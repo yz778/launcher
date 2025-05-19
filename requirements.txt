@@ -1,0 +1,6 @@
+PyGObject>=3.40.0     # Gtk
+pyperclip>=1.8.0      # For cross-platform clipboard support
+pyxdg>=0.28           # For desktop file parsing
+PyYAML>=6.0           # Yaml
+sympy>=1.10.1         # For calculator plugin
+xdg-base-dirs>=6.0.0  # For XDG directory handling
