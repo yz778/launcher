@@ -19,7 +19,7 @@ sympy = None
 parse_expr = None
 standard_transformations = None
 implicit_multiplication_application = None
-SYMPY_TRANSFORMATIONS = None
+sympy_transformatinos = None
 
 
 class CalculatorPlugin(Plugin):
@@ -116,7 +116,7 @@ class CalculatorPlugin(Plugin):
         # Load sympy library
         try:
             logger.info("Loading sympy library...")
-            global sympy, parse_expr, standard_transformations, implicit_multiplication_application, SYMPY_TRANSFORMATIONS
+            global sympy, parse_expr, standard_transformations, implicit_multiplication_application, sympy_transformatinos
 
             import sympy
             from sympy.parsing.sympy_parser import (
@@ -125,7 +125,7 @@ class CalculatorPlugin(Plugin):
                 implicit_multiplication_application,
             )
 
-            SYMPY_TRANSFORMATIONS = standard_transformations + (
+            sympy_transformatinos = standard_transformations + (
                 implicit_multiplication_application,
             )
 
@@ -180,7 +180,7 @@ class CalculatorPlugin(Plugin):
             expression = expression.replace("^", "**")
 
             # Parse and evaluate the expression with sympy
-            result = parse_expr(expression, transformations=SYMPY_TRANSFORMATIONS)
+            result = parse_expr(expression, transformations=sympy_transformatinos)
 
             # Apply angle unit conversion for trigonometric functions if needed
             if (
@@ -240,11 +240,10 @@ class CalculatorPlugin(Plugin):
             plugin_id=self.get_id(),
             item_id=query,
             name=result,
-            description="Calculator result",
+            description=query,
             icon=self.calculator_icon,
             score=100.0,
             metadata={
-                "expression": query,
                 "result": result,
             },
         )

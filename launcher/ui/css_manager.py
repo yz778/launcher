@@ -19,7 +19,7 @@ class CssManager:
     background: #23272e;
     border-radius: 10px;
     box-shadow: none;
-    border: 1.5px solid #23272e;
+    border: 1.5px solid #44475a;
     padding: 0;
 }
 
