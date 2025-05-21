@@ -335,7 +335,7 @@ class LauncherWindow(Gtk.Window):
                             )
                 return True
 
-            # Handle Dow
+            # Handle Down
             elif keyval == Gdk.KEY_Up:
                 selected_row = self.list_box.get_selected_row()
                 if selected_row:
