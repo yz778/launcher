@@ -121,7 +121,22 @@ class LauncherWindow(Gtk.Window):
 
         # Set up window properties
         self.set_decorated(False)
-        self.set_position(Gtk.WindowPosition.CENTER)
+
+        try:
+            display = Gdk.Display.get_default()
+            monitor = display.get_primary_monitor()
+            geometry = monitor.get_geometry()
+            scale_factor = monitor.get_scale_factor()
+            monitor_width = geometry.width // scale_factor
+            monitor_height = geometry.height // scale_factor
+            x = geometry.x + (monitor_width - self.window_width) // 2
+            y = geometry.y + (monitor_height - self.window_height) // 4
+            self.move(x, y)
+
+        except Exception as e:
+            logger.error(f"Unable to set window position: {e}")
+            self.set_position(Gtk.WindowPosition.CENTER)
+
         self.set_default_size(self.window_width, self.window_height)
         self.set_keep_above(True)
         self.set_skip_taskbar_hint(True)

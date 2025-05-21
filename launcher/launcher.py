@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
 
+import os
+import sys
+
+os.environ["GDK_BACKEND"] = "x11"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
+
 import gi
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
-import os
-import sys
 import logging
 import argparse
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
 from .core.config_manager import ConfigManager
 from .core.plugin_manager import PluginManager
 from .core.history_manager import HistoryManager
