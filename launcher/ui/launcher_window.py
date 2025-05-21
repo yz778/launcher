@@ -103,6 +103,14 @@ class LauncherWindow(Gtk.Window):
         history_manager: HistoryManager,
         config: Dict[str, Any],
     ):
+        """
+        Initializes the main launcher window with search entry, results list, and custom styling.
+        
+        Sets up window properties, manual positioning, and UI layout including the search entry,
+        result count label, and a scrollable list for displaying search results. Connects relevant
+        signals for user interaction and ensures the window is styled and positioned according to
+        the provided configuration.
+        """
         super().__init__(title="Launcher")
 
         # Apply default styling immediately
