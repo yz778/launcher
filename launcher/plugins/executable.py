@@ -10,7 +10,7 @@ from typing import Dict, List, Any
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib  # Import GLib at the module level
 
 from plugins.base import Plugin, SearchResult
 from launcher.utils.string_matcher import StringMatcher
@@ -48,6 +48,7 @@ class ExecutablePlugin(Plugin):
     """Plugin for searching executable files in custom directories"""
 
     def __init__(self):
+        super().__init__()  # Call super() to initialize the base Plugin class
         self.executables = {}
         self.locations = []
         self.include_patterns = []
@@ -150,20 +151,32 @@ class ExecutablePlugin(Plugin):
         """
         Start the plugin and perform any necessary setup work
 
-        This loads the default icon, scans for executable files, and initializes the string matcher.
+        This loads the default icon and starts scanning for executable files in a background thread.
         """
         # Load default icon
         self._load_default_icon()
 
-        # Scan for executable files
-        self._scan_executables()
+        # Start the scan in a separate thread
+        import threading
 
-        # Initialize string matcher
+        threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
+
+        return True
+
+    def _scan_and_update_matcher(self) -> None:
+        """Performs the executable file scan and updates the matcher in the main thread"""
+        self._scan_executables()
+        GLib.idle_add(self._update_matcher_on_main_thread)
+
+    def _update_matcher_on_main_thread(self) -> bool:
+        """Updates the string matcher on the main GTK thread"""
         self.matcher = StringMatcher(
             items=list(self.executables.values()), key_func=lambda ef: ef.name
         )
-
-        return True
+        logger.info(
+            f"Finished loading {len(self.executables)} executable files in background"
+        )
+        return False  # Remove from idle queue
 
     def _load_default_icon(self) -> None:
         """Load the default icon for executables"""

@@ -13,25 +13,19 @@ from plugins.base import Plugin, SearchResult
 
 logger = logging.getLogger(__name__)
 
-# Don't import sympy here - defer it until needed
-# These will be imported on demand in _ensure_sympy_loaded
-sympy = None
-parse_expr = None
-standard_transformations = None
-implicit_multiplication_application = None
-sympy_transformations = None
-
 
 class CalculatorPlugin(Plugin):
     """Plugin for calculating mathematical expressions"""
 
     def __init__(self):
+        super().__init__()
         self.icon_size = 24
         self.precision = 10
         self.angle_unit = "degree"
         self.calculator_icon = None
         self._sympy_loaded = False
         self._last_valid_result = None
+        self._sympy = None
 
     def get_id(self) -> str:
         return "calculator"
@@ -108,33 +102,10 @@ class CalculatorPlugin(Plugin):
         """
         Start the plugin and perform any necessary setup work
 
-        This loads the calculator icon and sympy library for calculations.
+        This loads the calculator icon. Sympy will be loaded lazily when needed.
         """
         # Load calculator icon
         self._load_calculator_icon()
-
-        # Load sympy library
-        try:
-            logger.info("Loading sympy library...")
-            global sympy, parse_expr, standard_transformations, implicit_multiplication_application, sympy_transformations
-
-            import sympy
-            from sympy.parsing.sympy_parser import (
-                parse_expr,
-                standard_transformations,
-                implicit_multiplication_application,
-            )
-
-            sympy_transformations = standard_transformations + (
-                implicit_multiplication_application,
-            )
-
-            self._sympy_loaded = True
-            logger.info("Sympy library loaded successfully")
-        except Exception as e:
-            logger.error(f"Error loading sympy: {e}")
-            self._sympy_loaded = False
-
         return True
 
     def _load_calculator_icon(self) -> None:
@@ -160,15 +131,46 @@ class CalculatorPlugin(Plugin):
 
         return False
 
+    def _get_sympy(self):
+        if self._sympy is None:
+            try:
+                from sympy.parsing.sympy_parser import (
+                    parse_expr,
+                    standard_transformations,
+                    implicit_multiplication_application,
+                    function_exponentiation,
+                    convert_xor,
+                )
+                import sympy as _sympy_module  # Import sympy itself for result.has(sympy.sin) etc.
+
+                self._sympy = {
+                    "parse_expr": parse_expr,
+                    "transformations": (
+                        standard_transformations
+                        + (implicit_multiplication_application,)
+                        + (function_exponentiation,)
+                        + (convert_xor,)
+                    ),
+                    "sympy_module": _sympy_module,  # Store the sympy module itself
+                }
+                self._sympy_loaded = True
+                logger.info("Sympy loaded successfully (lazy).")
+            except ImportError:
+                logger.error(
+                    "Sympy library not found. Please install it with 'pip install sympy'."
+                )
+                self._sympy_loaded = False
+                return None
+        return self._sympy
+
     def _calculate(self, expression: str) -> Optional[str]:
         """
         Calculate the result of the expression using sympy
 
         Returns None if calculation fails
         """
-        # Check if sympy was loaded successfully
-        if not self._sympy_loaded:
-            logger.error("Sympy library not loaded, cannot calculate expression")
+        sympy_lib = self._get_sympy()
+        if sympy_lib is None:
             return None
 
         # Strip leading = if present
@@ -180,16 +182,18 @@ class CalculatorPlugin(Plugin):
             expression = expression.replace("^", "**")
 
             # Parse and evaluate the expression with sympy
-            result = parse_expr(expression, transformations=sympy_transformations)
+            result = sympy_lib["parse_expr"](
+                expression, transformations=sympy_lib["transformations"]
+            )
 
             # Apply angle unit conversion for trigonometric functions if needed
             if (
                 self.angle_unit.lower() == "degree"
                 and hasattr(result, "has")
                 and (
-                    result.has(sympy.sin)
-                    or result.has(sympy.cos)
-                    or result.has(sympy.tan)
+                    result.has(sympy_lib["sympy_module"].sin)
+                    or result.has(sympy_lib["sympy_module"].cos)
+                    or result.has(sympy_lib["sympy_module"].tan)
                 )
             ):
                 # Convert result to radians for sympy (which uses radians by default)
