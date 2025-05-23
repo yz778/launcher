@@ -140,7 +140,7 @@ scrollbar slider:active {
             logger.info(f"Loading custom CSS from file: {css_path}")
             cls._load_css_from_file(css_path)
         else:
-            logger.info("No custom CSS file found or specified")
+            logger.debug("No custom CSS file found or specified")
 
     @classmethod
     def get_css(cls, plugins: dict = None) -> str:
