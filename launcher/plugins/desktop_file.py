@@ -171,6 +171,7 @@ class DesktopFilePlugin(Plugin):
     """Plugin for searching .desktop files"""
 
     def __init__(self):
+        super().__init__()
         self.desktop_files = {}
         self.locations = []
         self.icon_size = 24
@@ -253,17 +254,28 @@ class DesktopFilePlugin(Plugin):
         return True
 
     def start(self) -> bool:
-        """Scans for desktop files and initializes the string matcher"""
-        logger.info("Starting scan of desktop files...")
-        self._scan_desktop_files()
+        """Scans for desktop files and initializes the string matcher in a background thread"""
+        logger.info("Starting background scan of desktop files...")
+        # Start the scan in a separate thread
+        import threading
 
-        # Update the string matcher with the loaded files
+        threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
+        return True
+
+    def _scan_and_update_matcher(self) -> None:
+        """Performs the desktop file scan and updates the matcher in the main thread"""
+        self._scan_desktop_files()
+        GLib.idle_add(self._update_matcher_on_main_thread)
+
+    def _update_matcher_on_main_thread(self) -> bool:
+        """Updates the string matcher on the main GTK thread"""
         self.matcher = StringMatcher(
             items=list(self.desktop_files.values()), key_func=lambda df: df.name
         )
-
-        logger.info(f"Finished loading {len(self.desktop_files)} desktop files")
-        return True
+        logger.info(
+            f"Finished loading {len(self.desktop_files)} desktop files in background"
+        )
+        return False
 
     def _scan_desktop_files(self) -> None:
         """Scan for desktop files in the configured locations"""
