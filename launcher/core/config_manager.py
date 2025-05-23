@@ -13,7 +13,7 @@ class ConfigManager:
 
     DEFAULT_CONFIG = {
         "max_results": 15,
-        "icon_size": 24,
+        "icon_size": 48,
         "terminal_command": "xterm -e",
         "window_width": 600,
         "window_height": 70,
@@ -92,8 +92,8 @@ class ConfigManager:
                         f"Error loading configuration from {expanded_path}: {e}"
                     )
             else:
-                logger.warning(f"Configuration file not found: {expanded_path}")
-                logger.info("Using default configuration only")
+                logger.debug(f"Configuration file not found: {expanded_path}")
+                logger.info("Using default configuration")
 
             self.config_file = expanded_path
 

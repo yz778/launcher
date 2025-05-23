@@ -53,7 +53,7 @@ class ExecutablePlugin(Plugin):
         self.locations = []
         self.include_patterns = []
         self.exclude_patterns = []
-        self.icon_size = 24
+        self.icon_size = None
         self.matcher = None
         self.default_icon = None
 
@@ -81,7 +81,6 @@ class ExecutablePlugin(Plugin):
                 ".*~$",  # Exclude backup files
                 ".*\\.bak$",  # Exclude .bak files
             ],
-            "icon_size": 24,
         }
 
     def get_default_css(self) -> str:
@@ -143,7 +142,7 @@ class ExecutablePlugin(Plugin):
         self.exclude_patterns = [re.compile(pattern) for pattern in exclude_patterns]
 
         # Get icon size from general config
-        self.icon_size = self.general_config.get("icon_size", defaults["icon_size"])
+        self.icon_size = self.general_config.get("icon_size")
 
         return True
 
@@ -182,18 +181,13 @@ class ExecutablePlugin(Plugin):
         """Load the default icon for executables"""
         try:
             icon_theme = Gtk.IconTheme.get_default()
-            # Try to load terminal icon first, fall back to executable icon
-            try:
-                self.default_icon = icon_theme.load_icon(
-                    "utilities-terminal", self.icon_size, 0
-                )
-            except Exception:
-                self.default_icon = icon_theme.load_icon(
-                    "application-x-executable", self.icon_size, 0
-                )
+            self.default_icon = icon_theme.load_icon(
+                "utilities-terminal", self.icon_size, 0
+            )
         except Exception as e:
-            logger.error(f"Error loading default icon: {e}")
-            self.default_icon = None
+            self.default_icon = icon_theme.load_icon(
+                "application-x-executable", self.icon_size, 0
+            )
 
     def _scan_executables(self) -> None:
         """Scan for executable files in the configured locations"""

@@ -19,7 +19,7 @@ class CalculatorPlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self.icon_size = 24
+        self.icon_size = None
         self.precision = 10
         self.angle_unit = "degree"
         self.calculator_icon = None
@@ -41,7 +41,6 @@ class CalculatorPlugin(Plugin):
         return {
             "precision": 10,
             "angle_unit": "degree",
-            "icon_size": 24,
         }
 
     def get_default_css(self) -> str:
@@ -90,7 +89,7 @@ class CalculatorPlugin(Plugin):
         defaults = self.get_config_defaults()
 
         # Get icon size from general config
-        self.icon_size = self.general_config.get("icon_size", defaults["icon_size"])
+        self.icon_size = self.general_config.get("icon_size")
 
         # Get calculator-specific config
         self.precision = config.get("precision", defaults["precision"])
