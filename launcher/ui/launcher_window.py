@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 class AppListItem(Gtk.ListBoxRow):
     """Custom list box row for displaying a search result"""
 
-    def __init__(
-        self, result: SearchResult, icon_size: int = 24, launch_count: int = 0
-    ):
+    def __init__(self, result: SearchResult, icon_size: int, launch_count: int = 0):
         super().__init__()
         self.set_name("app-list-item")
         self.result = result
@@ -262,9 +260,12 @@ class LauncherWindow(Gtk.Window):
 
         for result in self.current_results:
             count = self.history_manager.get_count(result.plugin_id, result.item_id)
-            list_item = AppListItem(
-                result, icon_size=self.icon_size, launch_count=count
+            icon_size = (
+                self.icon_size
+                if self.icon_size is not None
+                else self.general_config.get("icon_size")
             )
+            list_item = AppListItem(result, icon_size=icon_size, launch_count=count)
             self.list_box.add(list_item)
 
         self.list_box.show_all()

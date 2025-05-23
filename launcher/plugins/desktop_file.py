@@ -60,7 +60,7 @@ class DesktopFile:
         except Exception:
             return None
 
-    def get_icon_pixbuf(self, size: int = 24) -> Optional[GdkPixbuf.Pixbuf]:
+    def get_icon_pixbuf(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
         """Load the icon as a pixbuf with exact size using pyxdg for icon lookup"""
         from xdg.IconTheme import getIconPath
 
@@ -174,7 +174,7 @@ class DesktopFilePlugin(Plugin):
         super().__init__()
         self.desktop_files = {}
         self.locations = []
-        self.icon_size = 24
+        self.icon_size = None
         self.matcher = None
         self.config = {}
 
@@ -193,10 +193,7 @@ class DesktopFilePlugin(Plugin):
             str(xdg_data_home() / "applications"),
             *[str(path / "applications") for path in xdg_data_dirs()],
         ]
-        return {
-            "locations": locations,
-            "icon_size": 24,
-        }
+        return {"locations": locations}
 
     def get_default_css(self) -> str:
         """Get default CSS for this plugin"""
@@ -245,7 +242,7 @@ class DesktopFilePlugin(Plugin):
         ]
 
         # Get icon size from general config
-        self.icon_size = self.general_config.get("icon_size", 24)
+        self.icon_size = self.general_config.get("icon_size")
 
         # Initialize with empty data first
         self.desktop_files = {}

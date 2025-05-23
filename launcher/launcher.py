@@ -8,7 +8,6 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-
 import gi
 
 gi.require_version("Gtk", "3.0")
@@ -16,6 +15,7 @@ from gi.repository import Gtk, GLib
 
 import logging
 import argparse
+import threading
 from .core.config_manager import ConfigManager
 from .core.plugin_manager import PluginManager
 from .core.history_manager import HistoryManager
@@ -85,7 +85,6 @@ def complete_initialization(
     args: argparse.Namespace,
 ) -> bool:
     """Finish async initialization tasks after UI is visible"""
-    logger.info("Completing initialization in the background...")
 
     from .ui.css_manager import CssManager
 
@@ -116,12 +115,24 @@ def start_plugins(plugin_manager: PluginManager) -> bool:
     """Initialize all enabled plugins"""
     logger.info("Starting plugins in parallel...")
 
+    def start_plugin_thread(plugin_id, plugin):
+        """Thread function to start a single plugin."""
+        try:
+            plugin.start()
+            logger.info(f"Started plugin: {plugin_id}")
+        except Exception as e:
+            logger.error(f"Error starting plugin {plugin_id}: {e}")
+
+    # Start each enabled plugin in its own thread
+    threads = []
     for plugin_id, plugin in plugin_manager.plugins.items():
         if plugin_manager.enabled_plugins.get(plugin_id, False):
-            try:
-                plugin.start()
-            except Exception as e:
-                logger.error(f"Error starting plugin {plugin_id}: {e}")
+            thread = threading.Thread(
+                target=start_plugin_thread, args=(plugin_id, plugin)
+            )
+            thread.daemon = True  # Ensure threads don't prevent app shutdown
+            thread.start()
+            threads.append(thread)
 
     logger.info("All plugins started")
     return False
