@@ -7,7 +7,7 @@ import pyperclip
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib
 
 from plugins.base import Plugin, SearchResult
 
@@ -103,11 +103,10 @@ class CalculatorPlugin(Plugin):
 
         This loads the calculator icon. Sympy will be loaded lazily when needed.
         """
-        # Load calculator icon
-        self._load_calculator_icon()
+        GLib.idle_add(self._load_calculator_icon)
         return True
 
-    def _load_calculator_icon(self) -> None:
+    def _load_calculator_icon(self) -> bool:
         """Load the calculator icon"""
         try:
             icon_theme = Gtk.IconTheme.get_default()
@@ -115,8 +114,9 @@ class CalculatorPlugin(Plugin):
                 "accessories-calculator", self.icon_size, 0
             )
         except Exception as e:
-            logger.error(f"Error loading calculator icon: {e}")
             self.calculator_icon = None
+
+        return False
 
     def _is_calculation(self, query: str) -> bool:
         """Check if the query looks like a calculation"""
