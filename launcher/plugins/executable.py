@@ -152,8 +152,7 @@ class ExecutablePlugin(Plugin):
 
         This loads the default icon and starts scanning for executable files in a background thread.
         """
-        # Load default icon
-        self._load_default_icon()
+        GLib.idle_add(self._load_default_icon)
 
         # Start the scan in a separate thread
         import threading
@@ -177,7 +176,7 @@ class ExecutablePlugin(Plugin):
         )
         return False  # Remove from idle queue
 
-    def _load_default_icon(self) -> None:
+    def _load_default_icon(self) -> bool:
         """Load the default icon for executables"""
         try:
             icon_theme = Gtk.IconTheme.get_default()
@@ -185,9 +184,9 @@ class ExecutablePlugin(Plugin):
                 "utilities-terminal", self.icon_size, 0
             )
         except Exception as e:
-            self.default_icon = icon_theme.load_icon(
-                "application-x-executable", self.icon_size, 0
-            )
+            self.default_icon = None
+
+        return False
 
     def _scan_executables(self) -> None:
         """Scan for executable files in the configured locations"""
