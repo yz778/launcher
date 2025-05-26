@@ -400,7 +400,11 @@ class LauncherWindow(Gtk.Window):
 
         # Use plugin manager to execute result, if successful save to history and quit
         if self.plugin_manager.execute(result):
-            self.history_manager.increment_count(result.plugin_id, result.item_id)
+            command_string = self.entry.get_text().strip()
+            self.history_manager.increment_count(
+                result.plugin_id, result.item_id, command_string
+            )
+            self.history_manager.save_history()
             result.metadata["history_manager"] = self.history_manager
             self.close_window()
 

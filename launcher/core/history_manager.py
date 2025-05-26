@@ -3,7 +3,8 @@
 import os
 import json
 import logging
-from typing import Dict
+import time
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +13,9 @@ class HistoryManager:
     """Manager for tracking and persisting launch history"""
 
     def __init__(self, config=None):
-        self.history = {}  # plugin_id:item_id -> count
+        self.history: Dict[str, Dict[str, Any]] = (
+            {}
+        )  # plugin_id:item_id -> {count, last_run_timestamp, command}
         self.history_file = None
 
         if config:
@@ -21,7 +24,7 @@ class HistoryManager:
             )
             self.load_history(history_file)
 
-    def load_history(self, history_file_path: str) -> Dict[str, int]:
+    def load_history(self, history_file_path: str) -> Dict[str, Dict[str, Any]]:
         """
         Load history from file
 
@@ -81,24 +84,38 @@ class HistoryManager:
             Launch count
         """
         key = f"{plugin_id}:{item_id}"
-        return self.history.get(key, 0)
+        entry = self.history.get(key)
+        if isinstance(entry, dict):
+            return entry.get("count", 0)
+        return 0
 
-    def increment_count(self, plugin_id: str, item_id: str) -> int:
+    def increment_count(self, plugin_id: str, item_id: str, command_string: str) -> int:
         """
-        Increment the launch count for an item
+        Increment the launch count for an item and record the command and timestamp.
 
         Args:
             plugin_id: Plugin ID
             item_id: Item ID
+            command_string: The full command string that was executed.
 
         Returns:
             New launch count
         """
         key = f"{plugin_id}:{item_id}"
-        count = self.history.get(key, 0) + 1
-        self.history[key] = count
-        self.save_history()
-        return count
+
+        current_data = self.history.get(key)
+        current_count = 0
+        if isinstance(current_data, dict):
+            current_count = current_data.get("count", 0)
+
+        new_count = current_count + 1
+
+        self.history[key] = {
+            "count": new_count,
+            "last_run_timestamp": time.time(),
+            "command": command_string,
+        }
+        return new_count
 
     def remove_entry(self, plugin_id: str, item_id: str) -> bool:
         """
