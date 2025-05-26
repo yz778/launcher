@@ -82,6 +82,7 @@ class ConfigManager:
                 try:
                     with open(expanded_path, "r") as f:
                         user_config = yaml.safe_load(f)
+                        logger.debug(f"User config loaded: {user_config}")
 
                     if user_config:
                         self._merge_config(config, user_config)

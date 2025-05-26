@@ -4,8 +4,10 @@ import os
 import importlib
 import inspect
 import logging
-from typing import Dict, List, Any, Type
+import threading
+from typing import Dict, List, Any, Type, Callable
 
+from gi.repository import GLib
 from plugins.base import Plugin, SearchResult
 
 logger = logging.getLogger(__name__)
@@ -19,6 +21,8 @@ class PluginManager:
         self.enabled_plugins: Dict[str, bool] = {}
         self.config: Dict[str, Any] = {}
         self.config_manager = config_manager
+        self.active_search_threads = 0
+        self.active_search_threads_lock = threading.Lock()
 
     def load_plugins(self, plugins_dir: str, config: Dict[str, Any]) -> None:
         """Discover and load all plugins from the specified directory"""
@@ -67,10 +71,17 @@ class PluginManager:
                 plugin_defaults = {}
 
             plugin_config = config.get("plugins", {}).get(plugin_id, {})
+            logger.debug(
+                f"Registering plugin '{plugin_id}'. Raw plugin_config: {plugin_config}"
+            )
 
             enabled = plugin_config.get("enabled", True)
+            logger.debug(f"Plugin '{plugin_id}' enabled flag is {enabled}.")
 
             if enabled:
+                logger.debug(
+                    f"Plugin '{plugin_id}' is enabled and will be initialized."
+                )
                 combined_config = config.copy()
 
                 for key, value in plugin_defaults.items():
@@ -92,29 +103,82 @@ class PluginManager:
                     )
             else:
                 logger.info(f"Plugin disabled: {plugin.get_name()} ({plugin_id})")
+                logger.debug(
+                    f"Plugin '{plugin_id}' is disabled and will NOT be added to active plugins."
+                )
                 self.enabled_plugins[plugin_id] = False
         except Exception as e:
             logger.error(f"Error registering plugin {plugin_class.__name__}: {e}")
 
-    def search(self, query: str) -> List[SearchResult]:
-        """Search across all enabled plugins and return sorted results"""
+    def search(
+        self,
+        query: str,
+        search_id: int,
+        result_callback: Callable[[int, str, List[SearchResult]], None],
+        finished_callback: Callable[[int], None],
+    ) -> None:
+        """
+        Search across enabled plugins non-blockingly.
+        Results for each plugin are passed via result_callback.
+        finished_callback is called once all plugins have been processed.
+        Callbacks are executed in the main GTK thread via GLib.idle_add.
+        search_id is used to track and ignore stale results.
+        """
         if not query or not query.strip():
-            return []
+            GLib.idle_add(finished_callback, search_id)
+            return
 
-        results = []
+        plugins_to_search = []
+        for plugin_id, plugin_instance in self.plugins.items():
+            # Ensure plugin is enabled in the current config
+            plugin_config = self.config.get("plugins", {}).get(plugin_id, {})
+            if plugin_config.get("enabled", True):
+                plugins_to_search.append((plugin_id, plugin_instance))
+            else:
+                logger.info(f"Plugin {plugin_id} is disabled, skipping search.")
 
-        for plugin_id, plugin in self.plugins.items():
-            if self.enabled_plugins.get(plugin_id, False):
-                try:
-                    plugin_results = plugin.search(query)
-                    results.extend(plugin_results)
-                except Exception as e:
-                    logger.error(f"Error searching with plugin {plugin_id}: {e}")
+        if not plugins_to_search:
+            GLib.idle_add(finished_callback, search_id)
+            return
 
-        results.sort(key=lambda r: r.score, reverse=True)
+        with self.active_search_threads_lock:
+            self.active_search_threads = len(plugins_to_search)
 
-        max_results = self.config.get("general", {}).get("max_results")
-        return results[:max_results]
+        def search_worker(
+            s_id: int,
+            p_id: str,
+            p_instance: Plugin,
+            p_query: str,
+            res_cb: Callable[[int, str, List[SearchResult]], None],
+            fin_cb: Callable[[int], None],
+        ):
+            try:
+                plugin_results = p_instance.search(p_query)
+                if plugin_results:
+                    GLib.idle_add(res_cb, s_id, p_id, plugin_results)
+            except Exception as e:
+                logger.error(
+                    f"Error searching with plugin {p_id} for search_id {s_id}: {e}"
+                )
+            finally:
+                with self.active_search_threads_lock:
+                    self.active_search_threads -= 1
+                    if self.active_search_threads == 0:
+                        GLib.idle_add(fin_cb, s_id)
+
+        for plugin_id, plugin_instance in plugins_to_search:
+            thread = threading.Thread(
+                target=search_worker,
+                args=(
+                    search_id,
+                    plugin_id,
+                    plugin_instance,
+                    query,
+                    result_callback,
+                    finished_callback,
+                ),
+            )
+            thread.start()
 
     def execute(self, result: SearchResult) -> bool:
         """Execute an action for the given search result"""

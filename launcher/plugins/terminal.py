@@ -76,9 +76,6 @@ class TerminalPlugin(Plugin):
             "prefix", self.get_config_defaults()["prefix"]
         )
         self.icon_size = self.general_config.get("icon_size")
-        logger.info(
-            f"TerminalPlugin initialized with prefix: '{self.prefix}' and icon size: {self.icon_size}"
-        )
         return True
 
     def start(self) -> bool:
