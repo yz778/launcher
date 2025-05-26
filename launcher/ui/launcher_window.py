@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 import gi
 
@@ -206,7 +206,8 @@ class LauncherWindow(Gtk.Window):
         self.scrolled.add(self.list_box)
 
         # Current search results
-        self.current_results = []
+        self.current_results: List[SearchResult] = []
+        self.active_search_id: int = 0
 
         # Track if user is navigating with keys
         self.user_navigating = False
@@ -216,97 +217,156 @@ class LauncherWindow(Gtk.Window):
 
         self.entry.grab_focus()
 
-    def update_results(self, query: str) -> None:
-        """Update the results list with matches for the query"""
+    def _clear_list_box_and_hide(self):
+        """Clears all items from the list box and hides the results area."""
+        for child in self.list_box.get_children():
+            self.list_box.remove(child)
+        self.scrolled.hide()
+        self.result_count_label.set_text("")
+        self.result_count_label.hide()
+        self.resize(self.window_width, self.window_height)
+
+    def _populate_list_box(self, results_to_display: List[SearchResult]):
+        """Populates the list box with the given results and updates UI elements."""
+        # Clear previous items from list_box
         for child in self.list_box.get_children():
             self.list_box.remove(child)
 
-        if not query:
-            self.scrolled.hide()
-            self.result_count_label.set_text("")
-            self.result_count_label.hide()
-            self.resize(self.window_width, self.window_height)
+        if not results_to_display:
+            self._clear_list_box_and_hide()
             return
 
-        # Search for matches using the plugin manager
-        results = self.plugin_manager.search(query)
+        # Update result count label
+        count = len(results_to_display)
+        self.result_count_label.set_text(f"{count} result{'s' if count != 1 else ''}")
+        self.result_count_label.show()
 
-        # Adjust scores based on history
-        for result in results:
-            count = self.history_manager.get_count(result.plugin_id, result.item_id)
-            result.score = self.history_manager.adjust_score(
-                result.plugin_id, result.item_id, result.score
+        # Add new items
+        for result in results_to_display:
+            history_count = self.history_manager.get_count(
+                result.plugin_id, result.item_id
             )
-            # Store the count in the result for sorting
-            result.metadata["history_count"] = count
+            # Ensure icon_size is correctly obtained from config if self.icon_size is None
+            icon_size = (
+                self.icon_size
+                if self.icon_size is not None
+                else self.config.get("general", {}).get("icon_size", 48)
+            )
+            list_item = AppListItem(
+                result, icon_size=icon_size, launch_count=history_count
+            )
+            self.list_box.add(list_item)
 
-        # Sort by history first (items with history > 0 come first), then by score
-        self.current_results = sorted(
-            results,
+        self.list_box.show_all()
+        self.scrolled.show()
+
+        # Scrollbar visibility logic
+        if len(results_to_display) > 5:
+            self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.ALWAYS)
+            self.scrolled.set_overlay_scrolling(False)
+        else:
+            self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
+
+        # Resize window
+        self.resize(self.window_width, self.window_height_results)
+        self.scrolled.queue_resize()
+
+        if len(results_to_display) > 1:
+            adjustment = self.scrolled.get_vadjustment()
+            if adjustment:
+                adjustment.set_upper(adjustment.get_upper() + 1)
+
+        if not self.user_navigating:
+            self.list_box.unselect_all()
+
+    def handle_plugin_results(
+        self, search_id: int, plugin_id: str, plugin_results: List[SearchResult]
+    ):
+        """Callback for when a plugin returns results."""
+        if search_id != self.active_search_id:
+            logger.debug(
+                f"Ignoring stale results from plugin {plugin_id} for search_id {search_id} (current is {self.active_search_id})"
+            )
+            return
+
+        logger.debug(
+            f"Received {len(plugin_results)} results from plugin {plugin_id} for search_id {search_id}"
+        )
+        self.current_results.extend(plugin_results)
+
+        # Adjust scores based on history for all current results
+        for result in self.current_results:
+            if (
+                "history_count" not in result.metadata
+            ):  # Avoid re-processing if called multiple times
+                count = self.history_manager.get_count(result.plugin_id, result.item_id)
+                result.score = self.history_manager.adjust_score(
+                    result.plugin_id, result.item_id, result.score
+                )
+                result.metadata["history_count"] = count
+
+        # Sort by history (items with history > 0 come first), then by score
+        self.current_results.sort(
             key=lambda r: (
-                r.metadata.get("history_count", 0) > 0,
+                r.metadata.get("history_count", 0)
+                > 0,  # True (1) for items with history
                 r.score,
             ),
             reverse=True,
         )
 
-        if not self.current_results:
-            self.scrolled.hide()
-            self.result_count_label.set_text("")
-            self.result_count_label.hide()
-            self.resize(self.window_width, self.window_height)
+        # Truncate results
+        max_results = self.config.get("general", {}).get("max_results", 15)
+        self.current_results = self.current_results[:max_results]
+
+        self._populate_list_box(self.current_results)
+
+    def handle_search_finished(self, search_id: int):
+        """Callback for when all plugins have finished searching."""
+        if search_id != self.active_search_id:
+            logger.debug(
+                f"Ignoring stale search_finished signal for search_id {search_id} (current is {self.active_search_id})"
+            )
             return
 
-        count = len(self.current_results)
-        self.result_count_label.set_text(f"{count} result{'s' if count != 1 else ''}")
-        self.result_count_label.show()
-
-        for result in self.current_results:
-            count = self.history_manager.get_count(result.plugin_id, result.item_id)
-            icon_size = (
-                self.icon_size
-                if self.icon_size is not None
-                else self.general_config.get("icon_size")
-            )
-            list_item = AppListItem(result, icon_size=icon_size, launch_count=count)
-            self.list_box.add(list_item)
-
-        self.list_box.show_all()
-
-        self.scrolled.show()
-
-        if len(self.current_results) > 5:  # Show scrollbar only if more than 5 items
-            # Force scrollbar to be visible
-            self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.ALWAYS)
-            # Ensure overlay scrolling is disabled
-            self.scrolled.set_overlay_scrolling(False)
-        else:
-            # Hide scrollbar for 5 or fewer items
-            self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
-
-        # Resize the window to show results at full height
-        window_height = self.window_height_results
-        self.resize(self.window_width, window_height)
-
-        self.scrolled.queue_resize()
-
-        if len(self.current_results) > 1:
-            # Show scrollbar immediately
-            adjustment = self.scrolled.get_vadjustment()
-            if adjustment:
-                # Set values to force scrollbar to appear
-                adjustment.set_upper(adjustment.get_upper() + 1)
-
-        # Don't auto-select unless user is navigating
-        if not self.user_navigating:
-            self.list_box.unselect_all()
+        logger.debug(f"All plugins have finished searching for search_id {search_id}.")
+        # If no results were found at all, ensure UI is clean.
+        # _populate_list_box handles empty list, but this is a safeguard.
+        if not self.current_results:
+            self._clear_list_box_and_hide()
+        # Potentially update a status message or hide a spinner in the future
 
     def on_entry_changed(self, widget) -> None:
-        """Handle text changes in the entry field"""
-        # Reset navigation state when user types
-        self.user_navigating = False
+        """Handle text changes in the entry field."""
+        self.user_navigating = False  # Reset navigation state
         query = self.entry.get_text().strip()
-        self.update_results(query)
+
+        self.current_results.clear()
+        self._clear_list_box_and_hide()  # Clear UI immediately
+
+        self.active_search_id += 1
+        logger.debug(
+            f"Initiating new search with search_id: {self.active_search_id} for query: '{query}'"
+        )
+
+        if not query:
+            # If query is empty, PluginManager's search will call finished_callback.
+            # We still call it here to ensure state is consistent if search isn't called.
+            self.plugin_manager.search(
+                query,
+                self.active_search_id,
+                self.handle_plugin_results,
+                self.handle_search_finished,
+            )
+            return
+
+        # Initiate new search
+        self.plugin_manager.search(
+            query,
+            self.active_search_id,
+            self.handle_plugin_results,
+            self.handle_search_finished,
+        )
 
     def on_entry_key_press(self, widget, event) -> bool:
         """Handle key presses in the entry field"""
@@ -377,6 +437,12 @@ class LauncherWindow(Gtk.Window):
             # Handle Tab
             elif keyval == Gdk.KEY_Tab:
                 selected_row = self.list_box.get_selected_row()
+                if not selected_row and self.current_results:
+                    # No selection, select first item
+                    first_row = self.list_box.get_row_at_index(0)
+                    self.list_box.select_row(first_row)
+                    selected_row = first_row
+
                 if selected_row:
                     self.entry.set_text(selected_row.result.name)
                     self.entry.set_position(-1)
@@ -388,7 +454,7 @@ class LauncherWindow(Gtk.Window):
                 if selected_row:
                     result = selected_row.result
                     self.history_manager.remove_entry(result.plugin_id, result.item_id)
-                    self.update_results(self.entry.get_text().strip())
+                    self.on_entry_changed(self.entry)
                 return True
 
         return False
