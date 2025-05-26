@@ -208,6 +208,9 @@ class LauncherWindow(Gtk.Window):
         # Current search results
         self.current_results = []
 
+        # Track if user is navigating with keys
+        self.user_navigating = False
+
         # Make sure the scrolled window is hidden initially
         self.scrolled.hide()
 
@@ -294,11 +297,14 @@ class LauncherWindow(Gtk.Window):
                 # Set values to force scrollbar to appear
                 adjustment.set_upper(adjustment.get_upper() + 1)
 
-        if self.current_results:
-            self.list_box.select_row(self.list_box.get_row_at_index(0))
+        # Don't auto-select unless user is navigating
+        if not self.user_navigating:
+            self.list_box.unselect_all()
 
     def on_entry_changed(self, widget) -> None:
         """Handle text changes in the entry field"""
+        # Reset navigation state when user types
+        self.user_navigating = False
         query = self.entry.get_text().strip()
         self.update_results(query)
 
@@ -314,14 +320,19 @@ class LauncherWindow(Gtk.Window):
                 if selected_row:
                     self.execute_result(selected_row.result, event)
                     return True
+                elif self.current_results:
+                    # No selection but have results, execute first result
+                    self.execute_result(self.current_results[0], event)
+                    return True
 
                 Gtk.main_quit()
 
             return True
 
         if self.scrolled.get_visible():
-            # Handle Up
+            # Handle Down arrow
             if keyval == Gdk.KEY_Down:
+                self.user_navigating = True
                 selected_row = self.list_box.get_selected_row()
                 if selected_row:
                     index = selected_row.get_index()
@@ -334,10 +345,16 @@ class LauncherWindow(Gtk.Window):
                             adjustment.clamp_page(
                                 row_alloc.y, row_alloc.y + row_alloc.height
                             )
+                else:
+                    # No selection, select first item
+                    if self.current_results:
+                        first_row = self.list_box.get_row_at_index(0)
+                        self.list_box.select_row(first_row)
                 return True
 
-            # Handle Down
+            # Handle Up arrow
             elif keyval == Gdk.KEY_Up:
+                self.user_navigating = True
                 selected_row = self.list_box.get_selected_row()
                 if selected_row:
                     index = selected_row.get_index()
@@ -350,6 +367,11 @@ class LauncherWindow(Gtk.Window):
                             adjustment.clamp_page(
                                 row_alloc.y, row_alloc.y + row_alloc.height
                             )
+                else:
+                    # No selection, select first item
+                    if self.current_results:
+                        first_row = self.list_box.get_row_at_index(0)
+                        self.list_box.select_row(first_row)
                 return True
 
             # Handle Tab
