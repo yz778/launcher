@@ -123,16 +123,13 @@ def start_plugins(plugin_manager: PluginManager) -> bool:
         except Exception as e:
             logger.error(f"Error starting plugin {plugin_id}: {e}")
 
-    # Start each enabled plugin in its own thread
+    # Start each plugin in plugin_manager.plugins.
     threads = []
     for plugin_id, plugin in plugin_manager.plugins.items():
-        if plugin_manager.enabled_plugins.get(plugin_id, False):
-            thread = threading.Thread(
-                target=start_plugin_thread, args=(plugin_id, plugin)
-            )
-            thread.daemon = True  # Ensure threads don't prevent app shutdown
-            thread.start()
-            threads.append(thread)
+        thread = threading.Thread(target=start_plugin_thread, args=(plugin_id, plugin))
+        thread.daemon = True
+        thread.start()
+        threads.append(thread)
 
     logger.info("All plugins started")
     return False

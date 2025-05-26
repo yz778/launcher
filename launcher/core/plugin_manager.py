@@ -71,13 +71,17 @@ class PluginManager:
                 plugin_defaults = {}
 
             plugin_config = config.get("plugins", {}).get(plugin_id, {})
-            logger.debug(f"Registering plugin '{plugin_id}'. Raw plugin_config: {plugin_config}")
+            logger.debug(
+                f"Registering plugin '{plugin_id}'. Raw plugin_config: {plugin_config}"
+            )
 
             enabled = plugin_config.get("enabled", True)
             logger.debug(f"Plugin '{plugin_id}' enabled flag is {enabled}.")
 
             if enabled:
-                logger.debug(f"Plugin '{plugin_id}' is enabled and will be initialized.")
+                logger.debug(
+                    f"Plugin '{plugin_id}' is enabled and will be initialized."
+                )
                 combined_config = config.copy()
 
                 for key, value in plugin_defaults.items():
@@ -99,7 +103,9 @@ class PluginManager:
                     )
             else:
                 logger.info(f"Plugin disabled: {plugin.get_name()} ({plugin_id})")
-                logger.debug(f"Plugin '{plugin_id}' is disabled and will NOT be added to active plugins.")
+                logger.debug(
+                    f"Plugin '{plugin_id}' is disabled and will NOT be added to active plugins."
+                )
                 self.enabled_plugins[plugin_id] = False
         except Exception as e:
             logger.error(f"Error registering plugin {plugin_class.__name__}: {e}")
@@ -124,8 +130,12 @@ class PluginManager:
 
         plugins_to_search = []
         for plugin_id, plugin_instance in self.plugins.items():
-            if self.enabled_plugins.get(plugin_id, False):
+            # Ensure plugin is enabled in the current config
+            plugin_config = self.config.get("plugins", {}).get(plugin_id, {})
+            if plugin_config.get("enabled", True):
                 plugins_to_search.append((plugin_id, plugin_instance))
+            else:
+                logger.info(f"Plugin {plugin_id} is disabled, skipping search.")
 
         if not plugins_to_search:
             GLib.idle_add(finished_callback, search_id)
@@ -147,7 +157,9 @@ class PluginManager:
                 if plugin_results:
                     GLib.idle_add(res_cb, s_id, p_id, plugin_results)
             except Exception as e:
-                logger.error(f"Error searching with plugin {p_id} for search_id {s_id}: {e}")
+                logger.error(
+                    f"Error searching with plugin {p_id} for search_id {s_id}: {e}"
+                )
             finally:
                 with self.active_search_threads_lock:
                     self.active_search_threads -= 1
