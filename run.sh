@@ -2,5 +2,5 @@
 
 set -e
 
-cd $(dirname $0)
+cd "$(dirname "$(readlink -f "$0")")"
 .venv/bin/python main.py "$@"
