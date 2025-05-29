@@ -14,7 +14,7 @@ class ConfigManager:
     DEFAULT_CONFIG = {
         "max_results": 15,
         "icon_size": 48,
-        "terminal_command": "xterm -e",
+        "terminal_command": "term",
         "window_width": 600,
         "window_height": 70,
         "window_height_results": 300,

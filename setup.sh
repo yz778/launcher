@@ -11,4 +11,4 @@ source .venv/bin/activate
 uv pip install -e .
 
 echo "Virtual environment set up successfully in .venv!"
-echo "To run the launcher, run: ./launcher.sh"
+echo "To run the launcher, run: ./run.sh"
