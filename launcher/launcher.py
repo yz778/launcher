@@ -126,12 +126,17 @@ def start_plugins(plugin_manager: PluginManager) -> bool:
     # Start each plugin in plugin_manager.plugins.
     threads = []
     for plugin_id, plugin in plugin_manager.plugins.items():
-        thread = threading.Thread(target=start_plugin_thread, args=(plugin_id, plugin))
-        thread.daemon = True
-        thread.start()
-        threads.append(thread)
+        if plugin_manager.enabled_plugins.get(plugin_id, True):
+            thread = threading.Thread(
+                target=start_plugin_thread, args=(plugin_id, plugin)
+            )
+            thread.daemon = True
+            thread.start()
+            threads.append(thread)
+        else:
+            logger.info(f"Plugin {plugin_id} is disabled, not starting.")
 
-    logger.info("All plugins started")
+    logger.info("All enabled plugins started")
     return False
 
 

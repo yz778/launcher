@@ -161,7 +161,7 @@ class LauncherWindow(Gtk.Window):
         self.entry.set_activates_default(True)
         self.entry.set_name("launcher-entry")
 
-        # Only connect signals if plugin_manager and history_manager are available
+        # Only connect signals if plugin_manager is not None and history_manager is not None
         if plugin_manager is not None and history_manager is not None:
             self.entry.connect("changed", self.on_entry_changed)
         self.entry.connect("key-press-event", self.on_entry_key_press)
@@ -232,21 +232,15 @@ class LauncherWindow(Gtk.Window):
         for child in self.list_box.get_children():
             self.list_box.remove(child)
 
-        if not results_to_display:
-            self._clear_list_box_and_hide()
-            return
-
-        # Update result count label
-        count = len(results_to_display)
-        self.result_count_label.set_text(f"{count} result{'s' if count != 1 else ''}")
-        self.result_count_label.show()
+        # Always show dropdown if user has typed something
+        self.scrolled.show()
+        self.result_count_label.hide()
 
         # Add new items
         for result in results_to_display:
             history_count = self.history_manager.get_count(
                 result.plugin_id, result.item_id
             )
-            # Ensure icon_size is correctly obtained from config if self.icon_size is None
             icon_size = (
                 self.icon_size
                 if self.icon_size is not None
@@ -259,6 +253,28 @@ class LauncherWindow(Gtk.Window):
 
         self.list_box.show_all()
         self.scrolled.show()
+        # Scroll to top when results change
+        vadj = self.scrolled.get_vadjustment()
+        if vadj:
+            vadj.set_value(vadj.get_lower())
+
+        # Show result count if there are results
+        if results_to_display:
+            count = len(results_to_display)
+            self.result_count_label.set_text(
+                f"{count} result{'s' if count != 1 else ''}"
+            )
+            self.result_count_label.show()
+        else:
+            self.result_count_label.set_text("")
+            self.result_count_label.hide()
+
+        # Always reserve space for 5 results
+        row_height = 40 + 16  # AppListItem height-request + hbox border
+        min_height = row_height * 5
+        self.resize(self.window_width, max(self.window_height_results, min_height))
+        self.scrolled.set_size_request(-1, min_height)
+        self.scrolled.queue_resize()
 
         # Scrollbar visibility logic
         if len(results_to_display) > 5:
@@ -330,11 +346,11 @@ class LauncherWindow(Gtk.Window):
             return
 
         logger.debug(f"All plugins have finished searching for search_id {search_id}.")
-        # If no results were found at all, ensure UI is clean.
-        # _populate_list_box handles empty list, but this is a safeguard.
-        if not self.current_results:
+        # Always show dropdown if user has typed something, even if no results
+        if self.entry.get_text().strip() and not self.current_results:
+            self._populate_list_box([])
+        elif not self.current_results:
             self._clear_list_box_and_hide()
-        # Potentially update a status message or hide a spinner in the future
 
     def on_entry_changed(self, widget) -> None:
         """Handle text changes in the entry field."""
@@ -342,25 +358,15 @@ class LauncherWindow(Gtk.Window):
         query = self.entry.get_text().strip()
 
         self.current_results.clear()
-        self._clear_list_box_and_hide()  # Clear UI immediately
+        if not query:
+            self._clear_list_box_and_hide()
+            return
 
         self.active_search_id += 1
         logger.debug(
             f"Initiating new search with search_id: {self.active_search_id} for query: '{query}'"
         )
 
-        if not query:
-            # If query is empty, PluginManager's search will call finished_callback.
-            # We still call it here to ensure state is consistent if search isn't called.
-            self.plugin_manager.search(
-                query,
-                self.active_search_id,
-                self.handle_plugin_results,
-                self.handle_search_finished,
-            )
-            return
-
-        # Initiate new search
         self.plugin_manager.search(
             query,
             self.active_search_id,
@@ -497,11 +503,14 @@ class LauncherWindow(Gtk.Window):
             self.close_window()
 
     def on_key_press(self, widget, event) -> bool:
-        """Handle global key presses"""
-        if event.keyval == Gdk.KEY_Escape:
+        keyval = event.keyval
+        nav_keys = [Gdk.KEY_Up, Gdk.KEY_Down, Gdk.KEY_Tab, Gdk.KEY_Page_Up, Gdk.KEY_Page_Down]
+        if keyval == Gdk.KEY_Escape:
             self.close_window()
             return True
-
+        if keyval not in nav_keys and not self.is_active():
+            self.present()
+            self.entry.grab_focus()
         return False
 
     def on_focus_out(self, widget, event) -> bool:
