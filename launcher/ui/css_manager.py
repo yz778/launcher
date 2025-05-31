@@ -17,8 +17,6 @@ class CssManager:
     DEFAULT_CSS = """/* Window styling */
 #launcher-window {
     background: #23272e;
-    border-radius: 10px;
-    box-shadow: none;
     border: 1.5px solid #44475a;
     padding: 0;
 }
@@ -26,11 +24,7 @@ class CssManager:
 /* Entry styling */
 #launcher-entry-container {
     background: #23272e;
-    border-radius: 0;
-    border: 1.5px solid #23272e;
-    padding: 10px 16px;
-    margin: 0;
-    box-shadow: none;
+    padding: 10px;
 }
 
 #launcher-entry {
