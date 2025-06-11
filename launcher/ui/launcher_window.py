@@ -100,6 +100,7 @@ class LauncherWindow(Gtk.Window):
         plugin_manager: PluginManager,
         history_manager: HistoryManager,
         config: Dict[str, Any],
+        foreground_mode: bool = False,
     ):
         super().__init__(title="Launcher")
 
@@ -109,6 +110,7 @@ class LauncherWindow(Gtk.Window):
         self.plugin_manager = plugin_manager
         self.history_manager = history_manager
         self.config = config
+        self.foreground_mode = foreground_mode
         self.icon_size = config.get("general", {}).get("icon_size")
 
         # Get window size configuration
@@ -117,8 +119,15 @@ class LauncherWindow(Gtk.Window):
         self.window_height = general_config.get("window_height")
         self.window_height_results = general_config.get("window_height_results")
 
+        # Position tracking variables
+        self.saved_x = None
+        self.saved_y = None
+
         # Set up window properties
         self.set_decorated(False)
+
+        # Connect position tracking before setting initial position
+        self.connect("configure-event", self.on_configure_event)
 
         try:
             display = Gdk.Display.get_default()
@@ -130,6 +139,9 @@ class LauncherWindow(Gtk.Window):
             x = geometry.x + (monitor_width - self.window_width) // 2
             y = geometry.y + (monitor_height - self.window_height) // 4
             self.move(x, y)
+            # Store initial position
+            self.saved_x = x
+            self.saved_y = y
 
         except Exception as e:
             logger.error(f"Unable to set window position: {e}")
@@ -143,7 +155,7 @@ class LauncherWindow(Gtk.Window):
         self.set_name("launcher-window")
 
         # Connect signals
-        self.connect("destroy", Gtk.main_quit)
+        self.connect("delete-event", self.on_delete_event)
         self.connect("key-press-event", self.on_key_press)
         self.connect("focus-out-event", self.on_focus_out)
 
@@ -502,6 +514,82 @@ class LauncherWindow(Gtk.Window):
             result.metadata["history_manager"] = self.history_manager
             self.close_window()
 
+    def on_configure_event(self, widget, event):
+        """Track window position changes"""
+        # Only track position if window is visible and we're not in the middle of showing
+        if self.get_visible() and self.get_mapped():
+            # Add a small delay to avoid tracking intermediate positions during window showing
+            from gi.repository import GLib
+            GLib.timeout_add(100, self._save_position, event.x, event.y)
+        return False
+
+    def _save_position(self, x, y):
+        """Save position after a small delay to ensure it's the final position"""
+        if self.get_visible():
+            self.saved_x = x
+            self.saved_y = y
+            logger.debug(f"Saved window position: ({x}, {y})")
+        return False  # Remove from timeout
+
+    def show_and_focus(self):
+        """Show window at saved position and grab focus"""
+        # Restore saved position if we have one
+        if self.saved_x is not None and self.saved_y is not None:
+            self.move(self.saved_x, self.saved_y)
+        
+        # Show the window
+        self.show_all()
+        
+        # Make sure results are hidden initially
+        self.scrolled.hide()
+        
+        # Clear entry and reset state
+        self.entry.set_text("")
+        self._clear_list_box_and_hide()
+        
+        # Present window and grab focus
+        self.present()
+        
+        # Use GLib.idle_add to ensure this happens after window is mapped
+        from gi.repository import GLib
+        GLib.idle_add(self._delayed_focus)
+
+    def _delayed_focus(self):
+        """Delayed focus grabbing to ensure window is fully shown"""
+        try:
+            # Make sure window is visible and mapped
+            if not self.get_visible() or not self.get_mapped():
+                return False
+                
+            # Make sure window is at the front
+            if self.get_window():
+                self.get_window().raise_()
+                self.get_window().focus(0)
+            
+            # Grab focus for the entry field
+            self.entry.grab_focus()
+            
+            # Additional focus enforcement for stubborn window managers
+            self.present()
+            
+            # Some window managers need an extra nudge
+            self.activate_focus()
+            
+        except Exception as e:
+            logger.debug(f"Error in delayed focus: {e}")
+        
+        return False  # Remove from idle queue
+
+    def on_delete_event(self, widget, event):
+        """Handle window delete event - hide or quit based on mode"""
+        if self.foreground_mode:
+            # In foreground mode, quit the application
+            Gtk.main_quit()
+        else:
+            # In singleton mode, hide the window
+            self.hide()
+        return True  # Prevent default destroy behavior
+
     def on_key_press(self, widget, event) -> bool:
         keyval = event.keyval
         nav_keys = [Gdk.KEY_Up, Gdk.KEY_Down, Gdk.KEY_Tab, Gdk.KEY_Page_Up, Gdk.KEY_Page_Down]
@@ -514,12 +602,20 @@ class LauncherWindow(Gtk.Window):
         return False
 
     def on_focus_out(self, widget, event) -> bool:
-        """Close the launcher when it loses focus"""
-        self.close_window()
+        """Close the launcher when it loses focus (only in singleton mode)"""
+        if not self.foreground_mode:
+            # Only auto-hide in singleton mode
+            self.close_window()
         return False
 
     def close_window(self):
-        Gtk.main_quit()
+        """Hide the window or quit based on mode"""
+        if self.foreground_mode:
+            # In foreground mode, quit the application
+            Gtk.main_quit()
+        else:
+            # In singleton mode, hide the window
+            self.hide()
         return True
 
     def update_with_full_config(self, plugin_manager, history_manager, config):

@@ -34,6 +34,12 @@ def arg_parser():
         help="Enable debug logging",
         action="store_true",
     )
+    parser.add_argument(
+        "--foreground",
+        "-f",
+        help="Run in foreground mode (disable singleton behavior)",
+        action="store_true",
+    )
 
     return parser.parse_args()
 
