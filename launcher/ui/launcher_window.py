@@ -475,6 +475,14 @@ class LauncherWindow(Gtk.Window):
                     self.on_entry_changed(self.entry)
                 return True
 
+        # Global hotkeys (work anywhere in the window)
+        # Handle F5 or Ctrl+R to rescan all plugins
+        if keyval == Gdk.KEY_F5 or (
+            keyval == Gdk.KEY_r and state & Gdk.ModifierType.CONTROL_MASK
+        ):
+            self._trigger_rescan()
+            return True
+
         return False
 
     def on_row_activated(self, list_box, row) -> None:
@@ -520,6 +528,7 @@ class LauncherWindow(Gtk.Window):
         if self.get_visible() and self.get_mapped():
             # Add a small delay to avoid tracking intermediate positions during window showing
             from gi.repository import GLib
+
             GLib.timeout_add(100, self._save_position, event.x, event.y)
         return False
 
@@ -536,22 +545,23 @@ class LauncherWindow(Gtk.Window):
         # Restore saved position if we have one
         if self.saved_x is not None and self.saved_y is not None:
             self.move(self.saved_x, self.saved_y)
-        
+
         # Show the window
         self.show_all()
-        
+
         # Make sure results are hidden initially
         self.scrolled.hide()
-        
+
         # Clear entry and reset state
         self.entry.set_text("")
         self._clear_list_box_and_hide()
-        
+
         # Present window and grab focus
         self.present()
-        
+
         # Use GLib.idle_add to ensure this happens after window is mapped
         from gi.repository import GLib
+
         GLib.idle_add(self._delayed_focus)
 
     def _delayed_focus(self):
@@ -560,25 +570,62 @@ class LauncherWindow(Gtk.Window):
             # Make sure window is visible and mapped
             if not self.get_visible() or not self.get_mapped():
                 return False
-                
+
             # Make sure window is at the front
             if self.get_window():
                 self.get_window().raise_()
                 self.get_window().focus(0)
-            
+
             # Grab focus for the entry field
             self.entry.grab_focus()
-            
+
             # Additional focus enforcement for stubborn window managers
             self.present()
-            
+
             # Some window managers need an extra nudge
             self.activate_focus()
-            
+
         except Exception as e:
             logger.debug(f"Error in delayed focus: {e}")
-        
+
         return False  # Remove from idle queue
+
+    def _trigger_rescan(self):
+        """Trigger a rescan of all plugins"""
+        if not self.plugin_manager:
+            return
+
+        logger.info("Manual rescan triggered")
+
+        # Show a brief notification
+        self.entry.set_text("🔄 Rescanning...")
+        self.entry.set_editable(False)
+
+        # Schedule the actual rescan and UI reset
+        from gi.repository import GLib
+
+        GLib.timeout_add(100, self._do_rescan)
+
+    def _do_rescan(self):
+        """Perform the actual rescan"""
+        # Trigger rescan for supported plugins
+        for plugin_id, plugin in self.plugin_manager.plugins.items():
+            if hasattr(plugin, "rescan"):
+                logger.info(f"Rescanning {plugin_id} plugin")
+                plugin.rescan()
+
+        # Reset UI after a short delay
+        from gi.repository import GLib
+
+        GLib.timeout_add(1000, self._reset_after_rescan)
+        return False
+
+    def _reset_after_rescan(self):
+        """Reset UI after rescan completes"""
+        self.entry.set_text("")
+        self.entry.set_editable(True)
+        self.entry.grab_focus()
+        return False
 
     def on_delete_event(self, widget, event):
         """Handle window delete event - hide or quit based on mode"""
@@ -592,7 +639,13 @@ class LauncherWindow(Gtk.Window):
 
     def on_key_press(self, widget, event) -> bool:
         keyval = event.keyval
-        nav_keys = [Gdk.KEY_Up, Gdk.KEY_Down, Gdk.KEY_Tab, Gdk.KEY_Page_Up, Gdk.KEY_Page_Down]
+        nav_keys = [
+            Gdk.KEY_Up,
+            Gdk.KEY_Down,
+            Gdk.KEY_Tab,
+            Gdk.KEY_Page_Up,
+            Gdk.KEY_Page_Down,
+        ]
         if keyval == Gdk.KEY_Escape:
             self.close_window()
             return True

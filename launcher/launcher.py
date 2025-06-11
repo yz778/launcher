@@ -29,6 +29,26 @@ singleton_manager = None
 launcher_window = None
 
 
+def rescan_callback(plugin_id: str = None):
+    """Callback to handle rescan commands"""
+    global launcher_window
+    if launcher_window and launcher_window.plugin_manager:
+        if plugin_id:
+            # Rescan specific plugin
+            plugin = launcher_window.plugin_manager.plugins.get(plugin_id)
+            if plugin and hasattr(plugin, "rescan"):
+                logger.info(f"Rescanning {plugin_id} plugin via IPC")
+                plugin.rescan()
+            else:
+                logger.warning(
+                    f"Plugin {plugin_id} not found or doesn't support rescanning"
+                )
+        else:
+            # Rescan all plugins
+            logger.info("Rescanning all plugins via IPC")
+            launcher_window._trigger_rescan()
+
+
 def show_window():
     """Callback to show the launcher window"""
     global launcher_window
@@ -52,6 +72,7 @@ def signal_handler(signum, frame):
     try:
         # Lazy import Gtk only if needed
         from gi.repository import Gtk
+
         Gtk.main_quit()
     except ImportError:
         pass  # Gtk not loaded yet
@@ -63,7 +84,7 @@ def signal_handler(signum, frame):
 def main() -> None:
     """Run the launcher application"""
     global singleton_manager, launcher_window
-    
+
     # Parse arguments first to check for foreground mode
     args = arg_parser()
 
@@ -74,7 +95,7 @@ def main() -> None:
     if args.create_config:
         from .utils.config_utils import create_default_config_file
         from .core.config_manager import ConfigManager
-        
+
         config_manager = ConfigManager()
         plugins_dir = os.path.join(current_dir, "plugins")
 
@@ -85,25 +106,48 @@ def main() -> None:
     if args.create_css:
         from .utils.config_utils import create_default_css_file
         from .core.config_manager import ConfigManager
-        
+
         config_manager = ConfigManager()
         plugins_dir = os.path.join(current_dir, "plugins")
 
         if not create_default_css_file(config_manager, plugins_dir):
             sys.exit(1)
         sys.exit(0)
-    
+
     # Set up signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    
+
     # Skip singleton behavior if running in foreground mode
     if not args.foreground:
         logger.info("Running in singleton mode")
-        
+
         # Initialize singleton manager
         singleton_manager = SingletonManager("launcher")
-        
+
+        # Handle rescan commands
+        if args.rescan or args.rescan_plugin:
+            if singleton_manager.is_running():
+                if args.rescan:
+                    logger.info("Sending rescan command to running instance...")
+                    if singleton_manager.send_rescan_command():
+                        logger.info("Successfully triggered rescan")
+                        return
+                elif args.rescan_plugin:
+                    logger.info(
+                        f"Sending rescan command for {args.rescan_plugin} to running instance..."
+                    )
+                    if singleton_manager.send_rescan_command(args.rescan_plugin):
+                        logger.info(
+                            f"Successfully triggered rescan for {args.rescan_plugin}"
+                        )
+                        return
+                logger.error("Failed to send rescan command")
+                sys.exit(1)
+            else:
+                logger.error("No running instance found to rescan")
+                sys.exit(1)
+
         # Check if another instance is already running
         if singleton_manager.is_running():
             logger.info("Another instance is already running, sending show command...")
@@ -111,32 +155,42 @@ def main() -> None:
                 logger.info("Successfully showed existing instance")
                 return  # Fast exit path - no heavy imports needed!
             else:
-                logger.warning("Failed to communicate with existing instance, starting new one...")
-        
+                logger.warning(
+                    "Failed to communicate with existing instance, starting new one..."
+                )
+
         # Start singleton server for this instance
-        if not singleton_manager.start_server(show_window):
+        if not singleton_manager.start_server(show_window, rescan_callback):
             logger.error("Failed to start singleton server")
             sys.exit(1)
     else:
         logger.info("Running in foreground mode (singleton disabled)")
 
+        # In foreground mode, rescan commands should just exit with error
+        if args.rescan or args.rescan_plugin:
+            logger.error("Rescan commands not supported in foreground mode")
+            sys.exit(1)
+
     # Only import heavy modules when we actually need to start the GUI
     logger.debug("Loading GUI modules...")
     import gi
+
     gi.require_version("Gtk", "3.0")
     from gi.repository import Gtk, GLib
-    
+
     from .core.config_manager import ConfigManager
     from .ui.launcher_window import LauncherWindow
-    
+
     config_manager = ConfigManager()
     plugins_dir = os.path.join(current_dir, "plugins")
 
     # Create minimal UI immediately for responsiveness
     config = {"general": config_manager.DEFAULT_CONFIG.copy()}
-    
+
     try:
-        launcher_window = LauncherWindow(None, None, config, foreground_mode=args.foreground)
+        launcher_window = LauncherWindow(
+            None, None, config, foreground_mode=args.foreground
+        )
         launcher_window.show_all()
         launcher_window.scrolled.hide()
         launcher_window.resize(
@@ -148,10 +202,12 @@ def main() -> None:
             Gtk.main_iteration()
 
         GLib.idle_add(
-            lambda: complete_initialization(launcher_window, config_manager, plugins_dir, args)
+            lambda: complete_initialization(
+                launcher_window, config_manager, plugins_dir, args
+            )
         )
         Gtk.main()
-        
+
     except Exception as e:
         logger.error(f"Error starting GUI: {e}")
         if singleton_manager:
@@ -194,6 +250,7 @@ def complete_initialization(
 
     # Start plugins in the background
     from gi.repository import GLib
+
     GLib.idle_add(lambda: start_plugins(plugin_manager))
 
     logger.info("Background initialization completed")
@@ -204,7 +261,7 @@ def start_plugins(plugin_manager) -> bool:
     """Initialize all enabled plugins"""
     # Lazy import threading only when needed
     import threading
-    
+
     logger.info("Starting plugins in parallel...")
 
     def start_plugin_thread(plugin_id, plugin):
