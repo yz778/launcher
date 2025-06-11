@@ -5,6 +5,7 @@ import os
 import re
 import shlex
 import stat
+import threading
 from typing import Dict, List, Any
 
 import gi
@@ -175,6 +176,15 @@ class ExecutablePlugin(Plugin):
             f"Finished loading {len(self.executables)} executable files in background"
         )
         return False  # Remove from idle queue
+
+    def rescan(self) -> None:
+        """Rescan executable files (for intelligent rescanning)"""
+        logger.info("Rescanning executable files...")
+        threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
+
+    def get_scan_directories(self) -> List[str]:
+        """Get directories that should be watched for changes"""
+        return self.locations
 
     def _load_default_icon(self) -> bool:
         """Load the default icon for executables"""
