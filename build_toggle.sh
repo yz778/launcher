@@ -1,2 +1,2 @@
 #!/bin/sh
-gcc -o toggle toggle.c
+gcc -O2 -s -o toggle toggle.c
