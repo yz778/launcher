@@ -16,11 +16,13 @@ from gi.repository import Gtk, GLib
 import logging
 import argparse
 import threading
+import signal
 from .core.config_manager import ConfigManager
 from .core.plugin_manager import PluginManager
 from .core.history_manager import HistoryManager
 from .ui.launcher_window import LauncherWindow
 from .utils.config_utils import arg_parser
+from .singleton import SingletonManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,19 +34,51 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Global variables for singleton behavior
+singleton_manager = None
+launcher_window = None
+
+
+def show_window():
+    """Callback to show the launcher window"""
+    global launcher_window
+    if launcher_window:
+        launcher_window.show_and_focus()
+
+
+def hide_window():
+    """Hide the launcher window instead of quitting"""
+    global launcher_window
+    if launcher_window:
+        launcher_window.hide()
+
+
+def signal_handler(signum, frame):
+    """Handle termination signals"""
+    global singleton_manager
+    logger.info(f"Received signal {signum}, shutting down...")
+    if singleton_manager:
+        singleton_manager.stop_server()
+    try:
+        Gtk.main_quit()
+    except:
+        pass  # Gtk might not be running
+    sys.exit(0)
+
 
 def main() -> None:
     """Run the launcher application"""
-
+    global singleton_manager, launcher_window
+    
+    # Parse arguments first to check for foreground mode
     config_manager = ConfigManager()
     plugins_dir = os.path.join(current_dir, "plugins")
-
-    # Parse and handle arguments
     args = arg_parser()
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
+    # Handle utility flags that exit immediately
     if args.create_config:
         from .utils.config_utils import create_default_config_file
 
@@ -58,24 +92,63 @@ def main() -> None:
         if not create_default_css_file(config_manager, plugins_dir):
             sys.exit(1)
         sys.exit(0)
+    
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+    
+    # Skip singleton behavior if running in foreground mode
+    if not args.foreground:
+        logger.info("Running in singleton mode")
+        
+        # Initialize singleton manager
+        singleton_manager = SingletonManager("launcher")
+        
+        # Check if another instance is already running
+        if singleton_manager.is_running():
+            logger.info("Another instance is already running, sending show command...")
+            if singleton_manager.send_show_command():
+                logger.info("Successfully showed existing instance")
+                return
+            else:
+                logger.warning("Failed to communicate with existing instance, starting new one...")
+        
+        # Start singleton server for this instance
+        if not singleton_manager.start_server(show_window):
+            logger.error("Failed to start singleton server")
+            sys.exit(1)
+    else:
+        logger.info("Running in foreground mode (singleton disabled)")
 
     # Create minimal UI immediately for responsiveness
     config = {"general": config_manager.DEFAULT_CONFIG.copy()}
-    win = LauncherWindow(None, None, config)
-    win.show_all()
-    win.scrolled.hide()
-    win.resize(
-        config["general"]["window_width"],
-        config["general"]["window_height"],
-    )
+    
+    try:
+        launcher_window = LauncherWindow(None, None, config, foreground_mode=args.foreground)
+        launcher_window.show_all()
+        launcher_window.scrolled.hide()
+        launcher_window.resize(
+            config["general"]["window_width"],
+            config["general"]["window_height"],
+        )
 
-    while Gtk.events_pending():
-        Gtk.main_iteration()
+        while Gtk.events_pending():
+            Gtk.main_iteration()
 
-    GLib.idle_add(
-        lambda: complete_initialization(win, config_manager, plugins_dir, args)
-    )
-    Gtk.main()
+        GLib.idle_add(
+            lambda: complete_initialization(launcher_window, config_manager, plugins_dir, args)
+        )
+        Gtk.main()
+        
+    except Exception as e:
+        logger.error(f"Error starting GUI: {e}")
+        if singleton_manager:
+            singleton_manager.stop_server()
+        raise
+    finally:
+        # Always clean up singleton server on exit
+        if singleton_manager:
+            singleton_manager.stop_server()
 
 
 def complete_initialization(
