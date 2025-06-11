@@ -5,6 +5,7 @@ import glob
 import logging
 import re
 import shlex
+import threading
 from typing import Dict, List, Any, Optional
 from xdg_base_dirs import xdg_data_home, xdg_data_dirs
 from xdg.DesktopEntry import DesktopEntry
@@ -273,6 +274,15 @@ class DesktopFilePlugin(Plugin):
             f"Finished loading {len(self.desktop_files)} desktop files in background"
         )
         return False
+
+    def rescan(self) -> None:
+        """Rescan desktop files (for intelligent rescanning)"""
+        logger.info("Rescanning desktop files...")
+        threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
+
+    def get_scan_directories(self) -> List[str]:
+        """Get directories that should be watched for changes"""
+        return self.locations
 
     def _scan_desktop_files(self) -> None:
         """Scan for desktop files in the configured locations"""
