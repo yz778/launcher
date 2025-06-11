@@ -6,62 +6,51 @@
 #include <linux/limits.h>
 
 int main(int argc, char *argv[]) {
-    const char *socket_path = "/tmp/launcher.sock";
-    struct sockaddr_un addr;
-    int fd;
+    // Try socket connection first
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd != -1) {
+        struct sockaddr_un addr = {.sun_family = AF_UNIX};
+        strcpy(addr.sun_path, "/tmp/launcher.sock");
 
-    // Try to connect to socket
-    if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) != -1) {
-        memset(&addr, 0, sizeof(addr));
-        addr.sun_family = AF_UNIX;
-        strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
-
-        struct timeval timeout = {0, 50000}; // 50ms timeout
+        struct timeval timeout = {0, 50000};
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
         if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
             write(fd, "SHOW", 4);
-            char buf[1];
-            if (read(fd, buf, 1) >= 0) {
+            char buf;
+            if (read(fd, &buf, 1) >= 0) {
                 close(fd);
-                return 0; // Success, exit
+                return 0;
             }
         }
         close(fd);
     }
 
-    // Get launcher directory
+    // Get executable directory
     char path[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", path, PATH_MAX - 1);
+    ssize_t len = readlink("/proc/self/exe", path, sizeof(path) - 1);
     if (len == -1) return 1;
     path[len] = '\0';
 
-    // Simple dirname: find last '/' and truncate
     char *last_slash = strrchr(path, '/');
     if (!last_slash) return 1;
     *last_slash = '\0';
 
-    // Change to launcher directory
     if (chdir(path) != 0) return 1;
 
-    // Prepare paths
-    char launcher_path[PATH_MAX];
-    char venv_python[PATH_MAX];
-    snprintf(launcher_path, PATH_MAX, "%s/main.py", path);
-    snprintf(venv_python, PATH_MAX, "%s/.venv/bin/python", path);
-
-    // Prepare arguments
+    // Build argument array
     char *args[argc + 2];
+    char venv_python[PATH_MAX];
+    snprintf(venv_python, sizeof(venv_python), "%s/.venv/bin/python", path);
+
     args[0] = venv_python;
-    args[1] = launcher_path;
-    for (int i = 1; i < argc; i++) args[i + 1] = argv[i];
-    args[argc + 1] = NULL;
+    args[1] = "main.py";
+    memcpy(&args[2], &argv[1], argc * sizeof(char*));
 
-    // Try venv Python
+    // Try venv python first, fallback to system python
     execvp(venv_python, args);
-
-    // Fallback to system Python
     args[0] = "python";
     execvp("python", args);
-    return 1; // execvp only returns on error
+
+    return 1;
 }
