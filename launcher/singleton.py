@@ -28,7 +28,7 @@ class SingletonManager:
             
         try:
             client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            client_socket.settimeout(1.0)  # 1 second timeout
+            client_socket.settimeout(0.1)  # Reduced from 1.0s to 0.1s for faster detection
             client_socket.connect(self.socket_path)
             # Send a test message to make sure the server is responsive
             client_socket.send(b"PING")
@@ -53,7 +53,7 @@ class SingletonManager:
             
         try:
             client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            client_socket.settimeout(1.0)  # 1 second timeout
+            client_socket.settimeout(0.1)  # Reduced from 1.0s to 0.1s for faster response
             client_socket.connect(self.socket_path)
             client_socket.send(b"SHOW")
             response = client_socket.recv(1024)

@@ -8,21 +8,11 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
-
+# Only import absolutely essential modules at startup
 import logging
-import argparse
-import threading
 import signal
-from .core.config_manager import ConfigManager
-from .core.plugin_manager import PluginManager
-from .core.history_manager import HistoryManager
-from .ui.launcher_window import LauncherWindow
-from .utils.config_utils import arg_parser
 from .singleton import SingletonManager
+from .utils.config_utils import arg_parser
 
 logging.basicConfig(
     level=logging.INFO,
@@ -60,7 +50,11 @@ def signal_handler(signum, frame):
     if singleton_manager:
         singleton_manager.stop_server()
     try:
+        # Lazy import Gtk only if needed
+        from gi.repository import Gtk
         Gtk.main_quit()
+    except ImportError:
+        pass  # Gtk not loaded yet
     except:
         pass  # Gtk might not be running
     sys.exit(0)
@@ -71,16 +65,18 @@ def main() -> None:
     global singleton_manager, launcher_window
     
     # Parse arguments first to check for foreground mode
-    config_manager = ConfigManager()
-    plugins_dir = os.path.join(current_dir, "plugins")
     args = arg_parser()
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Handle utility flags that exit immediately
+    # Handle utility flags that exit immediately (lazy import)
     if args.create_config:
         from .utils.config_utils import create_default_config_file
+        from .core.config_manager import ConfigManager
+        
+        config_manager = ConfigManager()
+        plugins_dir = os.path.join(current_dir, "plugins")
 
         if not create_default_config_file(config_manager, plugins_dir, args.config):
             sys.exit(1)
@@ -88,6 +84,10 @@ def main() -> None:
 
     if args.create_css:
         from .utils.config_utils import create_default_css_file
+        from .core.config_manager import ConfigManager
+        
+        config_manager = ConfigManager()
+        plugins_dir = os.path.join(current_dir, "plugins")
 
         if not create_default_css_file(config_manager, plugins_dir):
             sys.exit(1)
@@ -109,7 +109,7 @@ def main() -> None:
             logger.info("Another instance is already running, sending show command...")
             if singleton_manager.send_show_command():
                 logger.info("Successfully showed existing instance")
-                return
+                return  # Fast exit path - no heavy imports needed!
             else:
                 logger.warning("Failed to communicate with existing instance, starting new one...")
         
@@ -119,6 +119,18 @@ def main() -> None:
             sys.exit(1)
     else:
         logger.info("Running in foreground mode (singleton disabled)")
+
+    # Only import heavy modules when we actually need to start the GUI
+    logger.debug("Loading GUI modules...")
+    import gi
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import Gtk, GLib
+    
+    from .core.config_manager import ConfigManager
+    from .ui.launcher_window import LauncherWindow
+    
+    config_manager = ConfigManager()
+    plugins_dir = os.path.join(current_dir, "plugins")
 
     # Create minimal UI immediately for responsiveness
     config = {"general": config_manager.DEFAULT_CONFIG.copy()}
@@ -152,14 +164,17 @@ def main() -> None:
 
 
 def complete_initialization(
-    win: LauncherWindow,
-    config_manager: ConfigManager,
+    win,  # Don't need type hints for better import speed
+    config_manager,
     plugins_dir: str,
-    args: argparse.Namespace,
+    args,
 ) -> bool:
     """Finish async initialization tasks after UI is visible"""
 
+    # Lazy import heavy modules
     from .ui.css_manager import CssManager
+    from .core.plugin_manager import PluginManager
+    from .core.history_manager import HistoryManager
 
     # Load the full configuration
     config = config_manager.get_config(args.config)
@@ -178,14 +193,18 @@ def complete_initialization(
     win.update_with_full_config(plugin_manager, history_manager, config)
 
     # Start plugins in the background
+    from gi.repository import GLib
     GLib.idle_add(lambda: start_plugins(plugin_manager))
 
     logger.info("Background initialization completed")
     return False  # Remove from idle queue
 
 
-def start_plugins(plugin_manager: PluginManager) -> bool:
+def start_plugins(plugin_manager) -> bool:
     """Initialize all enabled plugins"""
+    # Lazy import threading only when needed
+    import threading
+    
     logger.info("Starting plugins in parallel...")
 
     def start_plugin_thread(plugin_id, plugin):
