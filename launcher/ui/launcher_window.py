@@ -221,6 +221,10 @@ class LauncherWindow(Gtk.Window):
         self.current_results: List[SearchResult] = []
         self.active_search_id: int = 0
 
+        # Search debouncing
+        self._search_timeout_id = None
+        self._search_delay_ms = 50  # 100ms delay to reduce search frequency
+
         # Track if user is navigating with keys
         self.user_navigating = False
 
@@ -231,8 +235,9 @@ class LauncherWindow(Gtk.Window):
 
     def _clear_list_box_and_hide(self):
         """Clears all items from the list box and hides the results area."""
+        # Properly destroy child widgets to prevent memory leaks
         for child in self.list_box.get_children():
-            self.list_box.remove(child)
+            child.destroy()  # Explicitly destroy rather than just remove
         self.scrolled.hide()
         self.result_count_label.set_text("")
         self.result_count_label.hide()
@@ -240,9 +245,9 @@ class LauncherWindow(Gtk.Window):
 
     def _populate_list_box(self, results_to_display: List[SearchResult]):
         """Populates the list box with the given results and updates UI elements."""
-        # Clear previous items from list_box
+        # Clear previous items from list_box with proper cleanup
         for child in self.list_box.get_children():
-            self.list_box.remove(child)
+            child.destroy()  # Properly destroy widgets
 
         # Always show dropdown if user has typed something
         self.scrolled.show()
@@ -365,14 +370,31 @@ class LauncherWindow(Gtk.Window):
             self._clear_list_box_and_hide()
 
     def on_entry_changed(self, widget) -> None:
-        """Handle text changes in the entry field."""
+        """Handle text changes in the entry field with debouncing."""
+        # Cancel any pending search
+        if self._search_timeout_id:
+            from gi.repository import GLib
+
+            GLib.source_remove(self._search_timeout_id)
+
+        # Schedule new search with debouncing
+        from gi.repository import GLib
+
+        self._search_timeout_id = GLib.timeout_add(
+            self._search_delay_ms, self._perform_search
+        )
+
+    def _perform_search(self) -> bool:
+        """Actually perform the search (called after debounce delay)"""
+        self._search_timeout_id = None  # Clear timeout ID
+
         self.user_navigating = False  # Reset navigation state
         query = self.entry.get_text().strip()
 
         self.current_results.clear()
         if not query:
             self._clear_list_box_and_hide()
-            return
+            return False  # Remove from timeout
 
         self.active_search_id += 1
         logger.debug(
@@ -385,6 +407,7 @@ class LauncherWindow(Gtk.Window):
             self.handle_plugin_results,
             self.handle_search_finished,
         )
+        return False  # Remove from timeout
 
     def on_entry_key_press(self, widget, event) -> bool:
         """Handle key presses in the entry field"""
