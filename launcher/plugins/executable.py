@@ -223,6 +223,13 @@ class ExecutablePlugin(Plugin):
 
         logger.info(f"Loaded {len(self.executables)} executable files")
 
+    def cleanup(self) -> None:
+        """Clean up plugin resources"""
+        self.executables.clear()
+
+        if self.matcher:
+            self.matcher = None
+
     def search(self, query: str) -> List[SearchResult]:
         """Search for executable files matching the query"""
         if not query:

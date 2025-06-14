@@ -23,6 +23,17 @@ class PluginManager:
         self.config_manager = config_manager
         self.active_search_threads = 0
         self.active_search_threads_lock = threading.Lock()
+        self._executor = None
+
+    def _get_executor(self):
+        """Get or create thread pool executor"""
+        if self._executor is None:
+            import concurrent.futures
+
+            self._executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=8, thread_name_prefix="plugin-search"
+            )
+        return self._executor
 
     def load_plugins(self, plugins_dir: str, config: Dict[str, Any]) -> None:
         """Discover and load all plugins from the specified directory"""
@@ -118,7 +129,7 @@ class PluginManager:
         finished_callback: Callable[[int], None],
     ) -> None:
         """
-        Search across enabled plugins non-blockingly.
+        Search across enabled plugins non-blockingly using thread pool.
         Results for each plugin are passed via result_callback.
         finished_callback is called once all plugins have been processed.
         Callbacks are executed in the main GTK thread via GLib.idle_add.
@@ -166,19 +177,17 @@ class PluginManager:
                     if self.active_search_threads == 0:
                         GLib.idle_add(fin_cb, s_id)
 
+        executor = self._get_executor()
         for plugin_id, plugin_instance in plugins_to_search:
-            thread = threading.Thread(
-                target=search_worker,
-                args=(
-                    search_id,
-                    plugin_id,
-                    plugin_instance,
-                    query,
-                    result_callback,
-                    finished_callback,
-                ),
+            executor.submit(
+                search_worker,
+                search_id,
+                plugin_id,
+                plugin_instance,
+                query,
+                result_callback,
+                finished_callback,
             )
-            thread.start()
 
     def execute(self, result: SearchResult) -> bool:
         """Execute an action for the given search result"""
@@ -198,6 +207,10 @@ class PluginManager:
 
     def cleanup(self) -> None:
         """Release all plugin resources"""
+        if self._executor:
+            self._executor.shutdown(wait=True)
+            self._executor = None
+
         for plugin_id, plugin in self.plugins.items():
             try:
                 plugin.cleanup()
