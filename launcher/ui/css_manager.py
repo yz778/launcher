@@ -76,6 +76,34 @@ class CssManager:
     background-color: rgba(80, 100, 140, 0.6);
 }
 
+/* History item styling */
+#history-item {
+    padding: 8px;
+    border-radius: 6px;
+    transition: background-color 0.15s ease;
+    min-height: 40px;
+    background-color: rgba(80, 80, 80, 0.2);
+}
+
+#history-item:hover {
+    background-color: rgba(100, 100, 100, 0.3);
+}
+
+#history-item:selected {
+    background-color: rgba(120, 120, 120, 0.4);
+}
+
+#history-icon {
+    color: #a0a0a0;
+    font-size: 18px;
+}
+
+#history-text {
+    color: #e0e0e0;
+    font-size: 16px;
+    font-style: italic;
+}
+
 #app-name {
     color: #f8f8f2;
     font-size: 16px;
