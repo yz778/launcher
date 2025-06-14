@@ -29,15 +29,13 @@ class SingletonManager:
 
         try:
             client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            client_socket.settimeout(
-                0.1
-            )  # Reduced from 1.0s to 0.1s for faster detection
+            client_socket.settimeout(0.05)
             client_socket.connect(self.socket_path)
             # Send a test message to make sure the server is responsive
             client_socket.send(b"PING")
-            response = client_socket.recv(1024)
+            response = client_socket.recv(16)
             client_socket.close()
-            return True
+            return response == b"PONG"
         except (ConnectionRefusedError, FileNotFoundError, socket.timeout):
             # Socket file exists but no one is listening or not responsive - clean it up
             try:
@@ -56,12 +54,10 @@ class SingletonManager:
 
         try:
             client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            client_socket.settimeout(
-                0.1
-            )  # Reduced from 1.0s to 0.1s for faster response
+            client_socket.settimeout(0.05)
             client_socket.connect(self.socket_path)
             client_socket.send(b"SHOW")
-            response = client_socket.recv(1024)
+            response = client_socket.recv(16)
             client_socket.close()
             return response == b"OK"
         except Exception as e:
@@ -75,7 +71,7 @@ class SingletonManager:
 
         try:
             client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            client_socket.settimeout(0.1)
+            client_socket.settimeout(0.05)
             client_socket.connect(self.socket_path)
 
             if plugin_id:
@@ -83,7 +79,7 @@ class SingletonManager:
             else:
                 client_socket.send(b"RESCAN")
 
-            response = client_socket.recv(1024)
+            response = client_socket.recv(16)
             client_socket.close()
             return response == b"OK"
         except Exception as e:

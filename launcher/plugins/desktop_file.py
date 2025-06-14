@@ -34,6 +34,7 @@ class DesktopFile:
         self.no_display = False
         self.terminal = False
         self.desktop_entry = None
+        self._icon_cache = {}
         self._parse()
 
     def _parse(self) -> None:
@@ -63,6 +64,10 @@ class DesktopFile:
 
     def get_icon_pixbuf(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
         """Load the icon as a pixbuf with exact size using pyxdg for icon lookup"""
+
+        if size in self._icon_cache:
+            return self._icon_cache[size]
+
         from xdg.IconTheme import getIconPath
 
         try:
@@ -110,15 +115,24 @@ class DesktopFile:
 
             # Ensure the pixbuf is exactly the requested size
             if pixbuf and (pixbuf.get_width() != size or pixbuf.get_height() != size):
+                original_pixbuf = pixbuf
                 pixbuf = pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+                if original_pixbuf is not pixbuf:
+                    original_pixbuf = None
 
+            self._icon_cache[size] = pixbuf
             return pixbuf
 
         except Exception as e:
             logger.error(f"Error loading icon {self.icon}: {e}")
 
             pixbuf = self._get_fallback_icon(size)
+            self._icon_cache[size] = pixbuf
             return pixbuf
+
+    def cleanup(self) -> None:
+        """Clean up cached pixbufs to prevent memory leaks"""
+        self._icon_cache.clear()
 
     def is_visible(self) -> bool:
         """Check if the application should be visible in menus"""
@@ -307,7 +321,14 @@ class DesktopFilePlugin(Plugin):
                 except Exception as e:
                     logger.error(f"Error processing {file_path}: {e}")
 
-        logger.info(f"Loaded {len(self.desktop_files)} desktop files")
+    def cleanup(self) -> None:
+        """Clean up plugin resources"""
+        for desktop_file in self.desktop_files.values():
+            desktop_file.cleanup()
+        self.desktop_files.clear()
+
+        if self.matcher:
+            self.matcher = None
 
     def search(self, query: str) -> List[SearchResult]:
         """Search for desktop files matching the query"""
