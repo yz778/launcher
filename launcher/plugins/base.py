@@ -55,6 +55,19 @@ class Plugin(ABC):
     def get_description(self) -> str:
         """Get the description of the plugin"""
 
+    def __init__(self):
+        """Initialize the plugin base class"""
+        self.track_history = True  # Default value, will be set from config
+    
+    def should_track_history(self) -> bool:
+        """
+        Check if this plugin should track executions in history
+        
+        Returns:
+            True if executions should be tracked in history, False otherwise
+        """
+        return getattr(self, 'track_history', True)
+
     @abstractmethod
     def get_config_defaults(self) -> Dict[str, Any]:
         """
