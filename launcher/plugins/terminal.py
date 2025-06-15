@@ -38,7 +38,10 @@ class TerminalPlugin(Plugin):
         return "Execute shell commands directly."
 
     def get_config_defaults(self) -> Dict[str, Any]:
-        return {"prefix": ">"}
+        return {
+            "prefix": ">",
+            "track_history": True,  # Track terminal commands in history
+        }
 
     def get_default_css(self) -> str:
         return """
@@ -72,8 +75,13 @@ class TerminalPlugin(Plugin):
         plugin_specific_config = config.get(
             self.get_id(), {}
         )  # Plugin-specific config is under its ID
+        defaults = self.get_config_defaults()
+        
+        # Set track_history setting
+        self.track_history = plugin_specific_config.get("track_history", defaults["track_history"])
+        
         self.prefix = plugin_specific_config.get(
-            "prefix", self.get_config_defaults()["prefix"]
+            "prefix", defaults["prefix"]
         )
         self.icon_size = self.general_config.get("icon_size")
         return True
@@ -114,6 +122,7 @@ class TerminalPlugin(Plugin):
                 score=100,
                 metadata={
                     "command": command,
+                    "track_history": self.should_track_history(),
                 },
             )
             return [result]

@@ -34,7 +34,9 @@ class QalculatePlugin(Plugin):
 
     def get_config_defaults(self) -> Dict[str, Any]:
         """Get default configuration for this plugin"""
-        return {}
+        return {
+            "track_history": False,  # Don't track calculator results in history by default
+        }
 
     def get_default_css(self) -> str:
         """Get default CSS for this plugin"""
@@ -80,6 +82,9 @@ class QalculatePlugin(Plugin):
 
         # Get default config
         defaults = self.get_config_defaults()
+        
+        # Set track_history setting
+        self.track_history = config.get("track_history", defaults["track_history"])
 
         # Get icon size from general config
         self.icon_size = self.general_config.get("icon_size")
@@ -178,6 +183,7 @@ class QalculatePlugin(Plugin):
             score=100.0,
             metadata={
                 "result": result,
+                "track_history": self.should_track_history(),
             },
         )
 
