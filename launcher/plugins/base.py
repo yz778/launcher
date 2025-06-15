@@ -6,6 +6,8 @@ from typing import List, Any, Dict, Optional
 
 class SearchResult:
     """Class representing a search result from any plugin"""
+    
+    __slots__ = ('plugin_id', 'item_id', 'name', 'description', 'icon', 'score', 'metadata')
 
     def __init__(
         self,
