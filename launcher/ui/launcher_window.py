@@ -33,7 +33,7 @@ class AppListItem(Gtk.ListBoxRow):
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         hbox.set_border_width(8)
 
-        hbox.set_property("height-request", 40)
+        hbox.set_property("height-request", 60)  # Increased height to show description
 
         if result.icon:
             # Create a fixed size container for the icon
@@ -81,6 +81,13 @@ class AppListItem(Gtk.ListBoxRow):
             desc_label = Gtk.Label(label=result.description)
             desc_label.set_halign(Gtk.Align.START)
             desc_label.set_ellipsize(Pango.EllipsizeMode.END)
+            desc_label.set_name("app-description")
+            desc_label.get_style_context().add_class("dim-label")
+            vbox.pack_start(desc_label, True, True, 0)
+        else:
+            # Debug: Show that description is missing
+            desc_label = Gtk.Label(label="[No description]")
+            desc_label.set_halign(Gtk.Align.START)
             desc_label.set_name("app-description")
             desc_label.get_style_context().add_class("dim-label")
             vbox.pack_start(desc_label, True, True, 0)
@@ -282,7 +289,7 @@ class LauncherWindow(Gtk.Window):
             
             hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             hbox.set_border_width(8)
-            hbox.set_property("height-request", 40)
+            hbox.set_property("height-request", 60)
             
             # Add icon - use actual app icon if available, otherwise fallback
             icon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
@@ -317,7 +324,7 @@ class LauncherWindow(Gtk.Window):
         self.showing_history = True
         
         # Resize window for history display
-        row_height = 40 + 16  # height + padding
+        row_height = 60 + 16  # height + padding
         num_items = len(recent_items)
         min_height = row_height * max(num_items, 1)
         self.resize(self.window_width, self.window_height + min_height)
@@ -513,7 +520,7 @@ class LauncherWindow(Gtk.Window):
             self.result_count_label.hide()
 
         # Always reserve space for 5 results
-        row_height = 40 + 16  # AppListItem height-request + hbox border
+        row_height = 60 + 16  # AppListItem height-request + hbox border
         min_height = row_height * 5
         self.resize(self.window_width, max(self.window_height_results, min_height))
         self.scrolled.set_size_request(-1, min_height)
@@ -823,6 +830,27 @@ class LauncherWindow(Gtk.Window):
                 # Regular search result activated
                 self.execute_result(row.result, None)
 
+    def _build_executed_command(self, result: SearchResult) -> str:
+        """
+        Build the complete command that represents what was actually executed.
+        This ensures history shows the matched command name, not the partial user input.
+        
+        Args:
+            result: The SearchResult that was executed
+            
+        Returns:
+            Complete command string for history storage
+        """
+        # Use the result name (matched command) as the base
+        base_command = result.name
+        
+        # Add any arguments if present in metadata
+        args = result.metadata.get("args", [])
+        if args:
+            base_command = base_command + " " + " ".join(args)
+        
+        return base_command
+
     def execute_result(self, result: SearchResult, event=None) -> None:
         """Execute the given search result"""
 
@@ -847,13 +875,21 @@ class LauncherWindow(Gtk.Window):
 
         # Use plugin manager to execute result, if successful save to history and quit
         if self.plugin_manager.execute(result):
-            user_input = self.entry.get_text().strip()
-            # Pass the icon pixbuf to history for storage (especially for executable plugin)
-            icon_pixbuf = result.icon if result.plugin_id == "executable" else None
-            self.history_manager.add_execution(
-                result.plugin_id, result.item_id, user_input, result.name, icon_pixbuf
-            )
-            self.history_manager.save_history()
+            # Check if this result should be tracked in history
+            should_track = result.metadata.get("track_history", True)
+            
+            if should_track:
+                # Build the complete command that represents what was actually executed
+                # This should be the full application name/command, not the partial user input
+                executed_command = self._build_executed_command(result)
+                
+                # Pass the icon pixbuf to history for storage (especially for executable plugin)
+                icon_pixbuf = result.icon if result.plugin_id == "executable" else None
+                self.history_manager.add_execution(
+                    result.plugin_id, result.item_id, executed_command, result.name, icon_pixbuf
+                )
+                self.history_manager.save_history()
+            
             result.metadata["history_manager"] = self.history_manager
             self.close_window()
 

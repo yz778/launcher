@@ -208,7 +208,10 @@ class DesktopFilePlugin(Plugin):
             str(xdg_data_home() / "applications"),
             *[str(path / "applications") for path in xdg_data_dirs()],
         ]
-        return {"locations": locations}
+        return {
+            "locations": locations,
+            "track_history": True,  # Track desktop applications in history
+        }
 
     def get_default_css(self) -> str:
         """Get default CSS for this plugin"""
@@ -249,11 +252,17 @@ class DesktopFilePlugin(Plugin):
 
         # Get general config
         self.general_config = config.get("general", {})
+        
+        # Get default config
+        defaults = self.get_config_defaults()
+        
+        # Set track_history setting
+        self.track_history = config.get("track_history", defaults["track_history"])
 
         # Get locations from config
         self.locations = [
             os.path.expanduser(loc)
-            for loc in config.get("locations", self.get_config_defaults()["locations"])
+            for loc in config.get("locations", defaults["locations"])
         ]
 
         # Get icon size from general config
@@ -353,7 +362,11 @@ class DesktopFilePlugin(Plugin):
                 description=desktop_file.comment,
                 icon=desktop_file.get_icon_pixbuf(size=self.icon_size),
                 score=score,
-                metadata={"desktop_file": desktop_file, "args": args},
+                metadata={
+                    "desktop_file": desktop_file, 
+                    "args": args,
+                    "track_history": self.should_track_history(),
+                },
             )
             results.append(result)
 

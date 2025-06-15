@@ -45,6 +45,7 @@ class CalculatorPlugin(Plugin):
         return {
             "precision": 10,
             "angle_unit": "degree",
+            "track_history": False,  # Don't track calculator results in history by default
         }
 
     def get_default_css(self) -> str:
@@ -91,6 +92,9 @@ class CalculatorPlugin(Plugin):
 
         # Get default config
         defaults = self.get_config_defaults()
+        
+        # Set track_history setting
+        self.track_history = config.get("track_history", defaults["track_history"])
 
         # Get icon size from general config
         self.icon_size = self.general_config.get("icon_size")
@@ -252,6 +256,7 @@ class CalculatorPlugin(Plugin):
             score=100.0,
             metadata={
                 "result": result,
+                "track_history": self.should_track_history(),
             },
         )
 

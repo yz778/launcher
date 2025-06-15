@@ -128,6 +128,7 @@ class ExecutablePlugin(Plugin):
                 ".*\\.bak$",  # Exclude .bak files
             ],
             "cache_icons": True,  # Cache loaded icons for better performance
+            "track_history": True,  # Track executable commands in history
         }
 
     def get_default_css(self) -> str:
@@ -173,6 +174,9 @@ class ExecutablePlugin(Plugin):
 
         # Get default config
         defaults = self.get_config_defaults()
+        
+        # Set track_history setting
+        self.track_history = config.get("track_history", defaults["track_history"])
 
         # Get locations from config
         self.locations = [
@@ -388,6 +392,7 @@ class ExecutablePlugin(Plugin):
                     "command": executable.get_command(),
                     "args": args,
                     "custom_icon": executable.custom_icon,  # Store for debugging
+                    "track_history": self.should_track_history(),
                 },
             )
             results.append(result)
