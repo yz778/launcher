@@ -273,7 +273,8 @@ class LauncherWindow(Gtk.Window):
                 continue
                 
             # Try to get the actual result from plugins to get the current icon
-            actual_result = self._get_result_for_history_entry(plugin_id, item_id)
+            # Pass the history_entry so we can check for stored icons
+            actual_result = self._get_result_for_history_entry(plugin_id, item_id, history_entry)
             
             # Create a history item row
             row = Gtk.ListBoxRow()
@@ -288,7 +289,7 @@ class LauncherWindow(Gtk.Window):
             icon_box.set_size_request(self.icon_size or 48, self.icon_size or 48)
             
             if actual_result and actual_result.icon:
-                # Use the actual app icon
+                # Use the actual app icon (could be from stored data or current plugin state)
                 icon = Gtk.Image.new_from_pixbuf(actual_result.icon)
                 icon_box.pack_start(icon, True, False, 0)
             else:
@@ -322,10 +323,25 @@ class LauncherWindow(Gtk.Window):
         self.resize(self.window_width, self.window_height + min_height)
         self.scrolled.set_size_request(-1, min_height)
 
-    def _get_result_for_history_entry(self, plugin_id: str, item_id: str):
+    def _get_result_for_history_entry(self, plugin_id: str, item_id: str, history_entry: Dict[str, Any] = None):
         """Try to get the actual result object for a history entry to access current icon."""
         if not self.plugin_manager:
             return None
+            
+        # First, check if we have stored icon data in history (for executable plugin)
+        if history_entry and plugin_id == "executable":
+            stored_icon = self.history_manager.get_stored_icon(
+                history_entry, self.icon_size or 48
+            )
+            if stored_icon:
+                # Create a result-like object with the stored icon
+                class MockResult:
+                    def __init__(self, icon, name, plugin_id, item_id):
+                        self.icon = icon
+                        self.name = name
+                        self.plugin_id = plugin_id
+                        self.item_id = item_id
+                return MockResult(stored_icon, history_entry.get("result_name", ""), plugin_id, item_id)
             
         plugin = self.plugin_manager.plugins.get(plugin_id)
         if not plugin:
@@ -350,14 +366,21 @@ class LauncherWindow(Gtk.Window):
                 # For executables, search through the executables dict
                 executable = plugin.executables.get(item_id)
                 if executable:
-                    # Create a SearchResult-like object with the default executable icon
+                    # Try to get custom icon first, then fallback to default
+                    icon = None
+                    if executable.custom_icon:
+                        icon = plugin._load_custom_icon(executable.custom_icon)
+                    if not icon:
+                        icon = plugin.default_icon
+                        
+                    # Create a SearchResult-like object 
                     class MockResult:
-                        def __init__(self, default_icon):
-                            self.icon = default_icon
-                            self.name = executable.name
+                        def __init__(self, icon, name):
+                            self.icon = icon
+                            self.name = name
                             self.plugin_id = plugin_id
                             self.item_id = item_id
-                    return MockResult(plugin.default_icon)
+                    return MockResult(icon, executable.name)
                     
             elif plugin_id == "qalculate" or plugin_id == "calculator":
                 # For calculator plugins, use a default icon
@@ -825,10 +848,10 @@ class LauncherWindow(Gtk.Window):
         # Use plugin manager to execute result, if successful save to history and quit
         if self.plugin_manager.execute(result):
             user_input = self.entry.get_text().strip()
-            # Note: We don't store the icon in history as it's a Pixbuf object
-            # We'll retrieve it fresh from plugins when displaying history
+            # Pass the icon pixbuf to history for storage (especially for executable plugin)
+            icon_pixbuf = result.icon if result.plugin_id == "executable" else None
             self.history_manager.add_execution(
-                result.plugin_id, result.item_id, user_input, result.name
+                result.plugin_id, result.item_id, user_input, result.name, icon_pixbuf
             )
             self.history_manager.save_history()
             result.metadata["history_manager"] = self.history_manager

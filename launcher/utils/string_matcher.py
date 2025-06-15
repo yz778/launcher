@@ -9,6 +9,8 @@ class StringMatcher(Generic[T]):
     """
     Basic result matcher that can match items based on a string representation
     """
+    
+    __slots__ = ('items', 'key_func', 'history')
 
     def __init__(
         self, items: List[T], key_func: Callable[[T], str], history: List[T] = None
