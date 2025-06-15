@@ -394,6 +394,56 @@ class LauncherWindow(Gtk.Window):
             
         return None
 
+    def _execute_history_item(self, history_entry: Dict[str, Any]) -> None:
+        """
+        Execute an item from history by doing a targeted search and executing the first exact match.
+        
+        Args:
+            history_entry: History entry containing plugin_id, item_id, user_input, etc.
+        """
+        plugin_id = history_entry.get("plugin_id")
+        item_id = history_entry.get("item_id") 
+        user_input = history_entry.get("user_input", "")
+        
+        if not plugin_id or not item_id or not self.plugin_manager:
+            # Fallback to regular search if missing data
+            self.entry.set_text(user_input)
+            self.on_entry_changed(self.entry)
+            return
+            
+        # Get the specific plugin and search for the exact item
+        plugin = self.plugin_manager.plugins.get(plugin_id)
+        if not plugin:
+            # Plugin not available, fallback to search
+            self.entry.set_text(user_input)
+            self.on_entry_changed(self.entry)
+            return
+            
+        try:
+            # Use the plugin's search method to find the item
+            results = plugin.search(user_input)
+            
+            # Find the exact result by item_id
+            target_result = None
+            for result in results:
+                if result.item_id == item_id:
+                    target_result = result
+                    break
+                    
+            if target_result:
+                # Found the exact item, execute it directly
+                self.execute_result(target_result, None)
+            else:
+                # Item not found, fallback to regular search
+                self.entry.set_text(user_input) 
+                self.on_entry_changed(self.entry)
+                
+        except Exception as e:
+            logger.debug(f"Error executing history item: {e}")
+            # Fallback to regular search
+            self.entry.set_text(user_input)
+            self.on_entry_changed(self.entry)
+
     def _populate_list_box(self, results_to_display: List[SearchResult]):
         """Populates the list box with the given results and updates UI elements."""
         # Clear previous items from list_box with proper cleanup
@@ -587,19 +637,16 @@ class LauncherWindow(Gtk.Window):
         # Handle Enter to execute
         if keyval == Gdk.KEY_Return:
             if self.showing_history:
-                # Handle history item selection
+                # Handle history item selection - execute directly from history
                 selected_row = self.list_box.get_selected_row()
-                if selected_row and hasattr(selected_row, 'user_input'):
-                    self.entry.set_text(selected_row.user_input)
-                    # Trigger search with the selected history item
-                    self.on_entry_changed(self.entry)
+                if selected_row and hasattr(selected_row, 'history_entry'):
+                    self._execute_history_item(selected_row.history_entry)
                     return True
                 elif self.list_box.get_children():
                     # No selection but have history items, use first one
                     first_row = self.list_box.get_row_at_index(0)
-                    if first_row and hasattr(first_row, 'user_input'):
-                        self.entry.set_text(first_row.user_input)
-                        self.on_entry_changed(self.entry)
+                    if first_row and hasattr(first_row, 'history_entry'):
+                        self._execute_history_item(first_row.history_entry)
                         return True
             elif self.scrolled.get_visible() and self.plugin_manager is not None:
                 selected_row = self.list_box.get_selected_row()
