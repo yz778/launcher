@@ -4,13 +4,20 @@ import os
 import json
 import logging
 import time
-from typing import Dict, Any, List
+import base64
+from typing import Dict, Any, List, Optional
+
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import GdkPixbuf
 
 logger = logging.getLogger(__name__)
 
 
 class HistoryManager:
     """Manager for tracking and persisting launch history"""
+    
+    __slots__ = ('user_input_history', 'history_file')
 
     def __init__(self, config=None):
         self.user_input_history: List[Dict[str, Any]] = (
@@ -94,7 +101,7 @@ class HistoryManager:
                 count += 1
         return count
 
-    def add_execution(self, plugin_id: str, item_id: str, user_input: str, result_name: str = None) -> None:
+    def add_execution(self, plugin_id: str, item_id: str, user_input: str, result_name: str = None, icon_pixbuf=None) -> None:
         """
         Record a successful execution in history.
 
@@ -103,13 +110,14 @@ class HistoryManager:
             item_id: Item ID that was executed
             user_input: The exact text that the user typed before submitting
             result_name: Display name of the executed item
+            icon_pixbuf: The actual icon pixbuf to store for better performance
         """
         current_time = time.time()
         
         # Add to user input history
-        self.add_user_input_history(user_input, plugin_id, item_id, current_time, result_name)
+        self.add_user_input_history(user_input, plugin_id, item_id, current_time, result_name, icon_pixbuf)
 
-    def add_user_input_history(self, user_input: str, plugin_id: str, item_id: str, timestamp: float = None, result_name: str = None) -> None:
+    def add_user_input_history(self, user_input: str, plugin_id: str, item_id: str, timestamp: float = None, result_name: str = None, icon_pixbuf=None) -> None:
         """
         Add user input to history, removing duplicates and maintaining order.
         
@@ -119,6 +127,7 @@ class HistoryManager:
             item_id: Item ID that was executed  
             timestamp: Timestamp when executed (defaults to current time)
             result_name: Display name of the executed item
+            icon_pixbuf: The actual icon pixbuf to store for better performance
         """
         if timestamp is None:
             timestamp = time.time()
@@ -137,6 +146,18 @@ class HistoryManager:
             "timestamp": timestamp,
             "result_name": result_name
         }
+        
+        # Store the actual icon data if provided and plugin is executable
+        if icon_pixbuf and plugin_id == "executable":
+            try:
+                # Convert pixbuf to PNG data and then base64 encode
+                icon_data = self._pixbuf_to_base64(icon_pixbuf)
+                if icon_data:
+                    entry["icon_data"] = icon_data
+                    logger.debug(f"Stored icon data for executable: {result_name}")
+            except Exception as e:
+                logger.warning(f"Failed to store icon data for {result_name}: {e}")
+            
         self.user_input_history.insert(0, entry)
         
         # Keep only the most recent 100 entries to prevent unlimited growth
@@ -220,3 +241,65 @@ class HistoryManager:
             boost = min(50, 10 * math.log2(count + 1))
             return base_score + boost
         return base_score
+
+    def _pixbuf_to_base64(self, pixbuf) -> Optional[str]:
+        """
+        Convert a GdkPixbuf to base64 encoded PNG data
+        
+        Args:
+            pixbuf: GdkPixbuf to convert
+            
+        Returns:
+            Base64 encoded PNG data, or None if conversion fails
+        """
+        try:
+            # Save pixbuf to PNG bytes
+            success, buffer = pixbuf.save_to_bufferv('png', [], [])
+            if success:
+                # Encode to base64
+                return base64.b64encode(buffer).decode('utf-8')
+        except Exception as e:
+            logger.error(f"Error converting pixbuf to base64: {e}")
+        return None
+    
+    def _base64_to_pixbuf(self, icon_data: str, icon_size: int = 48) -> Optional:
+        """
+        Convert base64 encoded PNG data back to GdkPixbuf
+        
+        Args:
+            icon_data: Base64 encoded PNG data
+            icon_size: Desired icon size
+            
+        Returns:
+            GdkPixbuf or None if conversion fails
+        """
+        try:
+            # Decode from base64
+            png_data = base64.b64decode(icon_data)
+            
+            # Create pixbuf from PNG data
+            from gi.repository import Gio
+            input_stream = Gio.MemoryInputStream.new_from_data(png_data)
+            pixbuf = GdkPixbuf.Pixbuf.new_from_stream_at_scale(
+                input_stream, icon_size, icon_size, True, None
+            )
+            return pixbuf
+        except Exception as e:
+            logger.error(f"Error converting base64 to pixbuf: {e}")
+        return None
+    
+    def get_stored_icon(self, history_entry: Dict[str, Any], icon_size: int = 48):
+        """
+        Get the stored icon from a history entry
+        
+        Args:
+            history_entry: History entry dict
+            icon_size: Desired icon size
+            
+        Returns:
+            GdkPixbuf or None if no stored icon
+        """
+        icon_data = history_entry.get("icon_data")
+        if icon_data:
+            return self._base64_to_pixbuf(icon_data, icon_size)
+        return None

@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 class CalculatorPlugin(Plugin):
     """Plugin for calculating mathematical expressions"""
+    
+    __slots__ = ('icon_size', 'precision', 'angle_unit', 'calculator_icon', 
+                 '_sympy_loaded', '_last_valid_result', '_sympy', 'general_config')
 
     def __init__(self):
         super().__init__()
@@ -26,6 +29,7 @@ class CalculatorPlugin(Plugin):
         self._sympy_loaded = False
         self._last_valid_result = None
         self._sympy = None
+        self.general_config = {}
 
     def get_id(self) -> str:
         return "calculator"

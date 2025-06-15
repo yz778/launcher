@@ -80,9 +80,7 @@ class CssManager:
 #history-item {
     padding: 8px;
     border-radius: 6px;
-    transition: background-color 0.15s ease;
     min-height: 40px;
-    background-color: rgba(80, 80, 80, 0.2);
 }
 
 #history-item:hover {

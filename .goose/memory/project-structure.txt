@@ -1,0 +1,31 @@
+# directory-structure codebase organization
+Launcher Project Directory Structure:
+
+**Root Files**:
+- main.py: Entry point that imports launcher.main()
+- setup.py: Python package setup with console_scripts entry point
+- requirements.txt: Dependencies (PyGObject, pyperclip, pyxdg, PyYAML, sympy, xdg-base-dirs)
+- toggle.py/toggle.c/toggle: Ultra-fast launcher toggle implementations
+- setup.sh: Virtual environment setup script
+- build_toggle.sh: C binary compilation script
+
+**Core Directories**:
+- launcher/: Main Python package
+  - core/: ConfigManager, PluginManager, HistoryManager
+  - ui/: LauncherWindow (GTK), CssManager
+  - plugins/: Base class + 5 plugins (calculator, desktop_file, executable, qalculate, terminal)
+  - utils/: StringMatcher, config utilities
+  - singleton.py: Unix socket singleton management
+  - launcher.py: Main application entry point with initialization
+
+**Plugin System**:
+- Base Plugin ABC with SearchResult class
+- Plugins: get_id(), search(), execute(), initialize(), start()
+- Thread pool execution for non-blocking searches
+- Plugin-specific configuration and CSS defaults
+
+**Development Environment**:
+- .venv/: Python virtual environment
+- .git/: Git repository (currently on 'icon' branch)
+- .goose/: Goose AI assistant session data
+
