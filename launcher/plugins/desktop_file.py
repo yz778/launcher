@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-import os
+import gi
 import glob
+import json
 import logging
+import os
 import re
 import shlex
 import threading
@@ -10,12 +12,11 @@ from typing import Dict, List, Any, Optional
 from xdg_base_dirs import xdg_data_home, xdg_data_dirs
 from xdg.DesktopEntry import DesktopEntry
 
-import gi
-
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GdkPixbuf, GLib
 
 from plugins.base import Plugin, SearchResult
+from launcher.core.config_manager import ConfigManager
 from launcher.utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,36 @@ class DesktopFile:
         self.desktop_entry = None
         self._icon_cache = {}
         self._parse()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert DesktopFile object to a dictionary for JSON serialization"""
+        return {
+            "path": self.path,
+            "name": self.name,
+            "exec_cmd": self.exec_cmd,
+            "icon": self.icon,
+            "comment": self.comment,
+            "hidden": self.hidden,
+            "no_display": self.no_display,
+            "terminal": self.terminal,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DesktopFile":
+        """Create a DesktopFile object from a dictionary (from cache)"""
+        # Create an empty instance to avoid re-running __init__ which does parsing
+        instance = object.__new__(cls)
+        instance.path = data.get("path", "")
+        instance.name = data.get("name", "")
+        instance.exec_cmd = data.get("exec_cmd", "")
+        instance.icon = data.get("icon", "")
+        instance.comment = data.get("comment", "")
+        instance.hidden = data.get("hidden", False)
+        instance.no_display = data.get("no_display", False)
+        instance.terminal = data.get("terminal", False)
+        instance.desktop_entry = None  # Not available from cache
+        instance._icon_cache = {}
+        return instance
 
     def _parse(self) -> None:
         """Parse the .desktop file to extract relevant information using xdg.DesktopEntry"""
@@ -192,6 +223,7 @@ class DesktopFilePlugin(Plugin):
         self.icon_size = None
         self.matcher = None
         self.config = {}
+        self.cache_file = None
 
     def get_id(self) -> str:
         return "desktop_file"
@@ -245,10 +277,9 @@ class DesktopFilePlugin(Plugin):
 }
 """
 
-    def initialize(self, config: Dict[str, Any]) -> bool:
+    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
-        # Store the config for later use
-        self.config = config
+        super().initialize(config, config_manager)
 
         # Get general config
         self.general_config = config.get("general", {})
@@ -272,13 +303,39 @@ class DesktopFilePlugin(Plugin):
         self.desktop_files = {}
         self.matcher = StringMatcher(items=[], key_func=lambda df: df.name)
 
+        self.cache_file = os.path.join(self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json")
+
         return True
 
+    def _load_from_cache(self) -> None:
+        """Load desktop files from the cache"""
+        if not os.path.exists(self.cache_file):
+            logger.info("Desktop file cache not found.")
+            return
+
+        try:
+            with open(self.cache_file, "r") as f:
+                cached_data = json.load(f)
+                for item_data in cached_data:
+                    desktop_file = DesktopFile.from_dict(item_data)
+                    self.desktop_files[desktop_file.path] = desktop_file
+            logger.info(f"Loaded {len(self.desktop_files)} desktop files from cache.")
+        except (IOError, json.JSONDecodeError) as e:
+            logger.error(f"Error loading desktop file cache: {e}")
+
+    def _save_to_cache(self) -> None:
+        """Save desktop files to the cache"""
+        try:
+            with open(self.cache_file, "w") as f:
+                json.dump([df.to_dict() for df in self.desktop_files.values()], f)
+            logger.info(f"Saved {len(self.desktop_files)} desktop files to cache.")
+        except IOError as e:
+            logger.error(f"Error saving desktop file cache: {e}")
+
     def start(self) -> bool:
-        """Scans for desktop files and initializes the string matcher in a background thread"""
-        logger.info("Starting background scan of desktop files...")
-        # Start the scan in a separate thread
-        import threading
+        """Load from cache and then start a background scan to refresh"""
+        self._load_from_cache()
+        self._update_matcher_on_main_thread()  # Initial update from cache
 
         threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
         return True
@@ -286,6 +343,7 @@ class DesktopFilePlugin(Plugin):
     def _scan_and_update_matcher(self) -> None:
         """Performs the desktop file scan and updates the matcher in the main thread"""
         self._scan_desktop_files()
+        self._save_to_cache()  # Save the newly scanned files to cache
         GLib.idle_add(self._update_matcher_on_main_thread)
 
     def _update_matcher_on_main_thread(self) -> bool:
@@ -363,7 +421,7 @@ class DesktopFilePlugin(Plugin):
                 icon=desktop_file.get_icon_pixbuf(size=self.icon_size),
                 score=score,
                 metadata={
-                    "desktop_file": desktop_file, 
+                    "desktop_file": desktop_file,
                     "args": args,
                     "track_history": self.should_track_history(),
                 },

@@ -43,7 +43,7 @@ class SearchResult:
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
-    __slots__ = ('config', 'track_history')
+    __slots__ = ('config', 'track_history', 'config_manager')
 
     @abstractmethod
     def get_id(self) -> str:
@@ -61,6 +61,7 @@ class Plugin(ABC):
         """Initialize the plugin base class"""
         self.config: Dict[str, Any] = {}
         self.track_history = True  # Default value, will be set from config
+        self.config_manager = None
 
     def get_general_config(self, key: str, default: Any = None) -> Any:
         """Helper to get a value from the [general] config section."""
@@ -93,7 +94,7 @@ class Plugin(ABC):
         """
         return ""  # Default implementation returns empty string
 
-    def initialize(self, config: Dict[str, Any]) -> bool:
+    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """
         Initialize the plugin with the given configuration.
         Base implementation stores the config. Subclasses should call super().
@@ -103,11 +104,13 @@ class Plugin(ABC):
 
         Args:
             config: Plugin-specific configuration
+            config_manager: The central config manager instance
 
         Returns:
             True if initialization was successful, False otherwise
         """
         self.config = config
+        self.config_manager = config_manager
         return True
 
     def start(self) -> bool:
