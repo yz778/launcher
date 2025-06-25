@@ -43,6 +43,8 @@ class SearchResult:
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
+    __slots__ = ('config', 'track_history')
+
     @abstractmethod
     def get_id(self) -> str:
         """Get the unique ID of the plugin"""
@@ -57,7 +59,12 @@ class Plugin(ABC):
 
     def __init__(self):
         """Initialize the plugin base class"""
+        self.config: Dict[str, Any] = {}
         self.track_history = True  # Default value, will be set from config
+
+    def get_general_config(self, key: str, default: Any = None) -> Any:
+        """Helper to get a value from the [general] config section."""
+        return self.config.get("general", {}).get(key, default)
     
     def should_track_history(self) -> bool:
         """
@@ -86,10 +93,10 @@ class Plugin(ABC):
         """
         return ""  # Default implementation returns empty string
 
-    @abstractmethod
     def initialize(self, config: Dict[str, Any]) -> bool:
         """
-        Initialize the plugin with the given configuration
+        Initialize the plugin with the given configuration.
+        Base implementation stores the config. Subclasses should call super().
 
         This method should only load configuration and CSS, without doing any heavy setup work.
         Use the start() method for actual setup work that should be done after the GUI is started.
@@ -100,6 +107,8 @@ class Plugin(ABC):
         Returns:
             True if initialization was successful, False otherwise
         """
+        self.config = config
+        return True
 
     def start(self) -> bool:
         """

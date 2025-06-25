@@ -415,7 +415,7 @@ class ExecutablePlugin(Plugin):
             import subprocess
 
             if use_terminal:
-                terminal_command = self.general_config.get("terminal_command")
+                terminal_command = self.get_general_config("terminal_command")
                 cmd_parts = terminal_command.split() + cmd_parts
 
             logger.info(f"Executing command: {' '.join(cmd_parts)}")

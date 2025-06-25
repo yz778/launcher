@@ -217,7 +217,7 @@ def main() -> None:
         # Always clean up singleton server on exit
         if singleton_manager:
             singleton_manager.stop_server()
-        
+
         # Clean up plugin manager resources
         if launcher_window and launcher_window.plugin_manager:
             launcher_window.plugin_manager.cleanup()
@@ -261,7 +261,7 @@ def complete_initialization(
     return False  # Remove from idle queue
 
 
-def start_plugins(plugin_manager) -> bool:
+def start_plugins(plugin_manager: "PluginManager") -> bool:
     """Initialize all enabled plugins"""
     # Lazy import threading only when needed
     import threading

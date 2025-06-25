@@ -117,3 +117,33 @@ class ConfigManager:
                 self._merge_config(base[key], value)
             else:
                 base[key] = value
+
+    def _expand_user_paths(self, config: Dict[str, Any]) -> None:
+        """
+        Recursively expand user paths in the configuration for known path keys.
+        """
+        
+        PATH_KEYS = {
+            "general": ["history_file", "css_file"],
+            "plugins": {
+                "desktop_file": ["locations"],
+                "executable": ["locations"]
+            }
+        }
+
+        # General section
+        if "general" in config:
+            for key in PATH_KEYS["general"]:
+                if key in config["general"] and isinstance(config["general"][key], str):
+                    config["general"][key] = os.path.expanduser(config["general"][key])
+
+        # Plugins section
+        if "plugins" in config:
+            for plugin_id, plugin_keys in PATH_KEYS["plugins"].items():
+                if plugin_id in config["plugins"]:
+                    for key in plugin_keys:
+                        if key in config["plugins"][plugin_id]:
+                            if isinstance(config["plugins"][plugin_id][key], str):
+                                config["plugins"][plugin_id][key] = os.path.expanduser(config["plugins"][plugin_id][key])
+                            elif isinstance(config["plugins"][plugin_id][key], list):
+                                config["plugins"][plugin_id][key] = [os.path.expanduser(p) for p in config["plugins"][plugin_id][key] if isinstance(p, str)]
