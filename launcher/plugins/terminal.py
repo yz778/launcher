@@ -76,13 +76,13 @@ class TerminalPlugin(Plugin):
             self.get_id(), {}
         )  # Plugin-specific config is under its ID
         defaults = self.get_config_defaults()
-        
+
         # Set track_history setting
-        self.track_history = plugin_specific_config.get("track_history", defaults["track_history"])
-        
-        self.prefix = plugin_specific_config.get(
-            "prefix", defaults["prefix"]
+        self.track_history = plugin_specific_config.get(
+            "track_history", defaults["track_history"]
         )
+
+        self.prefix = plugin_specific_config.get("prefix", defaults["prefix"])
         self.icon_size = self.general_config.get("icon_size")
         return True
 

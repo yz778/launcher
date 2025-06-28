@@ -12,9 +12,16 @@ logger = logging.getLogger(__name__)
 
 class SingletonManager:
     """Manages singleton behavior for the launcher application"""
-    
-    __slots__ = ('app_name', 'socket_path', 'server_socket', 'show_callback', 
-                 'rescan_callback', 'server_thread', '_running')
+
+    __slots__ = (
+        "app_name",
+        "socket_path",
+        "server_socket",
+        "show_callback",
+        "rescan_callback",
+        "server_thread",
+        "_running",
+    )
 
     def __init__(self, app_name: str = "launcher"):
         self.app_name = app_name

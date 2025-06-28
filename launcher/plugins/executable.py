@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 
 class ExecutableFile:
     """Class representing an executable file"""
-    
-    __slots__ = ('path', 'name', 'is_executable', 'custom_icon')
+
+    __slots__ = ("path", "name", "is_executable", "custom_icon")
 
     def __init__(self, path: str):
         self.path = path
@@ -48,33 +48,35 @@ class ExecutableFile:
         """Parse the #icon directive from the file"""
         if not self.is_executable:
             return
-            
+
         try:
-            with open(self.path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open(self.path, "r", encoding="utf-8", errors="ignore") as f:
                 # Read first few lines to look for shebang and icon directive
                 lines = []
                 for i, line in enumerate(f):
                     if i >= 10:  # Only check first 10 lines
                         break
                     lines.append(line.strip())
-                
+
                 # Look for #icon directive after shebang
                 found_shebang = False
                 for line in lines:
-                    if line.startswith('#!'):
+                    if line.startswith("#!"):
                         found_shebang = True
                         continue
-                    elif found_shebang and line.startswith('#icon '):
+                    elif found_shebang and line.startswith("#icon "):
                         # Extract icon name/path after '#icon '
                         icon_spec = line[6:].strip()
                         if icon_spec:
                             self.custom_icon = icon_spec
-                            logger.debug(f"Found custom icon '{icon_spec}' for {self.path}")
+                            logger.debug(
+                                f"Found custom icon '{icon_spec}' for {self.path}"
+                            )
                         break
-                    elif line and not line.startswith('#'):
+                    elif line and not line.startswith("#"):
                         # Stop at first non-comment line
                         break
-                        
+
         except Exception as e:
             logger.debug(f"Could not parse icon directive from {self.path}: {e}")
 
@@ -85,10 +87,19 @@ class ExecutableFile:
 
 class ExecutablePlugin(Plugin):
     """Plugin for searching executable files in custom directories"""
-    
-    __slots__ = ('executables', 'locations', 'include_patterns', 'exclude_patterns', 
-                 'icon_size', 'matcher', 'default_icon', 'icon_cache', 'cache_icons', 
-                 'general_config')
+
+    __slots__ = (
+        "executables",
+        "locations",
+        "include_patterns",
+        "exclude_patterns",
+        "icon_size",
+        "matcher",
+        "default_icon",
+        "icon_cache",
+        "cache_icons",
+        "general_config",
+    )
 
     def __init__(self):
         super().__init__()  # Call super() to initialize the base Plugin class
@@ -174,7 +185,7 @@ class ExecutablePlugin(Plugin):
 
         # Get default config
         defaults = self.get_config_defaults()
-        
+
         # Set track_history setting
         self.track_history = config.get("track_history", defaults["track_history"])
 
@@ -255,41 +266,46 @@ class ExecutablePlugin(Plugin):
         """Load a custom icon based on the icon specification"""
         if not icon_spec:
             return self.default_icon
-        
+
         # Check cache first if caching is enabled
         if self.cache_icons and icon_spec in self.icon_cache:
             return self.icon_cache[icon_spec]
-            
+
         try:
             icon_theme = Gtk.IconTheme.get_default()
             loaded_icon = None
-            
+
             # Check if it's a file path (absolute or relative)
-            if '/' in icon_spec or icon_spec.endswith(('.png', '.svg', '.jpg', '.jpeg', '.ico')):
+            if "/" in icon_spec or icon_spec.endswith(
+                (".png", ".svg", ".jpg", ".jpeg", ".ico")
+            ):
                 # Treat as file path
                 icon_path = os.path.expanduser(icon_spec)
                 if not os.path.isabs(icon_path):
                     # If relative path, try several common locations
                     search_paths = [
-                        os.path.join(os.path.expanduser('~/.local/share/icons'), icon_path),
-                        os.path.join('/usr/share/icons', icon_path),
-                        os.path.join('/usr/share/pixmaps', icon_path),
-                        icon_path  # Try as-is in case it's relative to current dir
+                        os.path.join(
+                            os.path.expanduser("~/.local/share/icons"), icon_path
+                        ),
+                        os.path.join("/usr/share/icons", icon_path),
+                        os.path.join("/usr/share/pixmaps", icon_path),
+                        icon_path,  # Try as-is in case it's relative to current dir
                     ]
-                    
+
                     for path in search_paths:
                         if os.path.isfile(path):
                             icon_path = path
                             break
-                
+
                 if os.path.isfile(icon_path):
                     from gi.repository import GdkPixbuf
+
                     loaded_icon = GdkPixbuf.Pixbuf.new_from_file_at_scale(
                         icon_path, self.icon_size, self.icon_size, True
                     )
                 else:
                     logger.warning(f"Custom icon file not found: {icon_spec}")
-                    
+
             else:
                 # Treat as icon theme name
                 try:
@@ -299,32 +315,34 @@ class ExecutablePlugin(Plugin):
                     fallback_names = [
                         f"{icon_spec}-symbolic",
                         f"application-{icon_spec}",
-                        f"{icon_spec}-icon"
+                        f"{icon_spec}-icon",
                     ]
-                    
+
                     for fallback in fallback_names:
                         try:
-                            loaded_icon = icon_theme.load_icon(fallback, self.icon_size, 0)
+                            loaded_icon = icon_theme.load_icon(
+                                fallback, self.icon_size, 0
+                            )
                             break
                         except Exception:
                             continue
-                    
+
                     if not loaded_icon:
                         logger.warning(f"Icon not found in theme: {icon_spec}")
-            
+
             # Use default icon if loading failed
             if not loaded_icon:
                 loaded_icon = self.default_icon
-                
+
             # Cache the result if caching is enabled
             if self.cache_icons:
                 self.icon_cache[icon_spec] = loaded_icon
-                
+
             return loaded_icon
-                    
+
         except Exception as e:
             logger.error(f"Error loading custom icon '{icon_spec}': {e}")
-            
+
         return self.default_icon
 
     def _scan_executables(self) -> None:
@@ -377,10 +395,12 @@ class ExecutablePlugin(Plugin):
         results = []
         for executable, score in matches:
             # Load custom icon if specified, otherwise use default
-            icon = (self._load_custom_icon(executable.custom_icon) 
-                   if executable.custom_icon 
-                   else self.default_icon)
-            
+            icon = (
+                self._load_custom_icon(executable.custom_icon)
+                if executable.custom_icon
+                else self.default_icon
+            )
+
             result = SearchResult(
                 plugin_id=self.get_id(),
                 item_id=executable.path,

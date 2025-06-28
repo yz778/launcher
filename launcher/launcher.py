@@ -217,7 +217,7 @@ def main() -> None:
         # Always clean up singleton server on exit
         if singleton_manager:
             singleton_manager.stop_server()
-        
+
         # Clean up plugin manager resources
         if launcher_window and launcher_window.plugin_manager:
             launcher_window.plugin_manager.cleanup()

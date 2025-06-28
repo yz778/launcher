@@ -16,9 +16,17 @@ logger = logging.getLogger(__name__)
 
 class CalculatorPlugin(Plugin):
     """Plugin for calculating mathematical expressions"""
-    
-    __slots__ = ('icon_size', 'precision', 'angle_unit', 'calculator_icon', 
-                 '_sympy_loaded', '_last_valid_result', '_sympy', 'general_config')
+
+    __slots__ = (
+        "icon_size",
+        "precision",
+        "angle_unit",
+        "calculator_icon",
+        "_sympy_loaded",
+        "_last_valid_result",
+        "_sympy",
+        "general_config",
+    )
 
     def __init__(self):
         super().__init__()
@@ -92,7 +100,7 @@ class CalculatorPlugin(Plugin):
 
         # Get default config
         defaults = self.get_config_defaults()
-        
+
         # Set track_history setting
         self.track_history = config.get("track_history", defaults["track_history"])
 
