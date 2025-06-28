@@ -101,7 +101,7 @@ class HistoryManager:
                 count += 1
         return count
 
-    def add_execution(self, plugin_id: str, item_id: str, user_input: str, result_name: str = None, icon_pixbuf=None) -> None:
+    def add_execution(self, plugin_id: str, item_id: str, executed_command: str, original_user_input: str, result_name: str = None, icon_pixbuf=None) -> None:
         """
         Record a successful execution in history.
 
@@ -115,9 +115,9 @@ class HistoryManager:
         current_time = time.time()
         
         # Add to user input history
-        self.add_user_input_history(user_input, plugin_id, item_id, current_time, result_name, icon_pixbuf)
+        self.add_user_input_history(original_user_input, plugin_id, item_id, current_time, executed_command, result_name, icon_pixbuf)
 
-    def add_user_input_history(self, user_input: str, plugin_id: str, item_id: str, timestamp: float = None, result_name: str = None, icon_pixbuf=None) -> None:
+    def add_user_input_history(self, user_input: str, plugin_id: str, item_id: str, timestamp: float = None, executed_command_string: str = None, result_name: str = None, icon_pixbuf=None) -> None:
         """
         Add user input to history, removing duplicates and maintaining order.
         

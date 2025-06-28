@@ -885,8 +885,9 @@ class LauncherWindow(Gtk.Window):
                 
                 # Pass the icon pixbuf to history for storage (especially for executable plugin)
                 icon_pixbuf = result.icon if result.plugin_id == "executable" else None
+                user_input_for_history = self.entry.get_text().strip()
                 self.history_manager.add_execution(
-                    result.plugin_id, result.item_id, executed_command, result.name, icon_pixbuf
+                    result.plugin_id, result.item_id, executed_command, user_input_for_history, result.name, icon_pixbuf
                 )
                 self.history_manager.save_history()
             
