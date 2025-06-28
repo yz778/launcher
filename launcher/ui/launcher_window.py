@@ -221,7 +221,9 @@ class LauncherWindow(Gtk.Window):
         self.list_box = Gtk.ListBox()
         self.list_box.set_selection_mode(Gtk.SelectionMode.MULTIPLE)
         self.list_box.connect("row-activated", self.on_row_activated)
-        self.list_box.connect("selected-rows-changed", self.on_list_box_selection_changed) # Connect selection changed signal
+        self.list_box.connect(
+            "selected-rows-changed", self.on_list_box_selection_changed
+        )  # Connect selection changed signal
         self.list_box.set_name("results-list")
         self.scrolled.add(self.list_box)
 
@@ -715,15 +717,15 @@ class LauncherWindow(Gtk.Window):
                     self.execute_result(self.current_results[0], event)
                     return True
 
-                Gtk.main_quit()
-
             return True
 
         if self.scrolled.get_visible():
             # Handle Down arrow
             if keyval == Gdk.KEY_Down:
                 self.user_navigating = True
-                selected_row = self.list_box.get_selected_row() # Get the currently focused row
+                selected_row = (
+                    self.list_box.get_selected_row()
+                )  # Get the currently focused row
                 target_row = None
 
                 if selected_row:
@@ -743,7 +745,7 @@ class LauncherWindow(Gtk.Window):
                         for row in self.list_box.get_selected_rows():
                             if row != target_row:
                                 self.list_box.unselect_row(row)
-                    self.list_box.select_row(target_row) # Select the target row
+                    self.list_box.select_row(target_row)  # Select the target row
 
                     adjustment = self.scrolled.get_vadjustment()
                     if adjustment:
@@ -766,7 +768,9 @@ class LauncherWindow(Gtk.Window):
             # Handle Up arrow
             elif keyval == Gdk.KEY_Up:
                 self.user_navigating = True
-                selected_row = self.list_box.get_selected_row() # Get the currently focused row
+                selected_row = (
+                    self.list_box.get_selected_row()
+                )  # Get the currently focused row
                 target_row = None
 
                 if selected_row:
@@ -777,7 +781,9 @@ class LauncherWindow(Gtk.Window):
                     # No current selection, select the last item
                     children = self.list_box.get_children()
                     if children:
-                        target_row = self.list_box.get_row_at_index(len(children) - 1) # Select the last item if no selection
+                        target_row = self.list_box.get_row_at_index(
+                            len(children) - 1
+                        )  # Select the last item if no selection
 
                 if target_row:
                     if not (state & Gdk.ModifierType.SHIFT_MASK):
@@ -785,7 +791,7 @@ class LauncherWindow(Gtk.Window):
                         for row in self.list_box.get_selected_rows():
                             if row != target_row:
                                 self.list_box.unselect_row(row)
-                    self.list_box.select_row(target_row) # Select the target row
+                    self.list_box.select_row(target_row)  # Select the target row
 
                     adjustment = self.scrolled.get_vadjustment()
                     if adjustment:
@@ -902,7 +908,9 @@ class LauncherWindow(Gtk.Window):
             selected_rows = list_box.get_selected_rows()
             count = len(selected_rows)
             if count > 0:
-                self.result_count_label.set_text(f"{count} selected item{'s' if count != 1 else ''}")
+                self.result_count_label.set_text(
+                    f"{count} selected item{'s' if count != 1 else ''}"
+                )
                 self.result_count_label.show()
             else:
                 self.result_count_label.hide()
