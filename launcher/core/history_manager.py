@@ -21,9 +21,9 @@ class HistoryManager:
     __slots__ = ("user_input_history", "history_file")
 
     def __init__(self, config=None):
-        self.user_input_history: List[Dict[str, Any]] = (
-            []
-        )  # List of user input entries with timestamps
+        self.user_input_history: List[
+            Dict[str, Any]
+        ] = []  # List of user input entries with timestamps
         self.history_file = None
 
         if config:
@@ -53,7 +53,7 @@ class HistoryManager:
                 logger.error(f"Error loading history from {self.history_file}: {e}")
                 self.user_input_history = []
         else:
-            logger.info(f"History file not found, starting with empty history")
+            logger.info("History file not found, starting with empty history")
             self.user_input_history = []
 
     def save_history(self) -> bool:

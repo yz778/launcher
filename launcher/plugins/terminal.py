@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-import os
 import shlex
-import subprocess
 from typing import Dict, Any, List
 
 import gi
@@ -101,7 +99,7 @@ class TerminalPlugin(Plugin):
             self.default_icon = icon_theme.load_icon(
                 "utilities-terminal", self.icon_size, 0
             )
-        except Exception as e:
+        except Exception:
             self.default_icon = None
 
         # Return False to ensure this function is only called once by idle_add

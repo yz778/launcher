@@ -129,7 +129,7 @@ class CalculatorPlugin(Plugin):
             self.calculator_icon = icon_theme.load_icon(
                 "accessories-calculator", self.icon_size, 0
             )
-        except Exception as e:
+        except Exception:
             self.calculator_icon = None
 
         return False
