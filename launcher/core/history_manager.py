@@ -46,17 +46,7 @@ class HistoryManager:
         if os.path.isfile(self.history_file):
             try:
                 with open(self.history_file, "r") as f:
-                    data = json.load(f)
-
-                # Expect only the new format: a list of history entries
-                if isinstance(data, list):
-                    self.user_input_history = data
-                else:
-                    # Invalid format, start fresh
-                    logger.warning(
-                        f"Invalid history format in {self.history_file}, starting fresh"
-                    )
-                    self.user_input_history = []
+                    self.user_input_history = json.load(f)
 
                 logger.info(f"Loaded history from {self.history_file}")
             except Exception as e:
@@ -97,11 +87,11 @@ class HistoryManager:
         Returns:
             Usage count
         """
-        count = 0
+        # Find the most recent entry for this plugin_id/item_id
         for entry in self.user_input_history:
             if entry.get("plugin_id") == plugin_id and entry.get("item_id") == item_id:
-                count += 1
-        return count
+                return entry.get("usage_count", 1)
+        return 0
 
     def add_execution(
         self,
@@ -159,6 +149,13 @@ class HistoryManager:
         if timestamp is None:
             timestamp = time.time()
 
+        # Find existing entry with same plugin_id/item_id to get current usage count
+        current_usage_count = 0
+        for entry in self.user_input_history:
+            if entry.get("plugin_id") == plugin_id and entry.get("item_id") == item_id:
+                current_usage_count = entry.get("usage_count", 0)
+                break
+
         # Remove any existing entry with the same user input
         self.user_input_history = [
             entry
@@ -173,6 +170,7 @@ class HistoryManager:
             "item_id": item_id,
             "timestamp": timestamp,
             "result_name": result_name,
+            "usage_count": current_usage_count + 1,
         }
 
         # Store the actual icon data if provided and plugin is executable
@@ -347,7 +345,9 @@ class HistoryManager:
             logger.error(f"Error converting pixbuf to base64: {e}")
         return None
 
-    def _base64_to_pixbuf(self, icon_data: str, icon_size: int = 48) -> Optional:
+    def _base64_to_pixbuf(
+        self, icon_data: str, icon_size: int = 48
+    ) -> Optional[object]:
         """
         Convert base64 encoded PNG data back to GdkPixbuf
 
