@@ -39,13 +39,16 @@ int main(int argc, char *argv[]) {
     if (chdir(path) != 0) return 1;
 
     // Build argument array
-    char *args[argc + 2];
+    char *args[argc + 3];
     char venv_python[PATH_MAX];
-    snprintf(venv_python, sizeof(venv_python), "%s/.venv/bin/python", path);
+    snprintf(venv_python, sizeof(venv_python), "%s/../.venv/bin/python", path);
 
     args[0] = venv_python;
-    args[1] = "main.py";
-    memcpy(&args[2], &argv[1], argc * sizeof(char*));
+    args[1] = "-m";
+    args[2] = "launcher.launcher";
+    // Copy argv[1]..argv[argc-1] into args[3]..args[argc+1]
+    memcpy(&args[3], &argv[1], (argc - 1) * sizeof(char*));
+    args[argc + 2] = NULL; // NULL-terminate the array
 
     // Try venv python first, fallback to system python
     execvp(venv_python, args);
