@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 class ConfigManager:
     """Manager for loading and managing configuration"""
-    
-    __slots__ = ('config', 'config_file', 'plugin_defaults')
+
+    __slots__ = ("config", "config_file", "plugin_defaults")
 
     DEFAULT_CONFIG = {
         "max_results": 15,
