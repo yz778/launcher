@@ -252,10 +252,10 @@ class DesktopFilePlugin(Plugin):
 
         # Get general config
         self.general_config = config.get("general", {})
-        
+
         # Get default config
         defaults = self.get_config_defaults()
-        
+
         # Set track_history setting
         self.track_history = config.get("track_history", defaults["track_history"])
 
@@ -363,7 +363,7 @@ class DesktopFilePlugin(Plugin):
                 icon=desktop_file.get_icon_pixbuf(size=self.icon_size),
                 score=score,
                 metadata={
-                    "desktop_file": desktop_file, 
+                    "desktop_file": desktop_file,
                     "args": args,
                     "track_history": self.should_track_history(),
                 },
