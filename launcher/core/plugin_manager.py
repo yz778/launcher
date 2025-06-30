@@ -15,9 +15,16 @@ logger = logging.getLogger(__name__)
 
 class PluginManager:
     """Manager for loading and managing plugins"""
-    
-    __slots__ = ('plugins', 'enabled_plugins', 'config', 'config_manager', 
-                 'active_search_threads', 'active_search_threads_lock', '_executor')
+
+    __slots__ = (
+        "plugins",
+        "enabled_plugins",
+        "config",
+        "config_manager",
+        "active_search_threads",
+        "active_search_threads_lock",
+        "_executor",
+    )
 
     def __init__(self, config_manager=None):
         self.plugins: Dict[str, Plugin] = {}

@@ -6,8 +6,16 @@ from typing import List, Any, Dict, Optional
 
 class SearchResult:
     """Class representing a search result from any plugin"""
-    
-    __slots__ = ('plugin_id', 'item_id', 'name', 'description', 'icon', 'score', 'metadata')
+
+    __slots__ = (
+        "plugin_id",
+        "item_id",
+        "name",
+        "description",
+        "icon",
+        "score",
+        "metadata",
+    )
 
     def __init__(
         self,
@@ -70,11 +78,11 @@ class Plugin(ABC):
     def should_track_history(self) -> bool:
         """
         Check if this plugin should track executions in history
-        
+
         Returns:
             True if executions should be tracked in history, False otherwise
         """
-        return getattr(self, 'track_history', True)
+        return getattr(self, "track_history", True)
 
     @abstractmethod
     def get_config_defaults(self) -> Dict[str, Any]:

@@ -311,7 +311,7 @@ class ExecutablePlugin(Plugin):
             self.default_icon = icon_theme.load_icon(
                 "utilities-terminal", self.icon_size, 0
             )
-        except Exception as e:
+        except Exception:
             self.default_icon = None
 
         return False

@@ -283,10 +283,10 @@ class DesktopFilePlugin(Plugin):
 
         # Get general config
         self.general_config = config.get("general", {})
-        
+
         # Get default config
         defaults = self.get_config_defaults()
-        
+
         # Set track_history setting
         self.track_history = config.get("track_history", defaults["track_history"])
 

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
-import os
 import shlex
-import subprocess
 from typing import Dict, Any, List
 
 import gi
@@ -76,13 +74,13 @@ class TerminalPlugin(Plugin):
             self.get_id(), {}
         )  # Plugin-specific config is under its ID
         defaults = self.get_config_defaults()
-        
+
         # Set track_history setting
-        self.track_history = plugin_specific_config.get("track_history", defaults["track_history"])
-        
-        self.prefix = plugin_specific_config.get(
-            "prefix", defaults["prefix"]
+        self.track_history = plugin_specific_config.get(
+            "track_history", defaults["track_history"]
         )
+
+        self.prefix = plugin_specific_config.get("prefix", defaults["prefix"])
         self.icon_size = self.general_config.get("icon_size")
         return True
 
@@ -101,7 +99,7 @@ class TerminalPlugin(Plugin):
             self.default_icon = icon_theme.load_icon(
                 "utilities-terminal", self.icon_size, 0
             )
-        except Exception as e:
+        except Exception:
             self.default_icon = None
 
         # Return False to ensure this function is only called once by idle_add

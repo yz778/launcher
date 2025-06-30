@@ -28,9 +28,11 @@ setup(
     install_requires=requirements,
     include_package_data=True,
     license="MIT",
+    # Instead of a console script, we provide a pre-compiled executable.
+    # The 'launcher' executable must be built via 'make' before packaging.
     entry_points={
         "console_scripts": [
             "launcher=launcher.launcher:main",
-        ],
+        ]
     },
 )

@@ -80,7 +80,7 @@ class QalculatePlugin(Plugin):
         super().initialize(config)
         plugin_config = config.get(self.get_id(), {})
         defaults = self.get_config_defaults()
-        
+
         # Set track_history setting
         self.track_history = plugin_config.get("track_history", defaults["track_history"])
 

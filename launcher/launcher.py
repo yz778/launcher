@@ -100,8 +100,8 @@ def main() -> None:
         plugins_dir = os.path.join(current_dir, "plugins")
 
         if not create_default_config_file(config_manager, plugins_dir, args.config):
-            sys.exit(1)
-        sys.exit(0)
+            return 1
+        return 0
 
     if args.create_css:
         from .utils.config_utils import create_default_css_file
@@ -111,8 +111,8 @@ def main() -> None:
         plugins_dir = os.path.join(current_dir, "plugins")
 
         if not create_default_css_file(config_manager, plugins_dir):
-            sys.exit(1)
-        sys.exit(0)
+            return 1
+        return 0
 
     # Set up signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
@@ -143,10 +143,10 @@ def main() -> None:
                         )
                         return
                 logger.error("Failed to send rescan command")
-                sys.exit(1)
+                return 1
             else:
                 logger.error("No running instance found to rescan")
-                sys.exit(1)
+                return 1
 
         # Check if another instance is already running
         if singleton_manager.is_running():
@@ -162,14 +162,14 @@ def main() -> None:
         # Start singleton server for this instance
         if not singleton_manager.start_server(show_window, rescan_callback):
             logger.error("Failed to start singleton server")
-            sys.exit(1)
+            return 1
     else:
         logger.info("Running in foreground mode (singleton disabled)")
 
         # In foreground mode, rescan commands should just exit with error
         if args.rescan or args.rescan_plugin:
             logger.error("Rescan commands not supported in foreground mode")
-            sys.exit(1)
+            return 1
 
     # Only import heavy modules when we actually need to start the GUI
     logger.debug("Loading GUI modules...")
@@ -221,6 +221,8 @@ def main() -> None:
         # Clean up plugin manager resources
         if launcher_window and launcher_window.plugin_manager:
             launcher_window.plugin_manager.cleanup()
+
+    return 0
 
 
 def complete_initialization(
@@ -295,7 +297,7 @@ def start_plugins(plugin_manager: "PluginManager") -> bool:
 
 if __name__ == "__main__":
     try:
-        main()
+        sys.exit(main())
     except KeyboardInterrupt:
         logger.info("Interrupted by user")
         sys.exit(0)
