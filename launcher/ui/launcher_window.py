@@ -77,20 +77,13 @@ class AppListItem(Gtk.ListBoxRow):
 
         vbox.pack_start(name_box, True, True, 0)
 
-        if result.description:
-            desc_label = Gtk.Label(label=result.description)
-            desc_label.set_halign(Gtk.Align.START)
-            desc_label.set_ellipsize(Pango.EllipsizeMode.END)
-            desc_label.set_name("app-description")
-            desc_label.get_style_context().add_class("dim-label")
-            vbox.pack_start(desc_label, True, True, 0)
-        else:
-            # Debug: Show that description is missing
-            desc_label = Gtk.Label(label="[No description]")
-            desc_label.set_halign(Gtk.Align.START)
-            desc_label.set_name("app-description")
-            desc_label.get_style_context().add_class("dim-label")
-            vbox.pack_start(desc_label, True, True, 0)
+        # Add description
+        desc_label = Gtk.Label(label=result.description or "")
+        desc_label.set_halign(Gtk.Align.START)
+        desc_label.set_name("app-description")
+        desc_label.get_style_context().add_class("dim-label")
+        desc_label.set_ellipsize(Pango.EllipsizeMode.END)
+        vbox.pack_start(desc_label, True, True, 0)
 
         hbox.pack_start(vbox, True, True, 0)
         self.add(hbox)
