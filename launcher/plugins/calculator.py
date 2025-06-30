@@ -94,7 +94,7 @@ class CalculatorPlugin(Plugin):
         super().initialize(config, config_manager)
 
         # Get general config
-        self.general_config = config.get("general", {})
+        self.general_config = self.config_manager.get_config().get("general", {})
         defaults = self.get_config_defaults()
 
         # Get icon size from general config
