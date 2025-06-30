@@ -39,7 +39,7 @@ class HistoryManager:
         Args:
             history_file_path: Path to history file
         """
-        self.history_file = os.path.expanduser(history_file_path)
+        self.history_file = history_file_path
 
         os.makedirs(os.path.dirname(self.history_file), exist_ok=True)
 

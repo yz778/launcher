@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import gi
+import json
 import logging
 import os
 import re
@@ -8,12 +10,12 @@ import stat
 import threading
 from typing import Dict, List, Any
 
-import gi
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # Import GLib at the module level
 
 from plugins.base import Plugin, SearchResult
+from launcher.core.config_manager import ConfigManager
 from launcher.utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,25 @@ class ExecutableFile:
         self.custom_icon = None
         self._check_executable()
         self._parse_icon_directive()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert ExecutableFile object to a dictionary for JSON serialization"""
+        return {
+            "path": self.path,
+            "name": self.name,
+            "is_executable": self.is_executable,
+            "custom_icon": self.custom_icon,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ExecutableFile":
+        """Create an ExecutableFile object from a dictionary (from cache)"""
+        instance = object.__new__(cls)
+        instance.path = data.get("path", "")
+        instance.name = data.get("name", "")
+        instance.is_executable = data.get("is_executable", False)
+        instance.custom_icon = data.get("custom_icon")
+        return instance
 
     def _check_executable(self) -> None:
         """Check if the file is executable"""
@@ -99,10 +120,11 @@ class ExecutablePlugin(Plugin):
         "icon_cache",
         "cache_icons",
         "general_config",
+        "cache_file",
     )
 
     def __init__(self):
-        super().__init__()  # Call super() to initialize the base Plugin class
+        super().__init__()
         self.executables = {}
         self.locations = []
         self.include_patterns = []
@@ -113,6 +135,7 @@ class ExecutablePlugin(Plugin):
         self.icon_cache = {}  # Cache for loaded custom icons
         self.cache_icons = True
         self.general_config = {}
+        self.cache_file = None
 
     def get_id(self) -> str:
         return "executable"
@@ -174,12 +197,14 @@ class ExecutablePlugin(Plugin):
 }
 """
 
-    def initialize(self, config: Dict[str, Any]) -> bool:
+    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """
         Initialize the plugin with the given configuration
 
         This only loads configuration and CSS, without doing any heavy setup work.
         """
+        super().initialize(config, config_manager)
+
         # Store the general config for later use
         self.general_config = config.get("general", {})
 
@@ -206,10 +231,38 @@ class ExecutablePlugin(Plugin):
         # Get icon size from general config
         self.icon_size = self.general_config.get("icon_size")
 
-        # Get icon caching preference
         self.cache_icons = config.get("cache_icons", defaults["cache_icons"])
 
+        self.cache_file = os.path.join(
+            self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json"
+        )
+
         return True
+
+    def _load_from_cache(self) -> None:
+        """Load executables from the cache"""
+        if not os.path.exists(self.cache_file):
+            logger.info("Executable file cache not found.")
+            return
+
+        try:
+            with open(self.cache_file, "r") as f:
+                cached_data = json.load(f)
+                for item_data in cached_data:
+                    executable = ExecutableFile.from_dict(item_data)
+                    self.executables[executable.path] = executable
+            logger.info(f"Loaded {len(self.executables)} executables from cache.")
+        except (IOError, json.JSONDecodeError) as e:
+            logger.error(f"Error loading executable file cache: {e}")
+
+    def _save_to_cache(self) -> None:
+        """Save executables to the cache"""
+        try:
+            with open(self.cache_file, "w") as f:
+                json.dump([ex.to_dict() for ex in self.executables.values()], f)
+            logger.info(f"Saved {len(self.executables)} executables to cache.")
+        except IOError as e:
+            logger.error(f"Error saving executable file cache: {e}")
 
     def start(self) -> bool:
         """
@@ -219,8 +272,8 @@ class ExecutablePlugin(Plugin):
         """
         GLib.idle_add(self._load_default_icon)
 
-        # Start the scan in a separate thread
-        import threading
+        self._load_from_cache()
+        self._update_matcher_on_main_thread()  # Initial update from cache
 
         threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
 
@@ -229,6 +282,7 @@ class ExecutablePlugin(Plugin):
     def _scan_and_update_matcher(self) -> None:
         """Performs the executable file scan and updates the matcher in the main thread"""
         self._scan_executables()
+        self._save_to_cache()  # Save the newly scanned files to cache
         GLib.idle_add(self._update_matcher_on_main_thread)
 
     def _update_matcher_on_main_thread(self) -> bool:
@@ -435,7 +489,7 @@ class ExecutablePlugin(Plugin):
             import subprocess
 
             if use_terminal:
-                terminal_command = self.general_config.get("terminal_command")
+                terminal_command = self.get_general_config("terminal_command")
                 cmd_parts = terminal_command.split() + cmd_parts
 
             logger.info(f"Executing command: {' '.join(cmd_parts)}")

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
+import logging
 import os
 import yaml
-import logging
 from typing import Dict, Any, Optional
+from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +24,24 @@ class ConfigManager:
         "item_height": 50,
         "border_width": 10,
         "padding": 20,
-        "history_file": "~/.local/share/launcher/history.json",
-        "css_file": "~/.config/launcher/launcher.css",
+        "history_file": str(xdg_data_home() / "launcher/history.json"),
+        "css_file": str(xdg_config_home() / "launcher/launcher.css"),
+        "cache_dir": str(xdg_cache_home() / "launcher"),
     }
 
     def __init__(self):
         self.config: Dict[str, Any] = {}
         self.config_file: Optional[str] = None
         self.plugin_defaults: Dict[str, Dict[str, Any]] = {}
+
+    def get_cache_dir(self) -> str:
+        """Get the cache directory, creating it if it doesn't exist"""
+        if not cache_dir:
+            cache_dir = self.DEFAULT_CONFIG["cache_dir"]
+
+        cache_dir = os.path.expanduser(cache_dir)
+        os.makedirs(cache_dir, exist_ok=True)
+        return cache_dir
 
     def register_plugin_defaults(
         self, plugin_id: str, defaults: Dict[str, Any]
@@ -117,3 +128,36 @@ class ConfigManager:
                 self._merge_config(base[key], value)
             else:
                 base[key] = value
+
+    def _expand_user_paths(self, config: Dict[str, Any]) -> None:
+        """
+        Recursively expand user paths in the configuration for known path keys.
+        """
+
+        PATH_KEYS = {
+            "general": ["history_file", "css_file"],
+            "plugins": {"desktop_file": ["locations"], "executable": ["locations"]},
+        }
+
+        # General section
+        if "general" in config:
+            for key in PATH_KEYS["general"]:
+                if key in config["general"] and isinstance(config["general"][key], str):
+                    config["general"][key] = os.path.expanduser(config["general"][key])
+
+        # Plugins section
+        if "plugins" in config:
+            for plugin_id, plugin_keys in PATH_KEYS["plugins"].items():
+                if plugin_id in config["plugins"]:
+                    for key in plugin_keys:
+                        if key in config["plugins"][plugin_id]:
+                            if isinstance(config["plugins"][plugin_id][key], str):
+                                config["plugins"][plugin_id][key] = os.path.expanduser(
+                                    config["plugins"][plugin_id][key]
+                                )
+                            elif isinstance(config["plugins"][plugin_id][key], list):
+                                config["plugins"][plugin_id][key] = [
+                                    os.path.expanduser(p)
+                                    for p in config["plugins"][plugin_id][key]
+                                    if isinstance(p, str)
+                                ]

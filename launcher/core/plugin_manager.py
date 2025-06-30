@@ -112,7 +112,7 @@ class PluginManager:
                 for key, value in plugin_config.items():
                     combined_config[key] = value
 
-                if plugin.initialize(combined_config):
+                if plugin.initialize(combined_config, self.config_manager):
                     self.plugins[plugin_id] = plugin
                     self.enabled_plugins[plugin_id] = True
                     logger.info(

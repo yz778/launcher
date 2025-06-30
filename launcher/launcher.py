@@ -263,7 +263,7 @@ def complete_initialization(
     return False  # Remove from idle queue
 
 
-def start_plugins(plugin_manager) -> bool:
+def start_plugins(plugin_manager: "PluginManager") -> bool:
     """Initialize all enabled plugins"""
     # Lazy import threading only when needed
     import threading
