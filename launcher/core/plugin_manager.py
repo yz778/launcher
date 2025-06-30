@@ -99,20 +99,18 @@ class PluginManager:
             enabled = plugin_config.get("enabled", True)
             logger.debug(f"Plugin '{plugin_id}' enabled flag is {enabled}.")
 
+            # Get the already merged plugin-specific configuration from the main config
+            # This config already respects the hierarchy: global defaults -> plugin defaults -> user config
+            plugin_specific_config = config.get("plugins", {}).get(plugin_id, {})
+
+            enabled = plugin_specific_config.get("enabled", True)
+            logger.debug(f"Plugin '{plugin_id}' enabled flag is {enabled}.")
+
             if enabled:
                 logger.debug(
                     f"Plugin '{plugin_id}' is enabled and will be initialized."
                 )
-                combined_config = config.copy()
-
-                for key, value in plugin_defaults.items():
-                    if key not in plugin_config:
-                        plugin_config[key] = value
-
-                for key, value in plugin_config.items():
-                    combined_config[key] = value
-
-                if plugin.initialize(combined_config, self.config_manager):
+                if plugin.initialize(plugin_specific_config, self.config_manager):
                     self.plugins[plugin_id] = plugin
                     self.enabled_plugins[plugin_id] = True
                     logger.info(

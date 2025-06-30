@@ -70,18 +70,12 @@ class TerminalPlugin(Plugin):
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         super().initialize(config, config_manager)
-        self.general_config = config.get("general", {})
-        plugin_specific_config = config.get(
-            self.get_id(), {}
-        )  # Plugin-specific config is under its ID
+        self.general_config = self.config_manager.get_config().get(
+            "general", {}
+        )  # Get general config from config_manager
         defaults = self.get_config_defaults()
 
-        # Set track_history setting
-        self.track_history = plugin_specific_config.get(
-            "track_history", defaults["track_history"]
-        )
-
-        self.prefix = plugin_specific_config.get("prefix", defaults["prefix"])
+        self.prefix = config.get("prefix", defaults["prefix"])
         self.icon_size = self.general_config.get("icon_size")
         return True
 
