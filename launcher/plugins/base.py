@@ -51,7 +51,7 @@ class SearchResult:
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
-    __slots__ = ('config', 'track_history', 'config_manager')
+    __slots__ = ("config", "config_manager")
 
     @abstractmethod
     def get_id(self) -> str:
@@ -68,13 +68,12 @@ class Plugin(ABC):
     def __init__(self):
         """Initialize the plugin base class"""
         self.config: Dict[str, Any] = {}
-        self.track_history = True  # Default value, will be set from config
         self.config_manager = None
 
     def get_general_config(self, key: str, default: Any = None) -> Any:
         """Helper to get a value from the [general] config section."""
         return self.config.get("general", {}).get(key, default)
-    
+
     def should_track_history(self) -> bool:
         """
         Check if this plugin should track executions in history
@@ -82,7 +81,7 @@ class Plugin(ABC):
         Returns:
             True if executions should be tracked in history, False otherwise
         """
-        return getattr(self, "track_history", True)
+        return self.config.get("track_history", True)
 
     @abstractmethod
     def get_config_defaults(self) -> Dict[str, Any]:

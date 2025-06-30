@@ -79,9 +79,6 @@ class QalculatePlugin(Plugin):
         self.general_config = config.get("general", {})
         defaults = self.get_config_defaults()
 
-        # Set track_history setting
-        self.track_history = config.get("track_history", defaults["track_history"])
-
         # Get icon size from general config
         self.icon_size = self.get_general_config("icon_size")
 
