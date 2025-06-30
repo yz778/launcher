@@ -305,12 +305,25 @@ class LauncherWindow(Gtk.Window):
 
             hbox.pack_start(icon_box, False, False, 0)
 
+            # Create a vertical box for name and description
+            vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+
             # Add the user input text
             text_label = Gtk.Label(user_input)
             text_label.set_halign(Gtk.Align.START)
             text_label.set_ellipsize(Pango.EllipsizeMode.END)
             text_label.set_name("history-text")
-            hbox.pack_start(text_label, True, True, 0)
+            vbox.pack_start(text_label, True, True, 0)
+
+            # Add the result name as description
+            desc_label = Gtk.Label(label=result_name)
+            desc_label.set_halign(Gtk.Align.START)
+            desc_label.set_name("history-description")
+            desc_label.get_style_context().add_class("dim-label")
+            desc_label.set_ellipsize(Pango.EllipsizeMode.END)
+            vbox.pack_start(desc_label, True, True, 0)
+
+            hbox.pack_start(vbox, True, True, 0)
 
             row.add(hbox)
             row.user_input = user_input  # Store the input for selection
