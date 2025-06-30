@@ -270,7 +270,7 @@ class LauncherWindow(Gtk.Window):
             user_input = history_entry.get("user_input", "")
             plugin_id = history_entry.get("plugin_id", "")
             item_id = history_entry.get("item_id", "")
-            result_name = history_entry.get("result_name", user_input)
+            description = history_entry.get("description", user_input)
 
             if not user_input:
                 continue
@@ -316,7 +316,7 @@ class LauncherWindow(Gtk.Window):
             vbox.pack_start(text_label, True, True, 0)
 
             # Add the result name as description
-            desc_label = Gtk.Label(label=result_name)
+            desc_label = Gtk.Label(label=description)
             desc_label.set_halign(Gtk.Align.START)
             desc_label.set_name("history-description")
             desc_label.get_style_context().add_class("dim-label")
@@ -364,7 +364,7 @@ class LauncherWindow(Gtk.Window):
 
                 return MockResult(
                     stored_icon,
-                    history_entry.get("result_name", ""),
+                    history_entry.get("user_input", ""),
                     plugin_id,
                     item_id,
                 )
@@ -982,7 +982,7 @@ class LauncherWindow(Gtk.Window):
                     result.item_id,
                     executed_command,
                     user_input_for_history,
-                    result.name,
+                    result.description,
                     icon_pixbuf,
                 )
                 self.history_manager.save_history()

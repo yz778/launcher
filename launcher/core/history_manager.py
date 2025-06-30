@@ -99,7 +99,7 @@ class HistoryManager:
         item_id: str,
         executed_command: str,
         original_user_input: str,
-        result_name: str = None,
+        description: str = None,
         icon_pixbuf=None,
     ) -> None:
         """
@@ -109,7 +109,7 @@ class HistoryManager:
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
             user_input: The exact text that the user typed before submitting
-            result_name: Display name of the executed item
+            description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
         current_time = time.time()
@@ -121,7 +121,7 @@ class HistoryManager:
             item_id,
             current_time,
             executed_command,
-            result_name,
+            description,
             icon_pixbuf,
         )
 
@@ -132,7 +132,7 @@ class HistoryManager:
         item_id: str,
         timestamp: float = None,
         executed_command_string: str = None,
-        result_name: str = None,
+        description: str = None,
         icon_pixbuf=None,
     ) -> None:
         """
@@ -143,7 +143,7 @@ class HistoryManager:
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
             timestamp: Timestamp when executed (defaults to current time)
-            result_name: Display name of the executed item
+            description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
         if timestamp is None:
@@ -169,7 +169,7 @@ class HistoryManager:
             "plugin_id": plugin_id,
             "item_id": item_id,
             "timestamp": timestamp,
-            "result_name": result_name,
+            "description": description,
             "usage_count": current_usage_count + 1,
         }
 
@@ -180,9 +180,9 @@ class HistoryManager:
                 icon_data = self._pixbuf_to_base64(icon_pixbuf)
                 if icon_data:
                     entry["icon_data"] = icon_data
-                    logger.debug(f"Stored icon data for executable: {result_name}")
+                    logger.debug(f"Stored icon data for executable: {description}")
             except Exception as e:
-                logger.warning(f"Failed to store icon data for {result_name}: {e}")
+                logger.warning(f"Failed to store icon data for {description}: {e}")
 
         self.user_input_history.insert(0, entry)
 
