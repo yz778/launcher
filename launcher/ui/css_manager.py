@@ -145,7 +145,7 @@ scrollbar slider:active {
         """Load CSS styling from default, plugin, and custom sources"""
         css_path = None
         if config and "general" in config and "css_file" in config["general"]:
-            css_path = os.path.expanduser(config["general"]["css_file"])
+            css_path = config["general"]["css_file"]
 
         logger.info("Loading default CSS styling")
         cls._load_css_from_string(cls.DEFAULT_CSS)

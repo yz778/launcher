@@ -77,17 +77,15 @@ class QalculatePlugin(Plugin):
 
         This only loads configuration and CSS, without doing any heavy setup work.
         """
-        # Store the general config for later use
-        self.general_config = config.get("general", {})
-
-        # Get default config
+        super().initialize(config)
+        plugin_config = config.get(self.get_id(), {})
         defaults = self.get_config_defaults()
 
         # Set track_history setting
-        self.track_history = config.get("track_history", defaults["track_history"])
+        self.track_history = plugin_config.get("track_history", defaults["track_history"])
 
         # Get icon size from general config
-        self.icon_size = self.general_config.get("icon_size")
+        self.icon_size = self.get_general_config("icon_size")
 
         return True
 

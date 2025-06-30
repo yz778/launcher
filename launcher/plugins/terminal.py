@@ -137,7 +137,7 @@ class TerminalPlugin(Plugin):
         try:
             import subprocess
 
-            terminal_command = self.general_config.get("terminal_command")
+            terminal_command = self.get_general_config("terminal_command")
             cmd_parts = terminal_command.split() + shlex.split(command)
 
             logger.info(f"Executing command: {' '.join(cmd_parts)}")
