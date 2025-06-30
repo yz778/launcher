@@ -125,6 +125,26 @@ class HistoryManager:
             icon_pixbuf,
         )
 
+    def _normalize_command_for_comparison(self, command: str) -> Optional[str]:
+        """
+        Normalizes a command string for comparison, handling common executable variations.
+        For example, 'firefox.desktop' and '/usr/bin/firefox' should normalize to the same string.
+        """
+        if not command:
+            return None
+
+        # Get the base name without directory
+        base_name = os.path.basename(command)
+
+        # Remove common executable extensions or .desktop
+        if base_name.endswith(".desktop"):
+            base_name = base_name[:-len(".desktop")]
+        # Add more specific extension handling if needed, e.g., .py, .sh, but be careful
+        # For now, keep it simple to avoid false positives.
+
+        # Convert to lowercase for case-insensitive comparison
+        return base_name.lower()
+
     def add_user_input_history(
         self,
         user_input: str,
@@ -137,30 +157,49 @@ class HistoryManager:
     ) -> None:
         """
         Add user input to history, removing duplicates and maintaining order.
+        Merges usage counts for executables that resolve to the same command.
 
         Args:
             user_input: The exact text that the user typed
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
             timestamp: Timestamp when executed (defaults to current time)
+            executed_command_string: The actual command string that was executed.
             description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
         if timestamp is None:
             timestamp = time.time()
 
-        # Find existing entry with same plugin_id/item_id to get current usage count
         current_usage_count = 0
-        for entry in self.user_input_history:
-            if entry.get("plugin_id") == plugin_id and entry.get("item_id") == item_id:
-                current_usage_count = entry.get("usage_count", 0)
-                break
+        entries_to_remove = []
 
-        # Remove any existing entry with the same user input
+        # Normalize the executed command for the new entry, if applicable
+        normalized_new_command = None
+        if plugin_id in ["executable", "desktop_file"] and executed_command_string:
+            normalized_new_command = self._normalize_command_for_comparison(executed_command_string)
+
+        # Iterate through existing history to find duplicates and merge counts
+        for entry in self.user_input_history:
+            # Check for exact user input duplicate (case-insensitive)
+            if entry.get("user_input", "").lower() == user_input.lower():
+                # This is the exact same user input, so we'll replace it.
+                # Take its usage count as the base for the new entry.
+                current_usage_count = entry.get("usage_count", 0)
+                entries_to_remove.append(entry)
+                continue # Don't process this entry further for merging, it's being replaced
+
+            # Check for merging based on normalized executed command
+            if normalized_new_command and entry.get("executed_command"):
+                normalized_existing_command = self._normalize_command_for_comparison(entry["executed_command"])
+                if normalized_new_command == normalized_existing_command:
+                    current_usage_count += entry.get("usage_count", 0)
+                    entries_to_remove.append(entry)
+                    logger.debug(f"Merging history entry for command '{executed_command_string}' with existing entry: {entry.get('user_input')}")
+
+        # Filter out entries that are being replaced or merged
         self.user_input_history = [
-            entry
-            for entry in self.user_input_history
-            if entry.get("user_input", "").lower() != user_input.lower()
+            entry for entry in self.user_input_history if entry not in entries_to_remove
         ]
 
         # Add new entry at the beginning (most recent first)
@@ -170,7 +209,8 @@ class HistoryManager:
             "item_id": item_id,
             "timestamp": timestamp,
             "description": description,
-            "usage_count": current_usage_count + 1,
+            "usage_count": current_usage_count + 1, # Increment for the current execution
+            "executed_command": executed_command_string, # Store the actual executed command
         }
 
         # Store the actual icon data if provided and plugin is executable

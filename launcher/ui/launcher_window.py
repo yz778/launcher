@@ -281,54 +281,70 @@ class LauncherWindow(Gtk.Window):
                 plugin_id, item_id, history_entry
             )
 
-            # Create a history item row
-            row = Gtk.ListBoxRow()
-            row.set_name("history-item")
-
-            hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            hbox.set_border_width(8)
-            hbox.set_property("height-request", 60)
-
-            # Add icon - use actual app icon if available, otherwise fallback
-            icon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            icon_box.set_size_request(self.icon_size or 48, self.icon_size or 48)
-
+            # Determine the icon to use
+            display_icon = None
             if actual_result and actual_result.icon:
-                # Use the actual app icon (could be from stored data or current plugin state)
-                icon = Gtk.Image.new_from_pixbuf(actual_result.icon)
-                icon_box.pack_start(icon, True, False, 0)
+                display_icon = actual_result.icon
             else:
                 # Fallback to clock icon
-                history_label = Gtk.Label("🕒")
-                history_label.set_name("history-icon")
-                icon_box.pack_start(history_label, True, False, 0)
+                try:
+                    icon_theme = Gtk.IconTheme.get_default()
+                    display_icon = icon_theme.load_icon(
+                        "accessories-history", self.icon_size or 48, 0
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not load history icon: {e}")
+                    # Fallback to a generic icon if history icon fails
+                    try:
+                        display_icon = icon_theme.load_icon(
+                            "document-open-recent", self.icon_size or 48, 0
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not load generic recent icon: {e}")
+                        # If all else fails, display no icon (AppListItem will handle it)
+                        display_icon = None
 
-            hbox.pack_start(icon_box, False, False, 0)
+            # Determine the icon to use
+            display_icon = None
+            if actual_result and actual_result.icon:
+                display_icon = actual_result.icon
+            else:
+                # Fallback to clock icon
+                try:
+                    icon_theme = Gtk.IconTheme.get_default()
+                    display_icon = icon_theme.load_icon(
+                        "accessories-history", self.icon_size or 48, 0
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not load history icon: {e}")
+                    # Fallback to a generic icon if history icon fails
+                    try:
+                        display_icon = icon_theme.load_icon(
+                            "document-open-recent", self.icon_size or 48, 0
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not load generic recent icon: {e}")
+                        # If all else fails, display no icon (AppListItem will handle it)
+                        display_icon = None
 
-            # Create a vertical box for name and description
-            vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-
-            # Add the user input text
-            text_label = Gtk.Label(user_input)
-            text_label.set_halign(Gtk.Align.START)
-            text_label.set_ellipsize(Pango.EllipsizeMode.END)
-            text_label.set_name("history-text")
-            vbox.pack_start(text_label, True, True, 0)
-
-            # Add the result name as description
-            desc_label = Gtk.Label(label=description)
-            desc_label.set_halign(Gtk.Align.START)
-            desc_label.set_name("history-description")
-            desc_label.get_style_context().add_class("dim-label")
-            desc_label.set_ellipsize(Pango.EllipsizeMode.END)
-            vbox.pack_start(desc_label, True, True, 0)
-
-            hbox.pack_start(vbox, True, True, 0)
-
-            row.add(hbox)
-            row.user_input = user_input  # Store the input for selection
-            row.history_entry = history_entry  # Store full history entry
-            self.list_box.add(row)
+            # Create history result items
+            history_count = history_entry.get("usage_count", 0)
+            list_item = AppListItem(
+                SearchResult(
+                    plugin_id=plugin_id,
+                    item_id=item_id,
+                    name=user_input,
+                    description=description,
+                    icon=display_icon,
+                    score=0,
+                ),
+                icon_size=self.icon_size or 48,
+                launch_count=history_count,
+            )
+            list_item.set_name("history-item")
+            list_item.user_input = user_input  # Store the input for selection
+            list_item.history_entry = history_entry  # Store full history entry
+            self.list_box.add(list_item)
 
         self.list_box.show_all()
         self.scrolled.show()
