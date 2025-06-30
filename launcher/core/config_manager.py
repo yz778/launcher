@@ -36,8 +36,7 @@ class ConfigManager:
 
     def get_cache_dir(self) -> str:
         """Get the cache directory, creating it if it doesn't exist"""
-        if not cache_dir:
-            cache_dir = self.DEFAULT_CONFIG["cache_dir"]
+        cache_dir = self.DEFAULT_CONFIG["cache_dir"]
 
         cache_dir = os.path.expanduser(cache_dir)
         os.makedirs(cache_dir, exist_ok=True)

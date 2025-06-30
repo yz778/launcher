@@ -68,7 +68,8 @@ class TerminalPlugin(Plugin):
         }
         """
 
-    def initialize(self, config: Dict[str, Any]) -> bool:
+    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+        super().initialize(config, config_manager)
         self.general_config = config.get("general", {})
         plugin_specific_config = config.get(
             self.get_id(), {}

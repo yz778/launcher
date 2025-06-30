@@ -71,7 +71,8 @@ class QalculatePlugin(Plugin):
 }
 """
 
-    def initialize(self, config: Dict[str, Any]) -> bool:
+    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+        super().initialize(config, config_manager)
         """
         Initialize the plugin with the given configuration
 
