@@ -89,25 +89,23 @@ class CalculatorPlugin(Plugin):
 }
 """
 
-    def initialize(self, config: Dict[str, Any]) -> bool:
-        """
-        Initialize the plugin with the given configuration
+    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+        """Initialize the plugin with the given configuration"""
+        super().initialize(config, config_manager)
 
-        This only loads configuration and CSS, without doing any heavy setup work.
-        """
-        super().initialize(config)
-        plugin_config = config.get(self.get_id(), {})
+        # Get general config
+        self.general_config = config.get("general", {})
         defaults = self.get_config_defaults()
 
         # Set track_history setting
-        self.track_history = plugin_config.get("track_history", defaults["track_history"])
+        self.track_history = config.get("track_history", defaults["track_history"])
 
         # Get icon size from general config
         self.icon_size = self.get_general_config("icon_size")
 
         # Get calculator-specific config
-        self.precision = plugin_config.get("precision", defaults["precision"])
-        self.angle_unit = plugin_config.get("angle_unit", defaults["angle_unit"])
+        self.precision = config.get("precision", defaults["precision"])
+        self.angle_unit = config.get("angle_unit", defaults["angle_unit"])
 
         return True
 

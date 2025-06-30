@@ -198,17 +198,11 @@ class ExecutablePlugin(Plugin):
 """
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
-        """
-        Initialize the plugin with the given configuration
-
-        This only loads configuration and CSS, without doing any heavy setup work.
-        """
+        """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
 
-        # Store the general config for later use
+        # Get general config
         self.general_config = config.get("general", {})
-
-        # Get default config
         defaults = self.get_config_defaults()
 
         # Set track_history setting

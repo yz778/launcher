@@ -72,18 +72,15 @@ class QalculatePlugin(Plugin):
 """
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+        """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
-        """
-        Initialize the plugin with the given configuration
 
-        This only loads configuration and CSS, without doing any heavy setup work.
-        """
-        super().initialize(config)
-        plugin_config = config.get(self.get_id(), {})
+        # Get general config
+        self.general_config = config.get("general", {})
         defaults = self.get_config_defaults()
 
         # Set track_history setting
-        self.track_history = plugin_config.get("track_history", defaults["track_history"])
+        self.track_history = config.get("track_history", defaults["track_history"])
 
         # Get icon size from general config
         self.icon_size = self.get_general_config("icon_size")
@@ -96,6 +93,12 @@ class QalculatePlugin(Plugin):
 
         This loads the calculator icon. Sympy will be loaded lazily when needed.
         """
+        try:
+            subprocess.run(["qalc", "--version"], check=True, capture_output=True)
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            logger.error("qalc command not found. Disabling Qalculate plugin.")
+            return False
+
         GLib.idle_add(self._load_icon)
         return True
 
