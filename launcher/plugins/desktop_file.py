@@ -282,13 +282,8 @@ class DesktopFilePlugin(Plugin):
         super().initialize(config, config_manager)
 
         # Get general config
-        self.general_config = config.get("general", {})
-
-        # Get default config
+        self.general_config = self.config_manager.get_config().get("general", {})
         defaults = self.get_config_defaults()
-
-        # Set track_history setting
-        self.track_history = config.get("track_history", defaults["track_history"])
 
         # Get locations from config
         self.locations = [
@@ -303,7 +298,9 @@ class DesktopFilePlugin(Plugin):
         self.desktop_files = {}
         self.matcher = StringMatcher(items=[], key_func=lambda df: df.name)
 
-        self.cache_file = os.path.join(self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json")
+        self.cache_file = os.path.join(
+            self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json"
+        )
 
         return True
 
