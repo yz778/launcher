@@ -4,7 +4,7 @@ import logging
 import os
 import yaml
 from typing import Dict, Any, Optional
-from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
+from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_state_home
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class ConfigManager:
         "item_height": 50,
         "border_width": 10,
         "padding": 20,
-        "history_file": str(xdg_data_home() / "launcher/history.json"),
+        "history_file": str(xdg_state_home() / "launcher/history.json"),
         "css_file": str(xdg_config_home() / "launcher/launcher.css"),
         "cache_dir": str(xdg_cache_home() / "launcher"),
     }
