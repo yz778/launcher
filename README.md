@@ -140,8 +140,7 @@ Customize search result highlighting by overriding CSS classes:
 - **Escape** to clear or exit
 - **F5** or **Ctrl+R** to rescan plugins
 - **Ctrl+Q** to quit
-- **Shift+Delete** to remove selected history item
-- **Ctrl+Delete** to remove multiple selected history items
+- **Shift+Delete** to remove selected history items (single or multiple)
 
 ### Search Features
 

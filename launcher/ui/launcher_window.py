@@ -495,12 +495,13 @@ class LauncherWindow(Gtk.Window):
         self.showing_history = False
 
     def _show_recent_history(self):
-        """Show the most recent 5 history items when launcher opens with empty input."""
+        """Show all history items when launcher opens with empty input, with scrolling support."""
         if not self.history_manager:
             return
 
-        recent_items = self.history_manager.get_recent_history(5)
-        if not recent_items:
+        # Get all history items instead of just 5
+        all_history = self.history_manager.get_recent_history(100)  # Get up to 100 items
+        if not all_history:
             return
 
         # Clear previous items
@@ -508,7 +509,7 @@ class LauncherWindow(Gtk.Window):
             child.destroy()
 
         # Create history result items
-        for i, history_entry in enumerate(recent_items):
+        for i, history_entry in enumerate(all_history):
             user_input = history_entry.get("user_input", "")
             plugin_id = history_entry.get("plugin_id", "")
             item_id = history_entry.get("item_id", "")
@@ -528,30 +529,7 @@ class LauncherWindow(Gtk.Window):
             if actual_result and actual_result.icon:
                 display_icon = actual_result.icon
             else:
-                # Fallback to clock icon
-                try:
-                    icon_theme = Gtk.IconTheme.get_default()
-                    display_icon = icon_theme.load_icon(
-                        "accessories-history", self.icon_size or 48, 0
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not load history icon: {e}")
-                    # Fallback to a generic icon if history icon fails
-                    try:
-                        display_icon = icon_theme.load_icon(
-                            "document-open-recent", self.icon_size or 48, 0
-                        )
-                    except Exception as e:
-                        logger.warning(f"Could not load generic recent icon: {e}")
-                        # If all else fails, display no icon (AppListItem will handle it)
-                        display_icon = None
-
-            # Determine the icon to use
-            display_icon = None
-            if actual_result and actual_result.icon:
-                display_icon = actual_result.icon
-            else:
-                # Fallback to clock icon
+                # Fallback to history icon
                 try:
                     icon_theme = Gtk.IconTheme.get_default()
                     display_icon = icon_theme.load_icon(
@@ -593,12 +571,8 @@ class LauncherWindow(Gtk.Window):
         self.scrolled.show()
         self.showing_history = True
 
-        # Resize window for history display
-        row_height = 60 + 16  # height + padding
-        num_items = len(recent_items)
-        min_height = row_height * max(num_items, 1)
-        self.resize(self.window_width, self.window_height + min_height)
-        self.scrolled.set_size_request(-1, min_height)
+        # Use the same display logic as search results for consistency
+        self._setup_results_display(all_history, f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}")
 
     def _get_result_for_history_entry(
         self, plugin_id: str, item_id: str, history_entry: Dict[str, Any] = None
@@ -776,17 +750,17 @@ class LauncherWindow(Gtk.Window):
 
         # Add new items
         for result in results_to_display:
-            history_count = self.history_manager.get_usage_count(
-                result.plugin_id, result.item_id
-            )
-            icon_size = (
-                self.icon_size
-                if self.icon_size is not None
-                else self.config.get("general", {}).get("icon_size", 48)
-            )
+            # For history plugin results, use the stored usage count, otherwise look it up
+            if result.plugin_id == "history":
+                history_count = result.metadata.get("usage_count", 0)
+            else:
+                history_count = self.history_manager.get_usage_count(
+                    result.plugin_id, result.item_id
+                )
+            
             list_item = AppListItem(
                 result,
-                icon_size=icon_size,
+                icon_size=self.icon_size or 48,
                 launch_count=history_count,
                 query=self.entry.get_text().strip(),
             )
@@ -799,42 +773,39 @@ class LauncherWindow(Gtk.Window):
         if vadj:
             vadj.set_value(vadj.get_lower())
 
-        # Show result count if there are results
-        if results_to_display:
-            count = len(results_to_display)
-            self.result_count_label.set_text(
-                f"{count} result{'s' if count != 1 else ''}"
-            )
+        # Use unified display setup
+        count_text = f"{len(results_to_display)} result{'s' if len(results_to_display) != 1 else ''}" if results_to_display else ""
+        self._setup_results_display(results_to_display, count_text)
+
+        if not self.user_navigating:
+            self.list_box.unselect_all()
+
+    def _setup_results_display(self, items, count_text=""):
+        """Unified method to set up the results display area with consistent sizing and scrolling."""
+        # Show/hide result count
+        if count_text:
+            self.result_count_label.set_text(count_text)
             self.result_count_label.show()
         else:
             self.result_count_label.set_text("")
             self.result_count_label.hide()
 
-        # Always reserve space for 5 results
-        row_height = 60 + 16  # AppListItem height-request + hbox border
-        min_height = row_height * 5
-        self.resize(self.window_width, max(self.window_height_results, min_height))
-        self.scrolled.set_size_request(-1, min_height)
-        self.scrolled.queue_resize()
+        # Calculate display height - always use results window height for consistency
+        display_height = self.window_height_results - self.window_height
+        self.resize(self.window_width, self.window_height_results)
+        self.scrolled.set_size_request(-1, display_height)
 
-        # Scrollbar visibility logic
-        if len(results_to_display) > 5:
+        # Set scrolling policy based on number of items
+        if len(items) > 5:
             self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.ALWAYS)
             self.scrolled.set_overlay_scrolling(False)
         else:
             self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
 
-        # Resize window
-        self.resize(self.window_width, self.window_height_results)
-        self.scrolled.queue_resize()
-
-        if len(results_to_display) > 1:
-            adjustment = self.scrolled.get_vadjustment()
-            if adjustment:
-                adjustment.set_upper(adjustment.get_upper() + 1)
-
-        if not self.user_navigating:
-            self.list_box.unselect_all()
+        # Scroll to top when results change
+        vadj = self.scrolled.get_vadjustment()
+        if vadj:
+            vadj.set_value(vadj.get_lower())
 
     def handle_plugin_results(
         self, search_id: int, plugin_id: str, plugin_results: List[SearchResult]
@@ -867,15 +838,8 @@ class LauncherWindow(Gtk.Window):
                 )
                 result.metadata["history_count"] = count
 
-        # Sort by history (items with history > 0 come first), then by score
-        self.current_results.sort(
-            key=lambda r: (
-                r.metadata.get("history_count", 0)
-                > 0,  # True (1) for items with history
-                r.score,
-            ),
-            reverse=True,
-        )
+        # Sort by score only - history plugin already has prioritized scores
+        self.current_results.sort(key=lambda r: r.score, reverse=True)
 
         # Truncate results
         max_results = self.config.get("general", {}).get("max_results", 15)
@@ -1096,51 +1060,40 @@ class LauncherWindow(Gtk.Window):
                     self.entry.set_position(-1)
                 return True
 
-            # Handle Shift+Delete to remove a single history entry
+            # Handle Shift+Delete to remove selected history entries (single or multiple)
             elif keyval == Gdk.KEY_Delete and state & Gdk.ModifierType.SHIFT_MASK:
-                if self.showing_history:
-                    selected_row = self.list_box.get_selected_row()
-                    if selected_row and hasattr(selected_row, "history_entry"):
-                        entries_to_remove = [selected_row.history_entry]
+                selected_rows = self.list_box.get_selected_rows()
+                if selected_rows:
+                    entries_to_remove = []
+                    
+                    for row in selected_rows:
+                        # Check if this is a recent history item
+                        if self.showing_history and hasattr(row, "history_entry"):
+                            entries_to_remove.append(row.history_entry)
+                        # Check if this is a history plugin search result
+                        elif hasattr(row, "result") and row.result.plugin_id == "history":
+                            history_entry = row.result.metadata.get("history_entry")
+                            if history_entry:
+                                entries_to_remove.append(history_entry)
+                    
+                    if entries_to_remove:
                         removed_count = (
                             self.history_manager.remove_history_entries_by_ids(
                                 entries_to_remove
                             )
                         )
                         if removed_count > 0:
-                            logger.info(
-                                f"Removed 1 history entry with Shift+Delete: {selected_row.history_entry.get('user_input', '')}"
-                            )
-                            self._refresh_history_view_after_delete()
+                            count_text = f"{removed_count} history {'entry' if removed_count == 1 else 'entries'}"
+                            logger.info(f"Removed {count_text} with Shift+Delete.")
+                            
+                            if self.showing_history:
+                                self._refresh_history_view_after_delete()
+                            else:
+                                # Refresh the current search to update results
+                                self.on_entry_changed(self.entry)
                         return True
                 return (
-                    False  # Allow other handlers if not showing history or no selection
-                )
-
-            # Handle Ctrl+Delete to remove multiple selected history entries
-            elif keyval == Gdk.KEY_Delete and state & Gdk.ModifierType.CONTROL_MASK:
-                if self.showing_history:
-                    selected_rows = self.list_box.get_selected_rows()
-                    if selected_rows:
-                        entries_to_remove = [
-                            row.history_entry
-                            for row in selected_rows
-                            if hasattr(row, "history_entry")
-                        ]
-                        if entries_to_remove:
-                            removed_count = (
-                                self.history_manager.remove_history_entries_by_ids(
-                                    entries_to_remove
-                                )
-                            )
-                            if removed_count > 0:
-                                logger.info(
-                                    f"Removed {removed_count} history entries with Ctrl+Delete."
-                                )
-                                self._refresh_history_view_after_delete()
-                            return True
-                return (
-                    False  # Allow other handlers if not showing history or no selection
+                    False  # Allow other handlers if no selection
                 )
 
         # Global hotkeys (work anywhere in the window)
@@ -1439,6 +1392,11 @@ class LauncherWindow(Gtk.Window):
                 "changed", self.on_entry_changed
             )
             logger.info("Connected entry changed signal after full initialization")
+
+        # Show recent history now that history_manager is available
+        # Only show if the entry is empty (initial launch state)
+        if not self.entry.get_text().strip():
+            self._show_recent_history()
 
     def _refresh_history_view_after_delete(self):
         """
