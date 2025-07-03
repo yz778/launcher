@@ -359,9 +359,9 @@ class LauncherWindow(Gtk.Window):
         self.history_manager = history_manager
         self.config = config
         self.foreground_mode = foreground_mode
-        self.icon_size = config.get("general", {}).get("icon_size")
-
+        # Cache general config to avoid repeated lookups
         general_config = config.get("general", {})
+        self.icon_size = general_config.get("icon_size")
         self.window_width = general_config.get("window_width")
         self.window_height = general_config.get("window_height")
         self.window_height_results = general_config.get("window_height_results")
@@ -841,9 +841,10 @@ class LauncherWindow(Gtk.Window):
         # Sort by score only - history plugin already has prioritized scores
         self.current_results.sort(key=lambda r: r.score, reverse=True)
 
-        # Truncate results
-        max_results = self.config.get("general", {}).get("max_results", 15)
-        self.current_results = self.current_results[:max_results]
+        # Truncate results - cache max_results to avoid repeated config lookups
+        if not hasattr(self, '_cached_max_results'):
+            self._cached_max_results = self.config.get("general", {}).get("max_results", 15)
+        self.current_results = self.current_results[:self._cached_max_results]
 
         self._populate_list_box(self.current_results)
 
@@ -857,7 +858,8 @@ class LauncherWindow(Gtk.Window):
 
         logger.debug(f"All plugins have finished searching for search_id {search_id}.")
         # Always show dropdown if user has typed something, even if no results
-        if self.entry.get_text().strip() and not self.current_results:
+        query_text = self.entry.get_text().strip()
+        if query_text and not self.current_results:
             self._populate_list_box([])
         elif not self.current_results:
             self._clear_list_box_and_hide()
@@ -894,11 +896,9 @@ class LauncherWindow(Gtk.Window):
             self._show_recent_history()
             return False  # Remove from timeout
 
-        # Check for autocomplete matches
+        # Check for autocomplete matches - cache history manager check
         if self.history_manager:
-            self.autocomplete_matches = self.history_manager.get_matching_history(
-                query, 5
-            )
+            self.autocomplete_matches = self.history_manager.get_matching_history(query, 5)
 
         self.active_search_id += 1
         logger.debug(
@@ -1374,7 +1374,7 @@ class LauncherWindow(Gtk.Window):
         self.history_manager = history_manager
         self.config = config
 
-        # Update window size if needed
+        # Update window size if needed - cache general config
         general_config = config.get("general", {})
         self.window_width = general_config.get("window_width", self.window_width)
         self.window_height = general_config.get("window_height", self.window_height)

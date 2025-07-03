@@ -5,6 +5,7 @@ import json
 import logging
 import time
 import base64
+import math
 from typing import Dict, Any, List, Optional
 
 import gi
@@ -27,7 +28,8 @@ class HistoryManager:
         self.history_file = None
 
         if config:
-            history_file = config.get("general", {}).get(
+            general_config = config.get("general", {})
+            history_file = general_config.get(
                 "history_file", "~/.local/share/launcher/history.json"
             )
             self.load_history(history_file)
@@ -365,8 +367,6 @@ class HistoryManager:
         """
         count = self.get_usage_count(plugin_id, item_id)
         if count > 0:
-            import math
-
             boost = min(50, 10 * math.log2(count + 1))
             return base_score + boost
         return base_score

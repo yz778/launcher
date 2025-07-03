@@ -80,7 +80,8 @@ class PluginManager:
             plugin_id = temp_plugin.get_id()
 
             # Check if plugin is enabled before doing any real work
-            plugin_specific_config = config.get("plugins", {}).get(plugin_id, {})
+            plugins_config = config.get("plugins", {})
+            plugin_specific_config = plugins_config.get(plugin_id, {})
             enabled = plugin_specific_config.get("enabled", True)
             
             if not enabled:
