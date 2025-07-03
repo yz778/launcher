@@ -85,10 +85,7 @@ class TerminalPlugin(Plugin):
         return True
 
     def _load_default_icon(self) -> bool:
-        """
-        Load the default terminal icon from the icon theme.
-        This method is scheduled to run on the main GTK thread for thread safety.
-        """
+        """Load the default terminal icon from the icon theme"""
         try:
             icon_theme = Gtk.IconTheme.get_default()
             self.default_icon = icon_theme.load_icon(

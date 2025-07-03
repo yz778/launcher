@@ -138,7 +138,7 @@ class HistoryManager:
 
         # Remove common executable extensions or .desktop
         if base_name.endswith(".desktop"):
-            base_name = base_name[:-len(".desktop")]
+            base_name = base_name[: -len(".desktop")]
         # Add more specific extension handling if needed, e.g., .py, .sh, but be careful
         # For now, keep it simple to avoid false positives.
 
@@ -177,7 +177,9 @@ class HistoryManager:
         # Normalize the executed command for the new entry, if applicable
         normalized_new_command = None
         if plugin_id in ["executable", "desktop_file"] and executed_command_string:
-            normalized_new_command = self._normalize_command_for_comparison(executed_command_string)
+            normalized_new_command = self._normalize_command_for_comparison(
+                executed_command_string
+            )
 
         # Iterate through existing history to find duplicates and merge counts
         for entry in self.user_input_history:
@@ -187,15 +189,19 @@ class HistoryManager:
                 # Take its usage count as the base for the new entry.
                 current_usage_count = entry.get("usage_count", 0)
                 entries_to_remove.append(entry)
-                continue # Don't process this entry further for merging, it's being replaced
+                continue  # Don't process this entry further for merging, it's being replaced
 
             # Check for merging based on normalized executed command
             if normalized_new_command and entry.get("executed_command"):
-                normalized_existing_command = self._normalize_command_for_comparison(entry["executed_command"])
+                normalized_existing_command = self._normalize_command_for_comparison(
+                    entry["executed_command"]
+                )
                 if normalized_new_command == normalized_existing_command:
                     current_usage_count += entry.get("usage_count", 0)
                     entries_to_remove.append(entry)
-                    logger.debug(f"Merging history entry for command '{executed_command_string}' with existing entry: {entry.get('user_input')}")
+                    logger.debug(
+                        f"Merging history entry for command '{executed_command_string}' with existing entry: {entry.get('user_input')}"
+                    )
 
         # Filter out entries that are being replaced or merged
         self.user_input_history = [
@@ -209,8 +215,8 @@ class HistoryManager:
             "item_id": item_id,
             "timestamp": timestamp,
             "description": description,
-            "usage_count": current_usage_count + 1, # Increment for the current execution
-            "executed_command": executed_command_string, # Store the actual executed command
+            "usage_count": current_usage_count + 1,
+            "executed_command": executed_command_string,  # Store the actual executed command
         }
 
         # Store the actual icon data if provided and plugin is executable

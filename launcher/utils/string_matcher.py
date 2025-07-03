@@ -60,7 +60,10 @@ class StringMatcher(Generic[T]):
         scored_items.sort(key=lambda x: x[1], reverse=True)
 
         # Return top matches (no longer need highlight indices)
-        return [(item, score) for item, score, start_index, end_index in scored_items[:limit]]
+        return [
+            (item, score)
+            for item, score, start_index, end_index in scored_items[:limit]
+        ]
 
     def _calculate_score(self, query: str, key: str, item: T) -> Tuple[float, int, int]:
         """
