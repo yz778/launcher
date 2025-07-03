@@ -121,9 +121,7 @@ class ConfigManager:
             override: Override configuration to merge from
         """
         for key, value in override.items():
-            if (key in base and 
-                isinstance(base[key], dict) and 
-                isinstance(value, dict)):
+            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
                 self._merge_config(base[key], value)
             else:
                 base[key] = value

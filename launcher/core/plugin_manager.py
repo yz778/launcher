@@ -83,9 +83,11 @@ class PluginManager:
             plugins_config = config.get("plugins", {})
             plugin_specific_config = plugins_config.get(plugin_id, {})
             enabled = plugin_specific_config.get("enabled", True)
-            
+
             if not enabled:
-                logger.info(f"Plugin disabled: {temp_plugin.get_name()} ({plugin_id}) - skipping registration")
+                logger.info(
+                    f"Plugin disabled: {temp_plugin.get_name()} ({plugin_id}) - skipping registration"
+                )
                 return
 
             # Plugin is enabled, proceed with full registration
@@ -106,9 +108,13 @@ class PluginManager:
             if temp_plugin.initialize(plugin_specific_config, self.config_manager):
                 self.plugins[plugin_id] = temp_plugin
                 self.enabled_plugins[plugin_id] = True
-                logger.info(f"Initialized plugin: {temp_plugin.get_name()} ({plugin_id})")
+                logger.info(
+                    f"Initialized plugin: {temp_plugin.get_name()} ({plugin_id})"
+                )
             else:
-                logger.warning(f"Failed to initialize plugin: {temp_plugin.get_name()} ({plugin_id})")
+                logger.warning(
+                    f"Failed to initialize plugin: {temp_plugin.get_name()} ({plugin_id})"
+                )
 
         except Exception as e:
             logger.error(f"Error registering plugin {plugin_class.__name__}: {e}")

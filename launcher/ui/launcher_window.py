@@ -250,7 +250,9 @@ class AppListItem(Gtk.ListBoxRow):
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         hbox.set_border_width(8)
 
-        hbox.set_property("height-request", 60)  # Height to accommodate name and description
+        hbox.set_property(
+            "height-request", 60
+        )  # Height to accommodate name and description
 
         if result.icon:
             # Create a fixed size container for the icon
@@ -500,7 +502,9 @@ class LauncherWindow(Gtk.Window):
             return
 
         # Get all history items instead of just 5
-        all_history = self.history_manager.get_recent_history(100)  # Get up to 100 items
+        all_history = self.history_manager.get_recent_history(
+            100
+        )  # Get up to 100 items
         if not all_history:
             return
 
@@ -572,7 +576,10 @@ class LauncherWindow(Gtk.Window):
         self.showing_history = True
 
         # Use the same display logic as search results for consistency
-        self._setup_results_display(all_history, f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}")
+        self._setup_results_display(
+            all_history,
+            f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}",
+        )
 
     def _get_result_for_history_entry(
         self, plugin_id: str, item_id: str, history_entry: Dict[str, Any] = None
@@ -757,7 +764,7 @@ class LauncherWindow(Gtk.Window):
                 history_count = self.history_manager.get_usage_count(
                     result.plugin_id, result.item_id
                 )
-            
+
             list_item = AppListItem(
                 result,
                 icon_size=self.icon_size or 48,
@@ -774,7 +781,11 @@ class LauncherWindow(Gtk.Window):
             vadj.set_value(vadj.get_lower())
 
         # Use unified display setup
-        count_text = f"{len(results_to_display)} result{'s' if len(results_to_display) != 1 else ''}" if results_to_display else ""
+        count_text = (
+            f"{len(results_to_display)} result{'s' if len(results_to_display) != 1 else ''}"
+            if results_to_display
+            else ""
+        )
         self._setup_results_display(results_to_display, count_text)
 
         if not self.user_navigating:
@@ -842,9 +853,11 @@ class LauncherWindow(Gtk.Window):
         self.current_results.sort(key=lambda r: r.score, reverse=True)
 
         # Truncate results - cache max_results to avoid repeated config lookups
-        if not hasattr(self, '_cached_max_results'):
-            self._cached_max_results = self.config.get("general", {}).get("max_results", 15)
-        self.current_results = self.current_results[:self._cached_max_results]
+        if not hasattr(self, "_cached_max_results"):
+            self._cached_max_results = self.config.get("general", {}).get(
+                "max_results", 15
+            )
+        self.current_results = self.current_results[: self._cached_max_results]
 
         self._populate_list_box(self.current_results)
 
@@ -898,7 +911,9 @@ class LauncherWindow(Gtk.Window):
 
         # Check for autocomplete matches - cache history manager check
         if self.history_manager:
-            self.autocomplete_matches = self.history_manager.get_matching_history(query, 5)
+            self.autocomplete_matches = self.history_manager.get_matching_history(
+                query, 5
+            )
 
         self.active_search_id += 1
         logger.debug(
@@ -1065,17 +1080,19 @@ class LauncherWindow(Gtk.Window):
                 selected_rows = self.list_box.get_selected_rows()
                 if selected_rows:
                     entries_to_remove = []
-                    
+
                     for row in selected_rows:
                         # Check if this is a recent history item
                         if self.showing_history and hasattr(row, "history_entry"):
                             entries_to_remove.append(row.history_entry)
                         # Check if this is a history plugin search result
-                        elif hasattr(row, "result") and row.result.plugin_id == "history":
+                        elif (
+                            hasattr(row, "result") and row.result.plugin_id == "history"
+                        ):
                             history_entry = row.result.metadata.get("history_entry")
                             if history_entry:
                                 entries_to_remove.append(history_entry)
-                    
+
                     if entries_to_remove:
                         removed_count = (
                             self.history_manager.remove_history_entries_by_ids(
@@ -1085,16 +1102,14 @@ class LauncherWindow(Gtk.Window):
                         if removed_count > 0:
                             count_text = f"{removed_count} history {'entry' if removed_count == 1 else 'entries'}"
                             logger.info(f"Removed {count_text} with Shift+Delete.")
-                            
+
                             if self.showing_history:
                                 self._refresh_history_view_after_delete()
                             else:
                                 # Refresh the current search to update results
                                 self.on_entry_changed(self.entry)
                         return True
-                return (
-                    False  # Allow other handlers if no selection
-                )
+                return False  # Allow other handlers if no selection
 
         # Global hotkeys (work anywhere in the window)
         # Handle Ctrl+Q to quit (hide first for snappy response)
@@ -1195,8 +1210,7 @@ class LauncherWindow(Gtk.Window):
                 # Pass the icon pixbuf to history for storage (for all plugin types)
                 icon_pixbuf = result.icon
                 user_input_for_history = self.entry.get_text().strip()
-                
-                
+
                 self.history_manager.add_execution(
                     result.plugin_id,
                     result.item_id,

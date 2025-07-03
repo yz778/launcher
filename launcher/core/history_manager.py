@@ -230,7 +230,9 @@ class HistoryManager:
                     entry["icon_data"] = icon_data
                     logger.debug(f"Stored icon data for {plugin_id}: {description}")
                 else:
-                    logger.warning(f"Failed to convert icon to base64 for {plugin_id}: {description}")
+                    logger.warning(
+                        f"Failed to convert icon to base64 for {plugin_id}: {description}"
+                    )
             except Exception as e:
                 logger.error(f"Exception storing icon data for {description}: {e}")
 
