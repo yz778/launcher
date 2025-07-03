@@ -221,16 +221,18 @@ class HistoryManager:
             "executed_command": executed_command_string,  # Store the actual executed command
         }
 
-        # Store the actual icon data if provided and plugin is executable
-        if icon_pixbuf and plugin_id == "executable":
+        # Store the actual icon data if provided for any plugin type
+        if icon_pixbuf:
             try:
                 # Convert pixbuf to PNG data and then base64 encode
                 icon_data = self._pixbuf_to_base64(icon_pixbuf)
                 if icon_data:
                     entry["icon_data"] = icon_data
-                    logger.debug(f"Stored icon data for executable: {description}")
+                    logger.debug(f"Stored icon data for {plugin_id}: {description}")
+                else:
+                    logger.warning(f"Failed to convert icon to base64 for {plugin_id}: {description}")
             except Exception as e:
-                logger.warning(f"Failed to store icon data for {description}: {e}")
+                logger.error(f"Exception storing icon data for {description}: {e}")
 
         self.user_input_history.insert(0, entry)
 

@@ -250,7 +250,7 @@ class AppListItem(Gtk.ListBoxRow):
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         hbox.set_border_width(8)
 
-        hbox.set_property("height-request", 60)  # Increased height to show description
+        hbox.set_property("height-request", 60)  # Height to accommodate name and description
 
         if result.icon:
             # Create a fixed size container for the icon
@@ -473,7 +473,7 @@ class LauncherWindow(Gtk.Window):
 
         # Search debouncing
         self._search_timeout_id = None
-        self._search_delay_ms = 50  # 100ms delay to reduce search frequency
+        self._search_delay_ms = 50  # Debounce delay to reduce search frequency
 
         # Track if user is navigating with keys
         self.user_navigating = False
@@ -581,8 +581,8 @@ class LauncherWindow(Gtk.Window):
         if not self.plugin_manager:
             return None
 
-        # First, check if we have stored icon data in history (for executable plugin)
-        if history_entry and plugin_id == "executable":
+        # First, check if we have stored icon data in history
+        if history_entry:
             stored_icon = self.history_manager.get_stored_icon(
                 history_entry, self.icon_size or 48
             )
@@ -1192,9 +1192,11 @@ class LauncherWindow(Gtk.Window):
                 # This should be the full application name/command, not the partial user input
                 executed_command = self._build_executed_command(result)
 
-                # Pass the icon pixbuf to history for storage (especially for executable plugin)
-                icon_pixbuf = result.icon if result.plugin_id == "executable" else None
+                # Pass the icon pixbuf to history for storage (for all plugin types)
+                icon_pixbuf = result.icon
                 user_input_for_history = self.entry.get_text().strip()
+                
+                
                 self.history_manager.add_execution(
                     result.plugin_id,
                     result.item_id,
@@ -1239,8 +1241,7 @@ class LauncherWindow(Gtk.Window):
         self.entry.set_text("")
         self._clear_list_box_and_hide()
 
-        # Show recent history if available
-        self._show_recent_history()
+        # Don't show history here - wait for update_with_full_config() when managers are ready
 
         # Present window and grab focus
         self.present()
