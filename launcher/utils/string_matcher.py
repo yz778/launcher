@@ -50,21 +50,21 @@ class StringMatcher(Generic[T]):
         for item in self.items:
             key = self.key_func(item).lower()
 
-            # Calculate score based on different matching strategies
-            score = self._calculate_score(query, key, item)
+            # Calculate score and highlight indices based on different matching strategies
+            score, start_index, end_index = self._calculate_score(query, key, item)
 
             if score > 0:
-                scored_items.append((item, score))
+                scored_items.append((item, score, start_index, end_index))
 
         # Sort by score descending
         scored_items.sort(key=lambda x: x[1], reverse=True)
 
-        # Return top matches
-        return scored_items[:limit]
+        # Return top matches (no longer need highlight indices)
+        return [(item, score) for item, score, start_index, end_index in scored_items[:limit]]
 
-    def _calculate_score(self, query: str, key: str, item: T) -> float:
+    def _calculate_score(self, query: str, key: str, item: T) -> Tuple[float, int, int]:
         """
-        Calculate match score between query and key
+        Calculate match score between query and key, and return highlight indices.
 
         Args:
             query: The normalized query string
@@ -72,7 +72,9 @@ class StringMatcher(Generic[T]):
             item: The original item
 
         Returns:
-            Score between 0 and 100, where 100 is a perfect match
+            Tuple of (score, start_index, end_index), where score is between 0 and 100,
+            and indices are for highlighting the matched part in the original string.
+            Indices will be -1, -1 if no match.
         """
         # Base scores for each category
         HISTORY_BASE = 300.0
@@ -80,31 +82,47 @@ class StringMatcher(Generic[T]):
         PREFIX_BASE = 150.0
         PARTIAL_BASE = 100.0
 
+        score = 0.0
+        start_index = -1
+        end_index = -1
+
         # Calculate match quality (0.0 to 1.0)
         match_quality = len(query) / len(key) if len(key) > 0 else 0
 
         # 1. History partial match
         if item in self.history and query in key:
-            # Add bonus for better matches within history
+            start_index = key.find(query)
+            end_index = start_index + len(query)
             if key.startswith(query):
-                return HISTORY_BASE + 20.0 * match_quality
-            return HISTORY_BASE + 10.0 * match_quality
+                score = HISTORY_BASE + 20.0 * match_quality
+            else:
+                score = HISTORY_BASE + 10.0 * match_quality
+            return score, start_index, end_index
 
         # 2. Exact match
         if query == key:
-            return EXACT_BASE
+            score = EXACT_BASE
+            start_index = 0
+            end_index = len(query)
+            return score, start_index, end_index
 
         # 3. Prefix match (key starts with query)
         if key.startswith(query):
-            return PREFIX_BASE + 30.0 * match_quality
+            score = PREFIX_BASE + 30.0 * match_quality
+            start_index = 0
+            end_index = len(query)
+            return score, start_index, end_index
 
         # 4. Partial match
         if query in key:
+            start_index = key.find(query)
+            end_index = start_index + len(query)
             # Calculate position factor (earlier matches get higher scores)
-            position = key.find(query) / len(key) if len(key) > 0 else 0
+            position = start_index / len(key) if len(key) > 0 else 0
             position_factor = 1.0 - position  # Higher for matches at the beginning
 
-            return PARTIAL_BASE + 20.0 * match_quality * position_factor
+            score = PARTIAL_BASE + 20.0 * match_quality * position_factor
+            return score, start_index, end_index
 
         # No match
-        return 0.0
+        return score, start_index, end_index

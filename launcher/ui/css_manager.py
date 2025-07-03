@@ -138,6 +138,28 @@ scrollbar slider:hover {
 
 scrollbar slider:active {
     background-color: rgba(150, 150, 150, 0.8);
+}
+
+/* Text highlighting styles */
+.highlight-exact {
+    color: #8be9fd;
+    font-weight: bold;
+}
+
+.highlight-prefix {
+    color: #8be9fd;
+    font-weight: bold;
+}
+
+.highlight-word {
+    color: #50fa7b;
+    font-weight: bold;
+}
+
+.highlight-fuzzy {
+    color: #ffb86c;
+    font-weight: bold;
+    font-style: italic;
 }"""
 
     @classmethod

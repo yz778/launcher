@@ -6,7 +6,7 @@ from typing import Dict, Any, List
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, Gdk, Pango
+from gi.repository import Gtk, Gdk, Pango, GLib
 
 from plugins.base import SearchResult
 from core.plugin_manager import PluginManager
@@ -16,13 +16,219 @@ from ui.css_manager import CssManager
 logger = logging.getLogger(__name__)
 
 
+class HighlightSegment:
+    """Represents a segment of text to be highlighted"""
+    
+    def __init__(self, start: int, end: int, match_type: str = "exact"):
+        self.start = start
+        self.end = end
+        self.match_type = match_type  # "exact", "fuzzy", "prefix", "word", etc.
+    
+    def __repr__(self):
+        return f"HighlightSegment({self.start}, {self.end}, {self.match_type})"
+
+
+class TextHighlighter:
+    """Flexible text highlighter that supports multiple matching strategies"""
+    
+    def __init__(self):
+        pass
+    
+    def get_highlight_segments(self, text: str, query: str) -> List[HighlightSegment]:
+        """
+        Get highlight segments for the given text and query.
+        Returns a list of HighlightSegment objects representing parts to highlight.
+        """
+        if not text or not query:
+            return []
+        
+        segments = []
+        
+        # Try different matching strategies in order of preference
+        segments.extend(self._exact_match(text, query))
+        if not segments:
+            segments.extend(self._prefix_match(text, query))
+        if not segments:
+            segments.extend(self._word_boundary_match(text, query))
+        if not segments:
+            segments.extend(self._fuzzy_match(text, query))
+        
+        # Merge overlapping segments and sort by position
+        return self._merge_segments(segments)
+    
+    def _exact_match(self, text: str, query: str) -> List[HighlightSegment]:
+        """Find exact substring matches (case-insensitive)"""
+        segments = []
+        text_lower = text.lower()
+        query_lower = query.lower()
+        
+        start = 0
+        while True:
+            pos = text_lower.find(query_lower, start)
+            if pos == -1:
+                break
+            segments.append(HighlightSegment(pos, pos + len(query), "exact"))
+            start = pos + 1
+        
+        return segments
+    
+    def _prefix_match(self, text: str, query: str) -> List[HighlightSegment]:
+        """Find prefix matches"""
+        text_lower = text.lower()
+        query_lower = query.lower()
+        
+        if text_lower.startswith(query_lower):
+            return [HighlightSegment(0, len(query), "prefix")]
+        return []
+    
+    def _word_boundary_match(self, text: str, query: str) -> List[HighlightSegment]:
+        """Find matches at word boundaries"""
+        import re
+        segments = []
+        
+        # Create pattern for word boundary matching
+        pattern = r'\b' + re.escape(query.lower())
+        
+        for match in re.finditer(pattern, text.lower()):
+            segments.append(HighlightSegment(match.start(), match.end(), "word"))
+        
+        return segments
+    
+    def _fuzzy_match(self, text: str, query: str) -> List[HighlightSegment]:
+        """
+        Find fuzzy matches - individual characters that match in sequence.
+        This is useful for fuzzy search where 'calc' might match 'Calculator' 
+        by highlighting 'C', 'a', 'l', 'c'.
+        """
+        segments = []
+        text_lower = text.lower()
+        query_lower = query.lower()
+        
+        text_idx = 0
+        query_idx = 0
+        
+        while text_idx < len(text_lower) and query_idx < len(query_lower):
+            if text_lower[text_idx] == query_lower[query_idx]:
+                # Found a matching character
+                segments.append(HighlightSegment(text_idx, text_idx + 1, "fuzzy"))
+                query_idx += 1
+            text_idx += 1
+        
+        # Only return segments if we matched the entire query
+        if query_idx == len(query_lower):
+            return segments
+        return []
+    
+    def _merge_segments(self, segments: List[HighlightSegment]) -> List[HighlightSegment]:
+        """Merge overlapping or adjacent segments"""
+        if not segments:
+            return []
+        
+        # Sort by start position
+        segments.sort(key=lambda s: s.start)
+        
+        merged = [segments[0]]
+        
+        for current in segments[1:]:
+            last = merged[-1]
+            
+            # If segments overlap or are adjacent, merge them
+            if current.start <= last.end:
+                # Extend the last segment to include the current one
+                merged[-1] = HighlightSegment(
+                    last.start, 
+                    max(last.end, current.end),
+                    last.match_type  # Keep the type of the first segment
+                )
+            else:
+                merged.append(current)
+        
+        return merged
+    
+    def _get_css_class(self, match_type: str) -> str:
+        """Get the CSS class name for a specific match type"""
+        return f"highlight-{match_type}"
+    
+    def build_markup(self, text: str, segments: List[HighlightSegment], widget: Gtk.Widget) -> str:
+        """Build Pango markup string from text and highlight segments using CSS styles"""
+        if not segments:
+            return GLib.markup_escape_text(text)
+        
+        markup_parts = []
+        last_end = 0
+        
+        for segment in segments:
+            # Add text before this segment
+            if segment.start > last_end:
+                before_text = text[last_end:segment.start]
+                markup_parts.append(GLib.markup_escape_text(before_text))
+            
+            # Add highlighted segment with CSS-based styling
+            highlight_text = text[segment.start:segment.end]
+            escaped_text = GLib.markup_escape_text(highlight_text)
+            
+            # Get CSS class for this match type
+            css_class = self._get_css_class(segment.match_type)
+            
+            # Extract style from CSS using GTK style context
+            style_attrs = self._get_style_from_css(widget, css_class)
+            markup_parts.append(f'<span {style_attrs}>{escaped_text}</span>')
+            
+            last_end = segment.end
+        
+        # Add remaining text after last segment
+        if last_end < len(text):
+            remaining_text = text[last_end:]
+            markup_parts.append(GLib.markup_escape_text(remaining_text))
+        
+        return ''.join(markup_parts)
+    
+    def _get_style_from_css(self, widget: Gtk.Widget, css_class: str) -> str:
+        """Extract style attributes from CSS for the given class"""
+        try:
+            # Create a temporary widget with the CSS class to extract styles
+            temp_widget = Gtk.Label()
+            style_context = temp_widget.get_style_context()
+            style_context.add_class(css_class)
+            
+            # Get color
+            color = style_context.get_color(Gtk.StateFlags.NORMAL)
+            color_hex = f"#{int(color.red * 255):02x}{int(color.green * 255):02x}{int(color.blue * 255):02x}"
+            
+            # Get font weight and style
+            font_desc = style_context.get_font(Gtk.StateFlags.NORMAL)
+            weight = "normal"
+            style = "normal"
+            
+            if font_desc.get_weight() >= 700:  # Pango.Weight.BOLD
+                weight = "bold"
+            
+            if font_desc.get_style() != 0:  # Pango.Style.NORMAL
+                style = "italic"
+            
+            # Build attribute string
+            attrs = [f'foreground="{color_hex}"']
+            if weight != "normal":
+                attrs.append(f'weight="{weight}"')
+            if style != "normal":
+                attrs.append(f'style="{style}"')
+            
+            return " ".join(attrs)
+            
+        except Exception as e:
+            logger.debug(f"Could not extract CSS styles for {css_class}: {e}")
+            # Fallback to default highlighting
+            return 'foreground="#8be9fd" weight="bold"'
+
+
 class AppListItem(Gtk.ListBoxRow):
     """Custom list box row for displaying a search result"""
 
-    def __init__(self, result: SearchResult, icon_size: int, launch_count: int = 0):
+    def __init__(self, result: SearchResult, icon_size: int, launch_count: int = 0, query: str = ""):
         super().__init__()
         self.set_name("app-list-item")
         self.result = result
+        self.query = query
 
         # Add plugin-specific CSS class
         style_context = self.get_style_context()
@@ -59,10 +265,14 @@ class AppListItem(Gtk.ListBoxRow):
         name_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
 
         # Add the name
-        name_label = Gtk.Label(label=result.name)
+        name_label = Gtk.Label(label=result.name) # Always set the initial text
         name_label.set_halign(Gtk.Align.START)
         name_label.set_ellipsize(Pango.EllipsizeMode.END)
         name_label.set_name("app-name")
+
+        # Apply highlighting based on current query (UI handles highlighting logic)
+        self._apply_highlighting(name_label, result.name, self.query)
+
         name_box.pack_start(name_label, True, True, 0)
 
         # Add launch count if greater than 0
@@ -90,6 +300,36 @@ class AppListItem(Gtk.ListBoxRow):
 
         if result.description:
             self.set_tooltip_text(result.description)
+
+    def _apply_highlighting(self, label: Gtk.Label, text: str, query: str) -> None:
+        """Apply highlighting to a label based on the search query using flexible highlighting"""
+        if not text or not query:
+            label.set_text(text or "")
+            return
+
+        query = query.strip()
+        if not query:
+            label.set_text(text)
+            return
+
+        try:
+            # Get highlight segments from the highlighter
+            highlighter = TextHighlighter()
+            segments = highlighter.get_highlight_segments(text, query)
+            
+            if not segments:
+                # No matches found, just set plain text
+                label.set_text(text)
+                return
+
+            # Build markup from segments using CSS styles
+            markup = highlighter.build_markup(text, segments, label)
+            label.set_markup(markup)
+            
+        except Exception as e:
+            logger.error(f"Error applying highlighting for '{text}': {e}")
+            # Fallback to plain text if highlighting fails
+            label.set_text(text)
 
 
 class LauncherWindow(Gtk.Window):
@@ -340,6 +580,7 @@ class LauncherWindow(Gtk.Window):
                 ),
                 icon_size=self.icon_size or 48,
                 launch_count=history_count,
+                query="",  # No highlighting for history items
             )
             list_item.set_name("history-item")
             list_item.user_input = user_input  # Store the input for selection
@@ -542,7 +783,7 @@ class LauncherWindow(Gtk.Window):
                 else self.config.get("general", {}).get("icon_size", 48)
             )
             list_item = AppListItem(
-                result, icon_size=icon_size, launch_count=history_count
+                result, icon_size=icon_size, launch_count=history_count, query=self.entry.get_text().strip()
             )
             self.list_box.add(list_item)
 
@@ -603,6 +844,9 @@ class LauncherWindow(Gtk.Window):
         logger.debug(
             f"Received {len(plugin_results)} results from plugin {plugin_id} for search_id {search_id}"
         )
+
+        # No need to handle highlighting here - UI layer will handle it based on current query
+
         self.current_results.extend(plugin_results)
 
         # Adjust scores based on history for all current results
