@@ -1255,7 +1255,9 @@ class LauncherWindow(Gtk.Window):
         self.entry.set_text("")
         self._clear_list_box_and_hide()
 
-        # Don't show history here - wait for update_with_full_config() when managers are ready
+        # Show history if managers are already initialized (e.g., when toggling existing instance)
+        if self.history_manager is not None:
+            self._show_recent_history()
 
         # Present window and grab focus
         self.present()

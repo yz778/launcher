@@ -6,6 +6,7 @@ import tempfile
 import threading
 import logging
 from typing import Optional, Callable
+from xdg_base_dirs import xdg_runtime_dir
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,15 @@ class SingletonManager:
 
     def __init__(self, app_name: str = "launcher"):
         self.app_name = app_name
-        self.socket_path = os.path.join(tempfile.gettempdir(), f"{app_name}.sock")
+        uid = os.getuid()
+        runtime_dir = xdg_runtime_dir()
+        if runtime_dir and os.path.exists(runtime_dir):
+            self.socket_path = os.path.join(runtime_dir, f"{app_name}-{uid}.sock")
+        else:
+            # Fallback for systems without XDG_RUNTIME_DIR
+            self.socket_path = os.path.join(
+                tempfile.gettempdir(), f"{app_name}-{uid}.sock"
+            )
         self.server_socket: Optional[socket.socket] = None
         self.show_callback: Optional[Callable] = None
         self.rescan_callback: Optional[Callable] = None
