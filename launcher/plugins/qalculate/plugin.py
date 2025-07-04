@@ -75,6 +75,13 @@ class QalculatePlugin(Plugin):
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
 
+        # Check if qalc is available before proceeding with initialization
+        try:
+            subprocess.run(["qalc", "--version"], check=True, capture_output=True, text=True)
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            logger.warning("qalc command not found. Qalculate plugin will be disabled.")
+            return False
+
         # Get general config
         self.general_config = self.config_manager.get_config().get("general", {})
         defaults = self.get_config_defaults()
@@ -88,14 +95,8 @@ class QalculatePlugin(Plugin):
         """
         Start the plugin and perform any necessary setup work
 
-        This loads the calculator icon. Sympy will be loaded lazily when needed.
+        This loads the calculator icon.
         """
-        try:
-            subprocess.run(["qalc", "--version"], check=True, capture_output=True)
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            logger.error("qalc command not found. Disabling Qalculate plugin.")
-            return False
-
         GLib.idle_add(self._load_icon)
         return True
 
@@ -141,9 +142,7 @@ class QalculatePlugin(Plugin):
             return result
 
         except FileNotFoundError:
-            logger.error(
-                "qalc command not found. Please install it (e.g., 'sudo apt install qalc')."
-            )
+            logger.debug("qalc command not found during calculation")
             return None
         except subprocess.CalledProcessError as e:
             logger.debug(f"Error calculating with qalc: {e.stderr}")
