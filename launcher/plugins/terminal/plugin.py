@@ -9,7 +9,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # GLib might not be strictly needed if no idle_add
 
-from plugins.base import Plugin, SearchResult
+from ..base import Plugin, SearchResult
 
 logger = logging.getLogger(__name__)
 
