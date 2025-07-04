@@ -111,13 +111,27 @@ class QalculatePlugin(Plugin):
         return False
 
     def _is_calculation(self, query: str) -> bool:
-        """Check if the query looks like a calculation"""
-        if query and query[0] in "=-0123456789([":
+        """Check if the query looks like a calculation using simple heuristics"""
+        if not query:
+            return False
+            
+        query = query.strip()
+        
+        # 1. Explicit calculation trigger
+        if query.startswith('='):
             return True
-
-        # If the query starts with common math functions, it's likely a calculation
-        math_funcs = ["sin(", "cos(", "tan(", "log(", "ln(", "sqrt(", "abs(", "exp("]
-        if any(query.lower().startswith(func) for func in math_funcs):
+            
+        # 2. Starts with a number (most calculations do)
+        if query and query[0].isdigit():
+            return True
+            
+        # 3. Contains conversion keywords
+        conversion_keywords = [" to ", " in ", " as ", " into "]
+        if any(keyword in query.lower() for keyword in conversion_keywords):
+            return True
+            
+        # 4. Contains function call pattern (something followed by parentheses)
+        if '(' in query and ')' in query:
             return True
 
         return False
