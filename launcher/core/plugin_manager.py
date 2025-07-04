@@ -49,15 +49,22 @@ class PluginManager:
         """Discover and load all plugins from the specified directory"""
         self.config = config
 
-        plugin_files = [
-            f[:-3]
-            for f in os.listdir(plugins_dir)
-            if f.endswith(".py") and f != "__init__.py" and f != "base.py"
+        # Look for plugin directories (not files)
+        plugin_dirs = [
+            d for d in os.listdir(plugins_dir)
+            if os.path.isdir(os.path.join(plugins_dir, d))
+            and d != "__pycache__"
+            and not d.startswith(".")
         ]
 
-        for plugin_file in plugin_files:
+        for plugin_dir in plugin_dirs:
             try:
-                module_name = f"plugins.{plugin_file}"
+                # Check if the directory has a plugin.py file
+                plugin_file = os.path.join(plugins_dir, plugin_dir, "plugin.py")
+                if not os.path.exists(plugin_file):
+                    continue
+                    
+                module_name = f"plugins.{plugin_dir}.plugin"
                 module = importlib.import_module(module_name)
                 for name, obj in inspect.getmembers(module):
                     if (
@@ -68,7 +75,7 @@ class PluginManager:
                     ):
                         self._register_plugin(obj, config)
             except Exception as e:
-                logger.error(f"Error loading plugin {plugin_file}: {e}")
+                logger.error(f"Error loading plugin {plugin_dir}: {e}")
 
     def _register_plugin(
         self, plugin_class: Type[Plugin], config: Dict[str, Any]

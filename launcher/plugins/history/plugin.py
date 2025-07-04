@@ -10,7 +10,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
 
-from plugins.base import Plugin, SearchResult
+from ..base import Plugin, SearchResult
 
 logger = logging.getLogger(__name__)
 

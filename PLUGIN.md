@@ -4,6 +4,28 @@
 
 The launcher uses a sophisticated plugin-based architecture that separates search logic from presentation. Plugins focus purely on finding and executing items, while the UI layer handles all presentation concerns including highlighting, theming, and user interaction.
 
+## Plugin Directory Structure
+
+Each plugin is organized in its own directory with a standardized structure:
+
+```
+launcher/plugins/
+├── base.py                    # Base plugin classes and interfaces
+├── my_plugin/                 # Individual plugin directory
+│   ├── plugin.py             # Main plugin implementation (required)
+│   ├── config.yaml           # Plugin-specific configuration (optional)
+│   ├── assets/               # Plugin assets like icons (optional)
+│   └── helpers/              # Additional helper modules (optional)
+└── another_plugin/
+    └── plugin.py
+```
+
+### Key Requirements:
+- Each plugin must be in its own directory under `launcher/plugins/`
+- The main plugin class must be in a file named `plugin.py`
+- The plugin class must inherit from the `Plugin` base class
+- Plugin directories can contain additional files and subdirectories as needed
+
 ## Core Components
 
 1. **Plugin Interface**: Abstract base classes defining the plugin contract
@@ -19,189 +41,152 @@ The launcher uses a sophisticated plugin-based architecture that separates searc
 
 Each plugin must inherit from `Plugin` and implement:
 
-- `get_id()`: Return unique plugin identifier
-- `get_name()`: Return human-readable plugin name  
-- `get_description()`: Return plugin description
-- `get_config_defaults()`: Return default configuration dictionary
-- `initialize(config, config_manager)`: Set up plugin with configuration
-- `search(query)`: Return list of `SearchResult` objects
-- `execute(result)`: Execute the selected search result
+```python
+from ..base import Plugin, SearchResult
+from typing import Dict, Any, List
+
+class MyPlugin(Plugin):
+    def get_id(self) -> str:
+        """Return unique plugin identifier"""
+        
+    def get_name(self) -> str:
+        """Return human-readable plugin name"""
+        
+    def get_description(self) -> str:
+        """Return plugin description"""
+        
+    def get_config_defaults(self) -> Dict[str, Any]:
+        """Return default configuration values"""
+        
+    def search(self, query: str) -> List[SearchResult]:
+        """Search for items matching the query"""
+        
+    def execute(self, result: SearchResult) -> bool:
+        """Execute the given search result"""
+```
 
 ### Optional Methods
 
-- `get_default_css()`: Return CSS styles for this plugin
-- `start()`: Perform heavy initialization after GUI startup
-- `cleanup()`: Clean up resources when plugin is unloaded
-- `should_track_history()`: Whether executions should be tracked
-- `rescan()`: Refresh plugin data (for file-based plugins)
+```python
+def get_default_css(self) -> str:
+    """Return default CSS styling for this plugin"""
+    return ""
 
-## Plugin Loading Process
+def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+    """Initialize plugin with configuration"""
+    super().initialize(config, config_manager)
+    return True
 
-1. The Plugin Manager scans the plugins directory
-2. It loads each plugin module and instantiates the plugin class
-3. Each plugin is initialized with its configuration
-4. Plugins are registered for search queries
+def start(self) -> bool:
+    """Perform heavy initialization after GUI startup"""
+    return True
 
-## Search Process
+def cleanup(self) -> None:
+    """Clean up resources when plugin is unloaded"""
+    pass
 
-1. **User Input**: User types a query in the launcher
-2. **Plugin Search**: Query is sent to all enabled plugins asynchronously
-3. **Result Processing**: Each plugin returns `SearchResult` objects
-4. **History Integration**: Results are scored and prioritized based on usage history
-5. **UI Rendering**: Results are displayed with intelligent highlighting
-6. **User Selection**: User selects a result for execution
-7. **Plugin Execution**: The originating plugin executes the selected item
-8. **History Update**: Successful executions are tracked for future prioritization
+def should_track_history(self) -> bool:
+    """Whether executions should be tracked in history"""
+    return True
+```
 
-## Search Result Structure
+## Search Results
+
+All search results must be `SearchResult` objects:
 
 ```python
-SearchResult(
-    plugin_id="desktop_file",           # Plugin that provided this result
-    item_id="/path/to/app.desktop",     # Unique identifier within plugin
-    name="Calculator",                  # Display name (will be highlighted)
-    description="Perform calculations", # Optional description
-    icon=pixbuf_object,                # Optional GTK pixbuf icon
-    score=85.5,                        # Match quality score (0-100)
-    metadata={                         # Plugin-specific data
-        "desktop_file": desktop_obj,
-        "track_history": True
-    }
+result = SearchResult(
+    plugin_id=self.get_id(),
+    item_id="unique_item_id",
+    name="Display Name",
+    description="Optional description",
+    icon=icon_pixbuf,  # Optional GTK icon
+    score=85.0,        # Match score (0-100)
+    metadata={"key": "value"}  # Plugin-specific data
 )
 ```
 
-## Highlighting and Presentation
-
-### Separation of Concerns
-
-Plugins should **NOT** handle highlighting or presentation logic. The UI layer automatically handles:
-
-- **Text Highlighting**: Multiple matching strategies (exact, prefix, word, fuzzy)
-- **Visual Styling**: CSS-based theming with plugin-specific classes
-- **Icon Rendering**: Automatic scaling and fallback handling
-- **Layout Management**: Consistent result item presentation
-
 ### Highlighting System
 
-The launcher uses a sophisticated highlighting system:
+The UI automatically highlights search matches in result names and descriptions. Plugins don't need to handle highlighting - just return clean text and the UI will apply appropriate highlighting based on the search query.
 
-1. **Multiple Match Types**: Exact, prefix, word boundary, and fuzzy matching
-2. **CSS-Based Styling**: Each match type has its own CSS class
-3. **Automatic Detection**: UI layer determines highlighting based on search query
-4. **Extensible**: New match types can be added easily
+Available highlight classes:
+- `.highlight-exact` - Exact substring matches
+- `.highlight-prefix` - Prefix matches  
+- `.highlight-word` - Word boundary matches
+- `.highlight-fuzzy` - Fuzzy character matches
 
-```css
-/* Highlighting CSS classes */
-.highlight-exact { color: #8be9fd; font-weight: bold; }
-.highlight-prefix { color: #8be9fd; font-weight: bold; }
-.highlight-word { color: #50fa7b; font-weight: bold; }
-.highlight-fuzzy { color: #ffb86c; font-weight: bold; font-style: italic; }
-```
+## CSS Integration
 
-## Plugin Styling
+### Plugin-Specific Styling
 
-### CSS Integration
-
-Plugins can provide default CSS through `get_default_css()`:
+Each plugin can provide default CSS through `get_default_css()`:
 
 ```python
 def get_default_css(self) -> str:
     return """
-    /* Calculator Plugin CSS */
-    .calculator-result #app-list-item {
-        background: rgba(255, 183, 108, 0.1);
-        border-left: 3px solid #ffb86c;
+    .my-plugin-result #app-list-item {
+        padding: 8px;
+        border-radius: 8px;
     }
-    
-    .calculator-result #app-name {
-        color: #ffb86c;
-        font-family: monospace;
+    .my-plugin-result #app-name {
+        color: #50fa7b;
+        font-weight: bold;
+    }
+    .my-plugin-result #app-description {
+        color: #6272a4;
+        font-size: 12px;
     }
     """
 ```
 
 ### CSS Class Naming
 
-Plugin results automatically get CSS classes:
-- `.{plugin-id}-result` - Applied to the result container
-- Standard element IDs: `#app-list-item`, `#app-name`, `#app-description`
+Use the pattern `.{plugin-id}-result` for plugin-specific styling:
+- Calculator: `.calculator-result`
+- Terminal: `.terminal-result`
+- Desktop Files: `.desktop-file-result`
 
-## Configuration System
+## Configuration
 
-### Default Configuration
+### Plugin Configuration
+
+Plugins receive configuration through the `initialize()` method:
 
 ```python
 def get_config_defaults(self) -> Dict[str, Any]:
     return {
         "enabled": True,
-        "locations": ["~/custom/path"],
-        "include_patterns": ["*.py", "*.sh"],
-        "track_history": True,
+        "max_results": 10,
         "custom_setting": "default_value"
     }
-```
 
-### Configuration Access
-
-```python
 def initialize(self, config: Dict[str, Any], config_manager) -> bool:
     super().initialize(config, config_manager)
-    
-    # Access plugin-specific config
-    self.custom_setting = config.get("custom_setting", "default")
-    
-    # Access general config
-    self.icon_size = self.get_general_config("icon_size", 48)
-    
+    self.max_results = config.get("max_results", 10)
     return True
 ```
 
-## Performance Best Practices
-
-### Initialization vs. Startup
-
-- **`initialize()`**: Light setup only (config, CSS)
-- **`start()`**: Heavy operations (file scanning, data loading)
-
-### Background Processing
+### Accessing General Configuration
 
 ```python
-def start(self) -> bool:
-    # Load data in background thread
-    threading.Thread(target=self._scan_data, daemon=True).start()
-    return True
-
-def _scan_data(self):
-    # Heavy processing here
-    self._load_files()
-    # Update UI on main thread
-    GLib.idle_add(self._update_results)
+# Get general launcher configuration
+terminal_cmd = self.get_general_config("terminal_command", "gnome-terminal -- ")
+icon_size = self.get_general_config("icon_size", 32)
 ```
 
-### Caching
+## Creating a New Plugin
 
-```python
-def _load_from_cache(self):
-    cache_file = os.path.join(
-        self.config_manager.get_cache_dir(), 
-        f"{self.get_id()}_cache.json"
-    )
-    # Load cached data for faster startup
+### Step 1: Create Plugin Directory
+```bash
+mkdir launcher/plugins/my_plugin
 ```
 
-## Adding New Plugins
-
-1. **Create Plugin File**: `plugins/my_plugin.py`
-2. **Inherit from Plugin**: `class MyPlugin(Plugin):`
-3. **Implement Required Methods**: See interface above
-4. **Add Configuration**: Define defaults and handle user config
-5. **Add CSS Styling**: Provide default appearance
-6. **Test Integration**: Ensure proper loading and execution
-
-### Example Plugin Structure
+### Step 2: Create plugin.py
+Create `launcher/plugins/my_plugin/plugin.py`:
 
 ```python
-from plugins.base import Plugin, SearchResult
+from ..base import Plugin, SearchResult
 from typing import Dict, Any, List
 
 class MyPlugin(Plugin):
@@ -215,11 +200,17 @@ class MyPlugin(Plugin):
         return "Description of what this plugin does"
     
     def get_config_defaults(self) -> Dict[str, Any]:
-        return {"enabled": True, "setting": "default"}
+        return {
+            "enabled": True,
+            "setting": "default_value"
+        }
     
     def get_default_css(self) -> str:
         return """
-        .my-plugin-result #app-name { color: #50fa7b; }
+        .my-plugin-result #app-name { 
+            color: #50fa7b; 
+            font-weight: bold;
+        }
         """
     
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
@@ -234,12 +225,49 @@ class MyPlugin(Plugin):
     def search(self, query: str) -> List[SearchResult]:
         # Search logic - return SearchResult objects
         results = []
-        # ... search implementation
+        if query.lower() in "my plugin":
+            results.append(SearchResult(
+                plugin_id=self.get_id(),
+                item_id="example",
+                name="Example Result",
+                description="This is an example result",
+                score=90.0
+            ))
         return results
     
     def execute(self, result: SearchResult) -> bool:
         # Execution logic
+        print(f"Executing: {result.name}")
         return True
 ```
+
+### Step 3: Test Your Plugin
+
+The plugin will be automatically discovered and loaded when the launcher starts. No registration or import statements needed.
+
+## Plugin Discovery
+
+The plugin manager automatically discovers plugins by:
+
+1. Scanning `launcher/plugins/` for subdirectories
+2. Looking for `plugin.py` files in each subdirectory
+3. Importing and registering any `Plugin` subclasses found
+4. Initializing enabled plugins with their configuration
+
+This structure supports:
+- **External plugin directories**: Future support for loading plugins from user directories
+- **Plugin packages**: Each plugin can be a complete Python package
+- **Asset management**: Plugins can include their own resources and files
+- **Modular development**: Clean separation between plugins
+
+## Best Practices
+
+1. **Keep plugins focused**: Each plugin should have a single, clear purpose
+2. **Handle errors gracefully**: Always return empty results rather than crashing
+3. **Optimize search performance**: Cache data when possible, avoid blocking operations
+4. **Use meaningful scores**: Higher scores (closer to 100) for better matches
+5. **Provide good descriptions**: Help users understand what each result does
+6. **Follow naming conventions**: Use consistent CSS class naming
+7. **Test thoroughly**: Ensure your plugin works with various search queries
 
 The plugin system is designed to be simple for basic plugins while supporting advanced features like caching, background processing, and custom styling for more complex use cases.

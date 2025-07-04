@@ -304,6 +304,11 @@ class AppListItem(Gtk.ListBoxRow):
         desc_label.set_name("app-description")
         desc_label.get_style_context().add_class("dim-label")
         desc_label.set_ellipsize(Pango.EllipsizeMode.END)
+        
+        # Apply highlighting to description as well
+        if result.description:
+            self._apply_highlighting(desc_label, result.description, self.query)
+        
         vbox.pack_start(desc_label, True, True, 0)
 
         hbox.pack_start(vbox, True, True, 0)
