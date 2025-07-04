@@ -6,7 +6,7 @@ from typing import Dict, Any, List
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, Gdk, Pango
+from gi.repository import Gtk, Gdk, Pango, GLib
 
 from plugins.base import SearchResult
 from core.plugin_manager import PluginManager
@@ -16,13 +16,230 @@ from ui.css_manager import CssManager
 logger = logging.getLogger(__name__)
 
 
+class HighlightSegment:
+    """Represents a segment of text to be highlighted"""
+
+    def __init__(self, start: int, end: int, match_type: str = "exact"):
+        self.start = start
+        self.end = end
+        self.match_type = match_type  # "exact", "fuzzy", "prefix", "word", etc.
+
+    def __repr__(self):
+        return f"HighlightSegment({self.start}, {self.end}, {self.match_type})"
+
+
+class TextHighlighter:
+    """Flexible text highlighter that supports multiple matching strategies"""
+
+    def __init__(self):
+        pass
+
+    def get_highlight_segments(self, text: str, query: str) -> List[HighlightSegment]:
+        """
+        Get highlight segments for the given text and query.
+        Returns a list of HighlightSegment objects representing parts to highlight.
+        """
+        if not text or not query:
+            return []
+
+        segments = []
+
+        # Try different matching strategies in order of preference
+        segments.extend(self._exact_match(text, query))
+        if not segments:
+            segments.extend(self._prefix_match(text, query))
+        if not segments:
+            segments.extend(self._word_boundary_match(text, query))
+        if not segments:
+            segments.extend(self._fuzzy_match(text, query))
+
+        # Merge overlapping segments and sort by position
+        return self._merge_segments(segments)
+
+    def _exact_match(self, text: str, query: str) -> List[HighlightSegment]:
+        """Find exact substring matches (case-insensitive)"""
+        segments = []
+        text_lower = text.lower()
+        query_lower = query.lower()
+
+        start = 0
+        while True:
+            pos = text_lower.find(query_lower, start)
+            if pos == -1:
+                break
+            segments.append(HighlightSegment(pos, pos + len(query), "exact"))
+            start = pos + 1
+
+        return segments
+
+    def _prefix_match(self, text: str, query: str) -> List[HighlightSegment]:
+        """Find prefix matches"""
+        text_lower = text.lower()
+        query_lower = query.lower()
+
+        if text_lower.startswith(query_lower):
+            return [HighlightSegment(0, len(query), "prefix")]
+        return []
+
+    def _word_boundary_match(self, text: str, query: str) -> List[HighlightSegment]:
+        """Find matches at word boundaries"""
+        import re
+
+        segments = []
+
+        # Create pattern for word boundary matching
+        pattern = r"\b" + re.escape(query.lower())
+
+        for match in re.finditer(pattern, text.lower()):
+            segments.append(HighlightSegment(match.start(), match.end(), "word"))
+
+        return segments
+
+    def _fuzzy_match(self, text: str, query: str) -> List[HighlightSegment]:
+        """
+        Find fuzzy matches - individual characters that match in sequence.
+        This is useful for fuzzy search where 'calc' might match 'Calculator'
+        by highlighting 'C', 'a', 'l', 'c'.
+        """
+        segments = []
+        text_lower = text.lower()
+        query_lower = query.lower()
+
+        text_idx = 0
+        query_idx = 0
+
+        while text_idx < len(text_lower) and query_idx < len(query_lower):
+            if text_lower[text_idx] == query_lower[query_idx]:
+                # Found a matching character
+                segments.append(HighlightSegment(text_idx, text_idx + 1, "fuzzy"))
+                query_idx += 1
+            text_idx += 1
+
+        # Only return segments if we matched the entire query
+        if query_idx == len(query_lower):
+            return segments
+        return []
+
+    def _merge_segments(
+        self, segments: List[HighlightSegment]
+    ) -> List[HighlightSegment]:
+        """Merge overlapping or adjacent segments"""
+        if not segments:
+            return []
+
+        # Sort by start position
+        segments.sort(key=lambda s: s.start)
+
+        merged = [segments[0]]
+
+        for current in segments[1:]:
+            last = merged[-1]
+
+            # If segments overlap or are adjacent, merge them
+            if current.start <= last.end:
+                # Extend the last segment to include the current one
+                merged[-1] = HighlightSegment(
+                    last.start,
+                    max(last.end, current.end),
+                    last.match_type,  # Keep the type of the first segment
+                )
+            else:
+                merged.append(current)
+
+        return merged
+
+    def _get_css_class(self, match_type: str) -> str:
+        """Get the CSS class name for a specific match type"""
+        return f"highlight-{match_type}"
+
+    def build_markup(
+        self, text: str, segments: List[HighlightSegment], widget: Gtk.Widget
+    ) -> str:
+        """Build Pango markup string from text and highlight segments using CSS styles"""
+        if not segments:
+            return GLib.markup_escape_text(text)
+
+        markup_parts = []
+        last_end = 0
+
+        for segment in segments:
+            # Add text before this segment
+            if segment.start > last_end:
+                before_text = text[last_end : segment.start]
+                markup_parts.append(GLib.markup_escape_text(before_text))
+
+            # Add highlighted segment with CSS-based styling
+            highlight_text = text[segment.start : segment.end]
+            escaped_text = GLib.markup_escape_text(highlight_text)
+
+            # Get CSS class for this match type
+            css_class = self._get_css_class(segment.match_type)
+
+            # Extract style from CSS using GTK style context
+            style_attrs = self._get_style_from_css(widget, css_class)
+            markup_parts.append(f"<span {style_attrs}>{escaped_text}</span>")
+
+            last_end = segment.end
+
+        # Add remaining text after last segment
+        if last_end < len(text):
+            remaining_text = text[last_end:]
+            markup_parts.append(GLib.markup_escape_text(remaining_text))
+
+        return "".join(markup_parts)
+
+    def _get_style_from_css(self, widget: Gtk.Widget, css_class: str) -> str:
+        """Extract style attributes from CSS for the given class"""
+        try:
+            # Create a temporary widget with the CSS class to extract styles
+            temp_widget = Gtk.Label()
+            style_context = temp_widget.get_style_context()
+            style_context.add_class(css_class)
+
+            # Get color
+            color = style_context.get_color(Gtk.StateFlags.NORMAL)
+            color_hex = f"#{int(color.red * 255):02x}{int(color.green * 255):02x}{int(color.blue * 255):02x}"
+
+            # Get font weight and style
+            font_desc = style_context.get_font(Gtk.StateFlags.NORMAL)
+            weight = "normal"
+            style = "normal"
+
+            if font_desc.get_weight() >= 700:  # Pango.Weight.BOLD
+                weight = "bold"
+
+            if font_desc.get_style() != 0:  # Pango.Style.NORMAL
+                style = "italic"
+
+            # Build attribute string
+            attrs = [f'foreground="{color_hex}"']
+            if weight != "normal":
+                attrs.append(f'weight="{weight}"')
+            if style != "normal":
+                attrs.append(f'style="{style}"')
+
+            return " ".join(attrs)
+
+        except Exception as e:
+            logger.debug(f"Could not extract CSS styles for {css_class}: {e}")
+            # Fallback to default highlighting
+            return 'foreground="#8be9fd" weight="bold"'
+
+
 class AppListItem(Gtk.ListBoxRow):
     """Custom list box row for displaying a search result"""
 
-    def __init__(self, result: SearchResult, icon_size: int, launch_count: int = 0):
+    def __init__(
+        self,
+        result: SearchResult,
+        icon_size: int,
+        launch_count: int = 0,
+        query: str = "",
+    ):
         super().__init__()
         self.set_name("app-list-item")
         self.result = result
+        self.query = query
 
         # Add plugin-specific CSS class
         style_context = self.get_style_context()
@@ -33,7 +250,9 @@ class AppListItem(Gtk.ListBoxRow):
         hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         hbox.set_border_width(8)
 
-        hbox.set_property("height-request", 60)  # Increased height to show description
+        hbox.set_property(
+            "height-request", 60
+        )  # Height to accommodate name and description
 
         if result.icon:
             # Create a fixed size container for the icon
@@ -59,13 +278,16 @@ class AppListItem(Gtk.ListBoxRow):
         name_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
 
         # Add the name
-        name_label = Gtk.Label(label=result.name)
+        name_label = Gtk.Label(label=result.name)  # Always set the initial text
         name_label.set_halign(Gtk.Align.START)
         name_label.set_ellipsize(Pango.EllipsizeMode.END)
         name_label.set_name("app-name")
+
+        # Apply highlighting based on current query (UI handles highlighting logic)
+        self._apply_highlighting(name_label, result.name, self.query)
+
         name_box.pack_start(name_label, True, True, 0)
 
-        # Add launch count if greater than 0
         if launch_count > 0:
             count_label = Gtk.Label(
                 label=f"Used {launch_count} time{'s' if launch_count != 1 else ''}"
@@ -77,7 +299,6 @@ class AppListItem(Gtk.ListBoxRow):
 
         vbox.pack_start(name_box, True, True, 0)
 
-        # Add description
         desc_label = Gtk.Label(label=result.description or "")
         desc_label.set_halign(Gtk.Align.START)
         desc_label.set_name("app-description")
@@ -90,6 +311,36 @@ class AppListItem(Gtk.ListBoxRow):
 
         if result.description:
             self.set_tooltip_text(result.description)
+
+    def _apply_highlighting(self, label: Gtk.Label, text: str, query: str) -> None:
+        """Apply highlighting to a label based on the search query using flexible highlighting"""
+        if not text or not query:
+            label.set_text(text or "")
+            return
+
+        query = query.strip()
+        if not query:
+            label.set_text(text)
+            return
+
+        try:
+            # Get highlight segments from the highlighter
+            highlighter = TextHighlighter()
+            segments = highlighter.get_highlight_segments(text, query)
+
+            if not segments:
+                # No matches found, just set plain text
+                label.set_text(text)
+                return
+
+            # Build markup from segments using CSS styles
+            markup = highlighter.build_markup(text, segments, label)
+            label.set_markup(markup)
+
+        except Exception as e:
+            logger.error(f"Error applying highlighting for '{text}': {e}")
+            # Fallback to plain text if highlighting fails
+            label.set_text(text)
 
 
 class LauncherWindow(Gtk.Window):
@@ -104,29 +355,23 @@ class LauncherWindow(Gtk.Window):
     ):
         super().__init__(title="Launcher")
 
-        # Apply default styling immediately
         CssManager._load_css_from_string(CssManager.DEFAULT_CSS)
 
         self.plugin_manager = plugin_manager
         self.history_manager = history_manager
         self.config = config
         self.foreground_mode = foreground_mode
-        self.icon_size = config.get("general", {}).get("icon_size")
-
-        # Get window size configuration
+        # Cache general config to avoid repeated lookups
         general_config = config.get("general", {})
+        self.icon_size = general_config.get("icon_size")
         self.window_width = general_config.get("window_width")
         self.window_height = general_config.get("window_height")
         self.window_height_results = general_config.get("window_height_results")
 
-        # Position tracking variables
         self.saved_x = None
         self.saved_y = None
 
-        # Set up window properties
         self.set_decorated(False)
-
-        # Connect position tracking before setting initial position
         self.connect("configure-event", self.on_configure_event)
 
         try:
@@ -139,7 +384,6 @@ class LauncherWindow(Gtk.Window):
             x = geometry.x + (monitor_width - self.window_width) // 2
             y = geometry.y + (monitor_height - self.window_height) // 4
             self.move(x, y)
-            # Store initial position
             self.saved_x = x
             self.saved_y = y
 
@@ -231,7 +475,7 @@ class LauncherWindow(Gtk.Window):
 
         # Search debouncing
         self._search_timeout_id = None
-        self._search_delay_ms = 50  # 100ms delay to reduce search frequency
+        self._search_delay_ms = 50  # Debounce delay to reduce search frequency
 
         # Track if user is navigating with keys
         self.user_navigating = False
@@ -253,12 +497,15 @@ class LauncherWindow(Gtk.Window):
         self.showing_history = False
 
     def _show_recent_history(self):
-        """Show the most recent 5 history items when launcher opens with empty input."""
+        """Show all history items when launcher opens with empty input, with scrolling support."""
         if not self.history_manager:
             return
 
-        recent_items = self.history_manager.get_recent_history(5)
-        if not recent_items:
+        # Get all history items instead of just 5
+        all_history = self.history_manager.get_recent_history(
+            100
+        )  # Get up to 100 items
+        if not all_history:
             return
 
         # Clear previous items
@@ -266,11 +513,11 @@ class LauncherWindow(Gtk.Window):
             child.destroy()
 
         # Create history result items
-        for i, history_entry in enumerate(recent_items):
+        for i, history_entry in enumerate(all_history):
             user_input = history_entry.get("user_input", "")
             plugin_id = history_entry.get("plugin_id", "")
             item_id = history_entry.get("item_id", "")
-            result_name = history_entry.get("result_name", user_input)
+            description = history_entry.get("description", user_input)
 
             if not user_input:
                 continue
@@ -281,52 +528,58 @@ class LauncherWindow(Gtk.Window):
                 plugin_id, item_id, history_entry
             )
 
-            # Create a history item row
-            row = Gtk.ListBoxRow()
-            row.set_name("history-item")
-
-            hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-            hbox.set_border_width(8)
-            hbox.set_property("height-request", 60)
-
-            # Add icon - use actual app icon if available, otherwise fallback
-            icon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            icon_box.set_size_request(self.icon_size or 48, self.icon_size or 48)
-
+            # Determine the icon to use
+            display_icon = None
             if actual_result and actual_result.icon:
-                # Use the actual app icon (could be from stored data or current plugin state)
-                icon = Gtk.Image.new_from_pixbuf(actual_result.icon)
-                icon_box.pack_start(icon, True, False, 0)
+                display_icon = actual_result.icon
             else:
-                # Fallback to clock icon
-                history_label = Gtk.Label("🕒")
-                history_label.set_name("history-icon")
-                icon_box.pack_start(history_label, True, False, 0)
+                # Fallback to history icon
+                try:
+                    icon_theme = Gtk.IconTheme.get_default()
+                    display_icon = icon_theme.load_icon(
+                        "accessories-history", self.icon_size or 48, 0
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not load history icon: {e}")
+                    # Fallback to a generic icon if history icon fails
+                    try:
+                        display_icon = icon_theme.load_icon(
+                            "document-open-recent", self.icon_size or 48, 0
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not load generic recent icon: {e}")
+                        # If all else fails, display no icon (AppListItem will handle it)
+                        display_icon = None
 
-            hbox.pack_start(icon_box, False, False, 0)
-
-            # Add the user input text
-            text_label = Gtk.Label(user_input)
-            text_label.set_halign(Gtk.Align.START)
-            text_label.set_ellipsize(Pango.EllipsizeMode.END)
-            text_label.set_name("history-text")
-            hbox.pack_start(text_label, True, True, 0)
-
-            row.add(hbox)
-            row.user_input = user_input  # Store the input for selection
-            row.history_entry = history_entry  # Store full history entry
-            self.list_box.add(row)
+            # Create history result items
+            history_count = history_entry.get("usage_count", 0)
+            list_item = AppListItem(
+                SearchResult(
+                    plugin_id=plugin_id,
+                    item_id=item_id,
+                    name=user_input,
+                    description=description,
+                    icon=display_icon,
+                    score=0,
+                ),
+                icon_size=self.icon_size or 48,
+                launch_count=history_count,
+                query="",  # No highlighting for history items
+            )
+            list_item.set_name("history-item")
+            list_item.user_input = user_input  # Store the input for selection
+            list_item.history_entry = history_entry  # Store full history entry
+            self.list_box.add(list_item)
 
         self.list_box.show_all()
         self.scrolled.show()
         self.showing_history = True
 
-        # Resize window for history display
-        row_height = 60 + 16  # height + padding
-        num_items = len(recent_items)
-        min_height = row_height * max(num_items, 1)
-        self.resize(self.window_width, self.window_height + min_height)
-        self.scrolled.set_size_request(-1, min_height)
+        # Use the same display logic as search results for consistency
+        self._setup_results_display(
+            all_history,
+            f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}",
+        )
 
     def _get_result_for_history_entry(
         self, plugin_id: str, item_id: str, history_entry: Dict[str, Any] = None
@@ -335,8 +588,8 @@ class LauncherWindow(Gtk.Window):
         if not self.plugin_manager:
             return None
 
-        # First, check if we have stored icon data in history (for executable plugin)
-        if history_entry and plugin_id == "executable":
+        # First, check if we have stored icon data in history
+        if history_entry:
             stored_icon = self.history_manager.get_stored_icon(
                 history_entry, self.icon_size or 48
             )
@@ -351,7 +604,7 @@ class LauncherWindow(Gtk.Window):
 
                 return MockResult(
                     stored_icon,
-                    history_entry.get("result_name", ""),
+                    history_entry.get("user_input", ""),
                     plugin_id,
                     item_id,
                 )
@@ -504,16 +757,19 @@ class LauncherWindow(Gtk.Window):
 
         # Add new items
         for result in results_to_display:
-            history_count = self.history_manager.get_usage_count(
-                result.plugin_id, result.item_id
-            )
-            icon_size = (
-                self.icon_size
-                if self.icon_size is not None
-                else self.config.get("general", {}).get("icon_size", 48)
-            )
+            # For history plugin results, use the stored usage count, otherwise look it up
+            if result.plugin_id == "history":
+                history_count = result.metadata.get("usage_count", 0)
+            else:
+                history_count = self.history_manager.get_usage_count(
+                    result.plugin_id, result.item_id
+                )
+
             list_item = AppListItem(
-                result, icon_size=icon_size, launch_count=history_count
+                result,
+                icon_size=self.icon_size or 48,
+                launch_count=history_count,
+                query=self.entry.get_text().strip(),
             )
             self.list_box.add(list_item)
 
@@ -524,42 +780,43 @@ class LauncherWindow(Gtk.Window):
         if vadj:
             vadj.set_value(vadj.get_lower())
 
-        # Show result count if there are results
-        if results_to_display:
-            count = len(results_to_display)
-            self.result_count_label.set_text(
-                f"{count} result{'s' if count != 1 else ''}"
-            )
+        # Use unified display setup
+        count_text = (
+            f"{len(results_to_display)} result{'s' if len(results_to_display) != 1 else ''}"
+            if results_to_display
+            else ""
+        )
+        self._setup_results_display(results_to_display, count_text)
+
+        if not self.user_navigating:
+            self.list_box.unselect_all()
+
+    def _setup_results_display(self, items, count_text=""):
+        """Unified method to set up the results display area with consistent sizing and scrolling."""
+        # Show/hide result count
+        if count_text:
+            self.result_count_label.set_text(count_text)
             self.result_count_label.show()
         else:
             self.result_count_label.set_text("")
             self.result_count_label.hide()
 
-        # Always reserve space for 5 results
-        row_height = 60 + 16  # AppListItem height-request + hbox border
-        min_height = row_height * 5
-        self.resize(self.window_width, max(self.window_height_results, min_height))
-        self.scrolled.set_size_request(-1, min_height)
-        self.scrolled.queue_resize()
+        # Calculate display height - always use results window height for consistency
+        display_height = self.window_height_results - self.window_height
+        self.resize(self.window_width, self.window_height_results)
+        self.scrolled.set_size_request(-1, display_height)
 
-        # Scrollbar visibility logic
-        if len(results_to_display) > 5:
+        # Set scrolling policy based on number of items
+        if len(items) > 5:
             self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.ALWAYS)
             self.scrolled.set_overlay_scrolling(False)
         else:
             self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
 
-        # Resize window
-        self.resize(self.window_width, self.window_height_results)
-        self.scrolled.queue_resize()
-
-        if len(results_to_display) > 1:
-            adjustment = self.scrolled.get_vadjustment()
-            if adjustment:
-                adjustment.set_upper(adjustment.get_upper() + 1)
-
-        if not self.user_navigating:
-            self.list_box.unselect_all()
+        # Scroll to top when results change
+        vadj = self.scrolled.get_vadjustment()
+        if vadj:
+            vadj.set_value(vadj.get_lower())
 
     def handle_plugin_results(
         self, search_id: int, plugin_id: str, plugin_results: List[SearchResult]
@@ -574,6 +831,9 @@ class LauncherWindow(Gtk.Window):
         logger.debug(
             f"Received {len(plugin_results)} results from plugin {plugin_id} for search_id {search_id}"
         )
+
+        # No need to handle highlighting here - UI layer will handle it based on current query
+
         self.current_results.extend(plugin_results)
 
         # Adjust scores based on history for all current results
@@ -589,19 +849,15 @@ class LauncherWindow(Gtk.Window):
                 )
                 result.metadata["history_count"] = count
 
-        # Sort by history (items with history > 0 come first), then by score
-        self.current_results.sort(
-            key=lambda r: (
-                r.metadata.get("history_count", 0)
-                > 0,  # True (1) for items with history
-                r.score,
-            ),
-            reverse=True,
-        )
+        # Sort by score only - history plugin already has prioritized scores
+        self.current_results.sort(key=lambda r: r.score, reverse=True)
 
-        # Truncate results
-        max_results = self.config.get("general", {}).get("max_results", 15)
-        self.current_results = self.current_results[:max_results]
+        # Truncate results - cache max_results to avoid repeated config lookups
+        if not hasattr(self, "_cached_max_results"):
+            self._cached_max_results = self.config.get("general", {}).get(
+                "max_results", 15
+            )
+        self.current_results = self.current_results[: self._cached_max_results]
 
         self._populate_list_box(self.current_results)
 
@@ -615,7 +871,8 @@ class LauncherWindow(Gtk.Window):
 
         logger.debug(f"All plugins have finished searching for search_id {search_id}.")
         # Always show dropdown if user has typed something, even if no results
-        if self.entry.get_text().strip() and not self.current_results:
+        query_text = self.entry.get_text().strip()
+        if query_text and not self.current_results:
             self._populate_list_box([])
         elif not self.current_results:
             self._clear_list_box_and_hide()
@@ -652,7 +909,7 @@ class LauncherWindow(Gtk.Window):
             self._show_recent_history()
             return False  # Remove from timeout
 
-        # Check for autocomplete matches
+        # Check for autocomplete matches - cache history manager check
         if self.history_manager:
             self.autocomplete_matches = self.history_manager.get_matching_history(
                 query, 5
@@ -818,52 +1075,41 @@ class LauncherWindow(Gtk.Window):
                     self.entry.set_position(-1)
                 return True
 
-            # Handle Shift+Delete to remove a single history entry
+            # Handle Shift+Delete to remove selected history entries (single or multiple)
             elif keyval == Gdk.KEY_Delete and state & Gdk.ModifierType.SHIFT_MASK:
-                if self.showing_history:
-                    selected_row = self.list_box.get_selected_row()
-                    if selected_row and hasattr(selected_row, "history_entry"):
-                        entries_to_remove = [selected_row.history_entry]
+                selected_rows = self.list_box.get_selected_rows()
+                if selected_rows:
+                    entries_to_remove = []
+
+                    for row in selected_rows:
+                        # Check if this is a recent history item
+                        if self.showing_history and hasattr(row, "history_entry"):
+                            entries_to_remove.append(row.history_entry)
+                        # Check if this is a history plugin search result
+                        elif (
+                            hasattr(row, "result") and row.result.plugin_id == "history"
+                        ):
+                            history_entry = row.result.metadata.get("history_entry")
+                            if history_entry:
+                                entries_to_remove.append(history_entry)
+
+                    if entries_to_remove:
                         removed_count = (
                             self.history_manager.remove_history_entries_by_ids(
                                 entries_to_remove
                             )
                         )
                         if removed_count > 0:
-                            logger.info(
-                                f"Removed 1 history entry with Shift+Delete: {selected_row.history_entry.get('user_input', '')}"
-                            )
-                            self._refresh_history_view_after_delete()
-                        return True
-                return (
-                    False  # Allow other handlers if not showing history or no selection
-                )
+                            count_text = f"{removed_count} history {'entry' if removed_count == 1 else 'entries'}"
+                            logger.info(f"Removed {count_text} with Shift+Delete.")
 
-            # Handle Ctrl+Delete to remove multiple selected history entries
-            elif keyval == Gdk.KEY_Delete and state & Gdk.ModifierType.CONTROL_MASK:
-                if self.showing_history:
-                    selected_rows = self.list_box.get_selected_rows()
-                    if selected_rows:
-                        entries_to_remove = [
-                            row.history_entry
-                            for row in selected_rows
-                            if hasattr(row, "history_entry")
-                        ]
-                        if entries_to_remove:
-                            removed_count = (
-                                self.history_manager.remove_history_entries_by_ids(
-                                    entries_to_remove
-                                )
-                            )
-                            if removed_count > 0:
-                                logger.info(
-                                    f"Removed {removed_count} history entries with Ctrl+Delete."
-                                )
+                            if self.showing_history:
                                 self._refresh_history_view_after_delete()
-                            return True
-                return (
-                    False  # Allow other handlers if not showing history or no selection
-                )
+                            else:
+                                # Refresh the current search to update results
+                                self.on_entry_changed(self.entry)
+                        return True
+                return False  # Allow other handlers if no selection
 
         # Global hotkeys (work anywhere in the window)
         # Handle Ctrl+Q to quit (hide first for snappy response)
@@ -961,15 +1207,16 @@ class LauncherWindow(Gtk.Window):
                 # This should be the full application name/command, not the partial user input
                 executed_command = self._build_executed_command(result)
 
-                # Pass the icon pixbuf to history for storage (especially for executable plugin)
-                icon_pixbuf = result.icon if result.plugin_id == "executable" else None
+                # Pass the icon pixbuf to history for storage (for all plugin types)
+                icon_pixbuf = result.icon
                 user_input_for_history = self.entry.get_text().strip()
+
                 self.history_manager.add_execution(
                     result.plugin_id,
                     result.item_id,
                     executed_command,
                     user_input_for_history,
-                    result.name,
+                    result.description,
                     icon_pixbuf,
                 )
                 self.history_manager.save_history()
@@ -1008,8 +1255,7 @@ class LauncherWindow(Gtk.Window):
         self.entry.set_text("")
         self._clear_list_box_and_hide()
 
-        # Show recent history if available
-        self._show_recent_history()
+        # Don't show history here - wait for update_with_full_config() when managers are ready
 
         # Present window and grab focus
         self.present()
@@ -1143,7 +1389,7 @@ class LauncherWindow(Gtk.Window):
         self.history_manager = history_manager
         self.config = config
 
-        # Update window size if needed
+        # Update window size if needed - cache general config
         general_config = config.get("general", {})
         self.window_width = general_config.get("window_width", self.window_width)
         self.window_height = general_config.get("window_height", self.window_height)
@@ -1161,6 +1407,11 @@ class LauncherWindow(Gtk.Window):
                 "changed", self.on_entry_changed
             )
             logger.info("Connected entry changed signal after full initialization")
+
+        # Show recent history now that history_manager is available
+        # Only show if the entry is empty (initial launch state)
+        if not self.entry.get_text().strip():
+            self._show_recent_history()
 
     def _refresh_history_view_after_delete(self):
         """

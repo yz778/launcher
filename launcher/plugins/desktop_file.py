@@ -54,7 +54,6 @@ class DesktopFile:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DesktopFile":
         """Create a DesktopFile object from a dictionary (from cache)"""
-        # Create an empty instance to avoid re-running __init__ which does parsing
         instance = object.__new__(cls)
         instance.path = data.get("path", "")
         instance.name = data.get("name", "")
@@ -64,7 +63,7 @@ class DesktopFile:
         instance.hidden = data.get("hidden", False)
         instance.no_display = data.get("no_display", False)
         instance.terminal = data.get("terminal", False)
-        instance.desktop_entry = None  # Not available from cache
+        instance.desktop_entry = None
         instance._icon_cache = {}
         return instance
 
@@ -107,7 +106,6 @@ class DesktopFile:
 
             if os.path.isfile(self.icon):
                 pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(self.icon, size, size)
-
             else:
                 icon_path = getIconPath(self.icon, size)
 
@@ -124,14 +122,11 @@ class DesktopFile:
                         pass
 
                 if not pixbuf:
-                    # Check if icon exists in GTK theme
                     if icon_theme.has_icon(self.icon):
                         try:
                             pixbuf = icon_theme.load_icon(self.icon, size, 0)
                         except GLib.Error:
                             pass
-
-                    # Try without extension in GTK theme
                     elif "." in self.icon:
                         icon_name = os.path.splitext(self.icon)[0]
                         if icon_theme.has_icon(icon_name):
@@ -140,11 +135,9 @@ class DesktopFile:
                             except GLib.Error:
                                 pass
 
-            # Fallback to generic icon if all else fails
             if not pixbuf:
                 pixbuf = self._get_fallback_icon(size)
 
-            # Ensure the pixbuf is exactly the requested size
             if pixbuf and (pixbuf.get_width() != size or pixbuf.get_height() != size):
                 original_pixbuf = pixbuf
                 pixbuf = pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
@@ -437,7 +430,6 @@ class DesktopFilePlugin(Plugin):
         if not desktop_file.exec_cmd:
             return False
 
-        # Replace subsitutions with arguments (%f %F %u %U)
         args = shlex.join(result.metadata.get("args"))
         cmd_parts = shlex.split(
             re.sub(r"%[fu]", args, desktop_file.exec_cmd, flags=re.IGNORECASE)

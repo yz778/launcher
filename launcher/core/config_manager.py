@@ -4,7 +4,7 @@ import logging
 import os
 import yaml
 from typing import Dict, Any, Optional
-from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_data_home
+from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_state_home
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class ConfigManager:
         "item_height": 50,
         "border_width": 10,
         "padding": 20,
-        "history_file": str(xdg_data_home() / "launcher/history.json"),
+        "history_file": str(xdg_state_home() / "launcher/history.json"),
         "css_file": str(xdg_config_home() / "launcher/launcher.css"),
         "cache_dir": str(xdg_cache_home() / "launcher"),
     }
@@ -37,7 +37,6 @@ class ConfigManager:
     def get_cache_dir(self) -> str:
         """Get the cache directory, creating it if it doesn't exist"""
         cache_dir = self.DEFAULT_CONFIG["cache_dir"]
-
         cache_dir = os.path.expanduser(cache_dir)
         os.makedirs(cache_dir, exist_ok=True)
         return cache_dir
@@ -69,7 +68,6 @@ class ConfigManager:
 
         for plugin_id, plugin_defaults in self.plugin_defaults.items():
             default_config["plugins"][plugin_id] = {"enabled": True}
-
             for key, value in plugin_defaults.items():
                 default_config["plugins"][plugin_id][key] = value
 
@@ -138,13 +136,11 @@ class ConfigManager:
             "plugins": {"desktop_file": ["locations"], "executable": ["locations"]},
         }
 
-        # General section
         if "general" in config:
             for key in PATH_KEYS["general"]:
                 if key in config["general"] and isinstance(config["general"][key], str):
                     config["general"][key] = os.path.expanduser(config["general"][key])
 
-        # Plugins section
         if "plugins" in config:
             for plugin_id, plugin_keys in PATH_KEYS["plugins"].items():
                 if plugin_id in config["plugins"]:

@@ -73,7 +73,9 @@ class Plugin(ABC):
     def get_general_config(self, key: str, default: Any = None) -> Any:
         """Helper to get a value from the [general] config section."""
         if self.config_manager:
-            return self.config_manager.get_config().get("general", {}).get(key, default)
+            config = self.config_manager.get_config()
+            general_config = config.get("general", {})
+            return general_config.get(key, default)
         return default
 
     def should_track_history(self) -> bool:

@@ -89,7 +89,8 @@ def create_default_css_file(
     default_plugin_manager.load_plugins(plugins_dir, {})
     default_config = config_manager.get_config(None)
 
-    css_path = os.path.expanduser(default_config.get("general", {}).get("css_file"))
+    general_config = default_config.get("general", {})
+    css_path = os.path.expanduser(general_config.get("css_file"))
     base_name = os.path.basename(css_path)
     name_parts = os.path.splitext(base_name)
     default_name = f"{name_parts[0]}.default{name_parts[1]}"

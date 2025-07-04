@@ -75,12 +75,24 @@ class PluginManager:
     ) -> None:
         """Register and initialize a single plugin"""
         try:
-            plugin = plugin_class()
-            plugin_id = plugin.get_id()
+            # Create a temporary instance just to get the plugin ID and defaults
+            temp_plugin = plugin_class()
+            plugin_id = temp_plugin.get_id()
 
+            # Check if plugin is enabled before doing any real work
+            plugins_config = config.get("plugins", {})
+            plugin_specific_config = plugins_config.get(plugin_id, {})
+            enabled = plugin_specific_config.get("enabled", True)
+
+            if not enabled:
+                logger.info(
+                    f"Plugin disabled: {temp_plugin.get_name()} ({plugin_id}) - skipping registration"
+                )
+                return
+
+            # Plugin is enabled, proceed with full registration
             try:
-                plugin_defaults = plugin.get_config_defaults()
-
+                plugin_defaults = temp_plugin.get_config_defaults()
                 if self.config_manager:
                     self.config_manager.register_plugin_defaults(
                         plugin_id, plugin_defaults
@@ -89,43 +101,21 @@ class PluginManager:
                 logger.error(
                     f"Error getting config defaults for plugin {plugin_id}: {e}"
                 )
-                plugin_defaults = {}
 
-            plugin_config = config.get("plugins", {}).get(plugin_id, {})
-            logger.debug(
-                f"Registering plugin '{plugin_id}'. Raw plugin_config: {plugin_config}"
-            )
+            logger.debug(f"Registering enabled plugin '{plugin_id}'")
 
-            enabled = plugin_config.get("enabled", True)
-            logger.debug(f"Plugin '{plugin_id}' enabled flag is {enabled}.")
-
-            # Get the already merged plugin-specific configuration from the main config
-            # This config already respects the hierarchy: global defaults -> plugin defaults -> user config
-            plugin_specific_config = config.get("plugins", {}).get(plugin_id, {})
-
-            enabled = plugin_specific_config.get("enabled", True)
-            logger.debug(f"Plugin '{plugin_id}' enabled flag is {enabled}.")
-
-            if enabled:
-                logger.debug(
-                    f"Plugin '{plugin_id}' is enabled and will be initialized."
+            # Initialize the plugin
+            if temp_plugin.initialize(plugin_specific_config, self.config_manager):
+                self.plugins[plugin_id] = temp_plugin
+                self.enabled_plugins[plugin_id] = True
+                logger.info(
+                    f"Initialized plugin: {temp_plugin.get_name()} ({plugin_id})"
                 )
-                if plugin.initialize(plugin_specific_config, self.config_manager):
-                    self.plugins[plugin_id] = plugin
-                    self.enabled_plugins[plugin_id] = True
-                    logger.info(
-                        f"Initialized plugin: {plugin.get_name()} ({plugin_id})"
-                    )
-                else:
-                    logger.warning(
-                        f"Failed to initialize plugin: {plugin.get_name()} ({plugin_id})"
-                    )
             else:
-                logger.info(f"Plugin disabled: {plugin.get_name()} ({plugin_id})")
-                logger.debug(
-                    f"Plugin '{plugin_id}' is disabled and will NOT be added to active plugins."
+                logger.warning(
+                    f"Failed to initialize plugin: {temp_plugin.get_name()} ({plugin_id})"
                 )
-                self.enabled_plugins[plugin_id] = False
+
         except Exception as e:
             logger.error(f"Error registering plugin {plugin_class.__name__}: {e}")
 
@@ -147,14 +137,8 @@ class PluginManager:
             GLib.idle_add(finished_callback, search_id)
             return
 
-        plugins_to_search = []
-        for plugin_id, plugin_instance in self.plugins.items():
-            # Ensure plugin is enabled in the current config
-            plugin_config = self.config.get("plugins", {}).get(plugin_id, {})
-            if plugin_config.get("enabled", True):
-                plugins_to_search.append((plugin_id, plugin_instance))
-            else:
-                logger.info(f"Plugin {plugin_id} is disabled, skipping search.")
+        # Since only enabled plugins are in self.plugins, we can search all of them
+        plugins_to_search = list(self.plugins.items())
 
         if not plugins_to_search:
             GLib.idle_add(finished_callback, search_id)
@@ -201,7 +185,7 @@ class PluginManager:
         """Execute an action for the given search result"""
         plugin_id = result.plugin_id
 
-        if plugin_id in self.plugins and self.enabled_plugins.get(plugin_id, False):
+        if plugin_id in self.plugins:
             try:
                 return self.plugins[plugin_id].execute(result)
             except Exception as e:

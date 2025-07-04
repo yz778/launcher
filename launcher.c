@@ -46,9 +46,13 @@ int main(int argc, char *argv[]) {
     args[0] = venv_python;
     args[1] = "-m";
     args[2] = "launcher.launcher";
-    // Copy argv[1]..argv[argc-1] into args[3]..args[argc+1]
-    memcpy(&args[3], &argv[1], (argc - 1) * sizeof(char*));
-    args[argc + 2] = NULL; // NULL-terminate the array
+    // Copy command-line arguments (argv[1] onwards) to the Python script's arguments (args[3] onwards).
+    // The number of arguments to copy is argc - 1.
+    int i;
+    for (i = 0; i < argc - 1; ++i) {
+        args[3 + i] = argv[1 + i];
+    }
+    args[3 + (argc - 1)] = NULL; // NULL-terminate the argument array for execvp
 
     // Try venv python first, fallback to system python
     execvp(venv_python, args);
