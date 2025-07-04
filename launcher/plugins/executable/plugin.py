@@ -14,7 +14,7 @@ from typing import Dict, List, Any
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # Import GLib at the module level
 
-from plugins.base import Plugin, SearchResult
+from ..base import Plugin, SearchResult
 from launcher.core.config_manager import ConfigManager
 from launcher.utils.string_matcher import StringMatcher
 

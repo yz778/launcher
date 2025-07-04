@@ -15,7 +15,7 @@ from xdg.DesktopEntry import DesktopEntry
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GdkPixbuf, GLib
 
-from plugins.base import Plugin, SearchResult
+from ..base import Plugin, SearchResult
 from launcher.core.config_manager import ConfigManager
 from launcher.utils.string_matcher import StringMatcher
 
