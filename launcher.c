@@ -1,16 +1,34 @@
 #include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <string.h>
+#include <unistd.h>
 #include <linux/limits.h>
+
+// Function to get the socket path
+const char* get_socket_path() {
+    const char* app_name = "launcher";
+    const char* runtime_dir = getenv("XDG_RUNTIME_DIR");
+    static char socket_path[256];
+
+    if (runtime_dir && strlen(runtime_dir) > 0) {
+        snprintf(socket_path, sizeof(socket_path), "%s/%s.sock", runtime_dir, app_name);
+    } else {
+        // Fallback to /tmp if XDG_RUNTIME_DIR is not set
+        const char* tmp_dir = "/tmp";
+        snprintf(socket_path, sizeof(socket_path), "%s/%s.sock", tmp_dir, app_name);
+    }
+    return socket_path;
+}
 
 int main(int argc, char *argv[]) {
     // Try socket connection first
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (fd != -1) {
         struct sockaddr_un addr = {.sun_family = AF_UNIX};
-        strcpy(addr.sun_path, "/tmp/launcher.sock");
+        strncpy(addr.sun_path, get_socket_path(), sizeof(addr.sun_path) - 1);
+        addr.sun_path[sizeof(addr.sun_path) - 1] = '\0';
 
         struct timeval timeout = {0, 50000};
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
