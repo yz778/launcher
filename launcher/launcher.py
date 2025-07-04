@@ -28,6 +28,20 @@ logger = logging.getLogger(__name__)
 singleton_manager = None
 launcher_window = None
 
+# Global references for plugins to access
+_history_manager = None
+_plugin_manager = None
+
+
+def get_history_manager():
+    """Get the global history manager instance"""
+    return _history_manager
+
+
+def get_plugin_manager():
+    """Get the global plugin manager instance"""
+    return _plugin_manager
+
 
 def rescan_callback(plugin_id: str = None):
     """Callback to handle rescan commands"""
@@ -243,13 +257,23 @@ def complete_initialization(
 
     # Initialize plugin manager and load plugins
     plugin_manager = PluginManager(config_manager)
-    plugin_manager.load_plugins(plugins_dir, config)
-
-    # Load CSS
-    CssManager.load_css(config, plugin_manager.plugins)
 
     # Initialize history manager
     history_manager = HistoryManager(config)
+
+    # Set global references for plugins to access
+    global _history_manager, _plugin_manager
+    _history_manager = history_manager
+    _plugin_manager = plugin_manager
+
+    plugin_manager.load_plugins(plugins_dir, config)
+
+    # Set managers on history plugin if it was loaded
+    if "history" in plugin_manager.plugins:
+        plugin_manager.plugins["history"].set_managers(history_manager, plugin_manager)
+
+    # Load CSS
+    CssManager.load_css(config, plugin_manager.plugins)
 
     # Update the window with the full configuration and managers
     win.update_with_full_config(plugin_manager, history_manager, config)

@@ -5,6 +5,7 @@ import json
 import logging
 import time
 import base64
+import math
 from typing import Dict, Any, List, Optional
 
 import gi
@@ -27,7 +28,8 @@ class HistoryManager:
         self.history_file = None
 
         if config:
-            history_file = config.get("general", {}).get(
+            general_config = config.get("general", {})
+            history_file = general_config.get(
                 "history_file", "~/.local/share/launcher/history.json"
             )
             self.load_history(history_file)
@@ -99,7 +101,7 @@ class HistoryManager:
         item_id: str,
         executed_command: str,
         original_user_input: str,
-        result_name: str = None,
+        description: str = None,
         icon_pixbuf=None,
     ) -> None:
         """
@@ -109,7 +111,7 @@ class HistoryManager:
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
             user_input: The exact text that the user typed before submitting
-            result_name: Display name of the executed item
+            description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
         current_time = time.time()
@@ -121,9 +123,29 @@ class HistoryManager:
             item_id,
             current_time,
             executed_command,
-            result_name,
+            description,
             icon_pixbuf,
         )
+
+    def _normalize_command_for_comparison(self, command: str) -> Optional[str]:
+        """
+        Normalizes a command string for comparison, handling common executable variations.
+        For example, 'firefox.desktop' and '/usr/bin/firefox' should normalize to the same string.
+        """
+        if not command:
+            return None
+
+        # Get the base name without directory
+        base_name = os.path.basename(command)
+
+        # Remove common executable extensions or .desktop
+        if base_name.endswith(".desktop"):
+            base_name = base_name[: -len(".desktop")]
+        # Add more specific extension handling if needed, e.g., .py, .sh, but be careful
+        # For now, keep it simple to avoid false positives.
+
+        # Convert to lowercase for case-insensitive comparison
+        return base_name.lower()
 
     def add_user_input_history(
         self,
@@ -132,35 +154,60 @@ class HistoryManager:
         item_id: str,
         timestamp: float = None,
         executed_command_string: str = None,
-        result_name: str = None,
+        description: str = None,
         icon_pixbuf=None,
     ) -> None:
         """
         Add user input to history, removing duplicates and maintaining order.
+        Merges usage counts for executables that resolve to the same command.
 
         Args:
             user_input: The exact text that the user typed
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
             timestamp: Timestamp when executed (defaults to current time)
-            result_name: Display name of the executed item
+            executed_command_string: The actual command string that was executed.
+            description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
         if timestamp is None:
             timestamp = time.time()
 
-        # Find existing entry with same plugin_id/item_id to get current usage count
         current_usage_count = 0
-        for entry in self.user_input_history:
-            if entry.get("plugin_id") == plugin_id and entry.get("item_id") == item_id:
-                current_usage_count = entry.get("usage_count", 0)
-                break
+        entries_to_remove = []
 
-        # Remove any existing entry with the same user input
+        # Normalize the executed command for the new entry, if applicable
+        normalized_new_command = None
+        if plugin_id in ["executable", "desktop_file"] and executed_command_string:
+            normalized_new_command = self._normalize_command_for_comparison(
+                executed_command_string
+            )
+
+        # Iterate through existing history to find duplicates and merge counts
+        for entry in self.user_input_history:
+            # Check for exact user input duplicate (case-insensitive)
+            if entry.get("user_input", "").lower() == user_input.lower():
+                # This is the exact same user input, so we'll replace it.
+                # Take its usage count as the base for the new entry.
+                current_usage_count = entry.get("usage_count", 0)
+                entries_to_remove.append(entry)
+                continue  # Don't process this entry further for merging, it's being replaced
+
+            # Check for merging based on normalized executed command
+            if normalized_new_command and entry.get("executed_command"):
+                normalized_existing_command = self._normalize_command_for_comparison(
+                    entry["executed_command"]
+                )
+                if normalized_new_command == normalized_existing_command:
+                    current_usage_count += entry.get("usage_count", 0)
+                    entries_to_remove.append(entry)
+                    logger.debug(
+                        f"Merging history entry for command '{executed_command_string}' with existing entry: {entry.get('user_input')}"
+                    )
+
+        # Filter out entries that are being replaced or merged
         self.user_input_history = [
-            entry
-            for entry in self.user_input_history
-            if entry.get("user_input", "").lower() != user_input.lower()
+            entry for entry in self.user_input_history if entry not in entries_to_remove
         ]
 
         # Add new entry at the beginning (most recent first)
@@ -169,20 +216,25 @@ class HistoryManager:
             "plugin_id": plugin_id,
             "item_id": item_id,
             "timestamp": timestamp,
-            "result_name": result_name,
+            "description": description,
             "usage_count": current_usage_count + 1,
+            "executed_command": executed_command_string,  # Store the actual executed command
         }
 
-        # Store the actual icon data if provided and plugin is executable
-        if icon_pixbuf and plugin_id == "executable":
+        # Store the actual icon data if provided for any plugin type
+        if icon_pixbuf:
             try:
                 # Convert pixbuf to PNG data and then base64 encode
                 icon_data = self._pixbuf_to_base64(icon_pixbuf)
                 if icon_data:
                     entry["icon_data"] = icon_data
-                    logger.debug(f"Stored icon data for executable: {result_name}")
+                    logger.debug(f"Stored icon data for {plugin_id}: {description}")
+                else:
+                    logger.warning(
+                        f"Failed to convert icon to base64 for {plugin_id}: {description}"
+                    )
             except Exception as e:
-                logger.warning(f"Failed to store icon data for {result_name}: {e}")
+                logger.error(f"Exception storing icon data for {description}: {e}")
 
         self.user_input_history.insert(0, entry)
 
@@ -319,8 +371,6 @@ class HistoryManager:
         """
         count = self.get_usage_count(plugin_id, item_id)
         if count > 0:
-            import math
-
             boost = min(50, 10 * math.log2(count + 1))
             return base_score + boost
         return base_score

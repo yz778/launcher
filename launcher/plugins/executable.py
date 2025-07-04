@@ -56,9 +56,7 @@ class ExecutableFile:
     def _check_executable(self) -> None:
         """Check if the file is executable"""
         try:
-            # Check if the file exists and is executable
             if os.path.isfile(self.path):
-                # Check if the file has execute permission
                 st = os.stat(self.path)
                 self.is_executable = bool(st.st_mode & stat.S_IXUSR)
         except Exception as e:
@@ -72,21 +70,18 @@ class ExecutableFile:
 
         try:
             with open(self.path, "r", encoding="utf-8", errors="ignore") as f:
-                # Read first few lines to look for shebang and icon directive
                 lines = []
                 for i, line in enumerate(f):
-                    if i >= 10:  # Only check first 10 lines
+                    if i >= 10:
                         break
                     lines.append(line.strip())
 
-                # Look for #icon directive after shebang
                 found_shebang = False
                 for line in lines:
                     if line.startswith("#!"):
                         found_shebang = True
                         continue
                     elif found_shebang and line.startswith("#icon "):
-                        # Extract icon name/path after '#icon '
                         icon_spec = line[6:].strip()
                         if icon_spec:
                             self.custom_icon = icon_spec
@@ -95,7 +90,6 @@ class ExecutableFile:
                             )
                         break
                     elif line and not line.startswith("#"):
-                        # Stop at first non-comment line
                         break
 
         except Exception as e:
@@ -320,21 +314,18 @@ class ExecutablePlugin(Plugin):
             icon_theme = Gtk.IconTheme.get_default()
             loaded_icon = None
 
-            # Check if it's a file path (absolute or relative)
             if "/" in icon_spec or icon_spec.endswith(
                 (".png", ".svg", ".jpg", ".jpeg", ".ico")
             ):
-                # Treat as file path
                 icon_path = os.path.expanduser(icon_spec)
                 if not os.path.isabs(icon_path):
-                    # If relative path, try several common locations
                     search_paths = [
                         os.path.join(
                             os.path.expanduser("~/.local/share/icons"), icon_path
                         ),
                         os.path.join("/usr/share/icons", icon_path),
                         os.path.join("/usr/share/pixmaps", icon_path),
-                        icon_path,  # Try as-is in case it's relative to current dir
+                        icon_path,
                     ]
 
                     for path in search_paths:
@@ -352,11 +343,9 @@ class ExecutablePlugin(Plugin):
                     logger.warning(f"Custom icon file not found: {icon_spec}")
 
             else:
-                # Treat as icon theme name
                 try:
                     loaded_icon = icon_theme.load_icon(icon_spec, self.icon_size, 0)
                 except Exception:
-                    # If icon name not found in theme, try some common fallbacks
                     fallback_names = [
                         f"{icon_spec}-symbolic",
                         f"application-{icon_spec}",
@@ -375,11 +364,9 @@ class ExecutablePlugin(Plugin):
                     if not loaded_icon:
                         logger.warning(f"Icon not found in theme: {icon_spec}")
 
-            # Use default icon if loading failed
             if not loaded_icon:
                 loaded_icon = self.default_icon
 
-            # Cache the result if caching is enabled
             if self.cache_icons:
                 self.icon_cache[icon_spec] = loaded_icon
 
@@ -428,18 +415,14 @@ class ExecutablePlugin(Plugin):
         if not query:
             return []
 
-        # split query into search portion and arguments
         parts = shlex.split(query)
         search_query = parts[0] if parts else ""
         args = parts[1:] if len(parts) > 1 else []
 
-        # Use string matcher to find matches
         matches = self.matcher.match(search_query, limit=20)
 
-        # Convert matches to search results
         results = []
         for executable, score in matches:
-            # Load custom icon if specified, otherwise use default
             icon = (
                 self._load_custom_icon(executable.custom_icon)
                 if executable.custom_icon
