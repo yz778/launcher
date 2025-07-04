@@ -4,8 +4,13 @@ import logging
 import math
 import time
 from typing import List, Dict, Any
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk
+
 from plugins.base import Plugin, SearchResult
-from utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -284,11 +289,6 @@ class HistoryPlugin(Plugin):
 
             # Fallback to generic history icon only if no original icon found
             try:
-                import gi
-
-                gi.require_version("Gtk", "3.0")
-                from gi.repository import Gtk
-
                 icon_theme = Gtk.IconTheme.get_default()
                 logger.debug(
                     f"Using fallback history icon for: {entry.get('user_input', '')}"
