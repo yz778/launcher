@@ -168,7 +168,9 @@ class DesktopFile:
 
         return None
 
-    def _ensure_correct_size(self, pixbuf: Optional[GdkPixbuf.Pixbuf], size: int) -> Optional[GdkPixbuf.Pixbuf]:
+    def _ensure_correct_size(
+        self, pixbuf: Optional[GdkPixbuf.Pixbuf], size: int
+    ) -> Optional[GdkPixbuf.Pixbuf]:
         """Ensure pixbuf is the correct size"""
         if not pixbuf:
             return pixbuf
@@ -309,7 +311,7 @@ class DesktopFilePlugin(Plugin):
         ]
 
         # Get icon size from general config
-        self.icon_size = self.general_config.get("icon_size")
+        self.icon_size = self.get_icon_size()
 
         # Initialize with empty data first
         self.desktop_files = {}
@@ -407,11 +409,7 @@ class DesktopFilePlugin(Plugin):
 
     def _is_valid_desktop_file(self, desktop_file: DesktopFile) -> bool:
         """Check if desktop file is valid and should be included"""
-        return (
-            desktop_file.name
-            and desktop_file.exec_cmd
-            and desktop_file.is_visible()
-        )
+        return desktop_file.name and desktop_file.exec_cmd and desktop_file.is_visible()
 
     def cleanup(self) -> None:
         """Clean up plugin resources"""
@@ -474,7 +472,7 @@ class DesktopFilePlugin(Plugin):
             import subprocess
 
             if desktop_file.terminal:
-                terminal_command = self.get_general_config("terminal_command")
+                terminal_command = self.get_terminal_command()
                 cmd_parts = terminal_command.split() + cmd_parts
 
             logger.info(f"Executing command: {' '.join(cmd_parts)}")

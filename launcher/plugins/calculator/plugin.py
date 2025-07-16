@@ -10,7 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
 from ..base import Plugin, SearchResult
-from launcher.utils.scoring_system import score_name_match
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -94,16 +94,12 @@ class CalculatorPlugin(Plugin):
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
 
-        # Get general config
-        self.general_config = self.config_manager.get_config().get("general", {})
-        defaults = self.get_config_defaults()
+        # Get icon size using helper
+        self.icon_size = self.get_icon_size()
 
-        # Get icon size from general config
-        self.icon_size = self.get_general_config("icon_size")
-
-        # Get calculator-specific config
-        self.precision = config.get("precision", defaults["precision"])
-        self.angle_unit = config.get("angle_unit", defaults["angle_unit"])
+        # Get calculator-specific config using helper
+        self.precision = self.get_config_value("precision")
+        self.angle_unit = self.get_config_value("angle_unit")
 
         return True
 
@@ -118,14 +114,9 @@ class CalculatorPlugin(Plugin):
 
     def _load_calculator_icon(self) -> bool:
         """Load the calculator icon"""
-        try:
-            icon_theme = Gtk.IconTheme.get_default()
-            self.calculator_icon = icon_theme.load_icon(
-                "accessories-calculator", self.icon_size, 0
-            )
-        except Exception:
-            self.calculator_icon = None
+        from launcher.utils.icon_utils import load_theme_icon
 
+        self.calculator_icon = load_theme_icon("accessories-calculator", self.icon_size)
         return False
 
     def _is_calculation(self, query: str) -> bool:
@@ -255,7 +246,7 @@ class CalculatorPlugin(Plugin):
             name=result,
             description=query,
             icon=self.calculator_icon,
-            score=score_name_match(query, result),
+            score=calculate_match_score(query, result, is_name=True),
             metadata={
                 "result": result,
                 "track_history": self.should_track_history(),

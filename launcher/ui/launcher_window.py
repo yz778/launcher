@@ -558,7 +558,9 @@ class LauncherWindow(Gtk.Window):
 
     def _get_history_icon(self, plugin_id, item_id, history_entry):
         """Get the appropriate icon for a history entry"""
-        actual_result = self._get_result_for_history_entry(plugin_id, item_id, history_entry)
+        actual_result = self._get_result_for_history_entry(
+            plugin_id, item_id, history_entry
+        )
 
         if actual_result and actual_result.icon:
             return actual_result.icon
@@ -567,15 +569,12 @@ class LauncherWindow(Gtk.Window):
 
     def _get_fallback_history_icon(self):
         """Get fallback icon for history items"""
-        icon_theme = Gtk.IconTheme.get_default()
+        from launcher.utils.icon_utils import load_theme_icon
 
-        for icon_name in ["accessories-history", "document-open-recent"]:
-            try:
-                return icon_theme.load_icon(icon_name, self.icon_size or 48, 0)
-            except Exception as e:
-                logger.warning(f"Could not load {icon_name} icon: {e}")
-
-        return None
+        fallback_names = ["document-open-recent"]
+        return load_theme_icon(
+            "accessories-history", self.icon_size or 48, fallback_names
+        )
 
     def _finalize_history_display(self, all_history):
         """Finalize the history display setup"""
@@ -583,7 +582,9 @@ class LauncherWindow(Gtk.Window):
         self.scrolled.show()
         self.showing_history = True
 
-        count_text = f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}"
+        count_text = (
+            f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}"
+        )
         self._setup_results_display(all_history, count_text)
 
     def _get_result_for_history_entry(
@@ -613,10 +614,7 @@ class LauncherWindow(Gtk.Window):
             return None
 
         return self._create_mock_result(
-            stored_icon,
-            history_entry.get("user_input", ""),
-            plugin_id,
-            item_id
+            stored_icon, history_entry.get("user_input", ""), plugin_id, item_id
         )
 
     def _get_plugin_result(self, plugin_id, item_id):
@@ -647,7 +645,9 @@ class LauncherWindow(Gtk.Window):
         for desktop_file in plugin.desktop_files.values():
             if desktop_file.path == item_id:
                 icon = desktop_file.get_icon_pixbuf(self.icon_size or 48)
-                return self._create_mock_result(icon, desktop_file.name, plugin_id, item_id)
+                return self._create_mock_result(
+                    icon, desktop_file.name, plugin_id, item_id
+                )
         return None
 
     def _get_executable_result(self, plugin, item_id, plugin_id):
@@ -669,24 +669,29 @@ class LauncherWindow(Gtk.Window):
 
     def _get_calculator_result(self, plugin_id, item_id):
         """Get result for calculator plugins"""
-        try:
-            icon_theme = Gtk.IconTheme.get_default()
-            icon = icon_theme.load_icon("accessories-calculator", self.icon_size or 48, 0)
-            return self._create_mock_result(icon, "Calculator", plugin_id, item_id)
-        except:
-            return None
+        from launcher.utils.icon_utils import load_theme_icon
+
+        icon = load_theme_icon("accessories-calculator", self.icon_size or 48)
+        return (
+            self._create_mock_result(icon, "Calculator", plugin_id, item_id)
+            if icon
+            else None
+        )
 
     def _get_terminal_result(self, plugin_id, item_id):
         """Get result for terminal plugin"""
-        try:
-            icon_theme = Gtk.IconTheme.get_default()
-            icon = icon_theme.load_icon("utilities-terminal", self.icon_size or 48, 0)
-            return self._create_mock_result(icon, "Terminal", plugin_id, item_id)
-        except:
-            return None
+        from launcher.utils.icon_utils import load_theme_icon
+
+        icon = load_theme_icon("utilities-terminal", self.icon_size or 48)
+        return (
+            self._create_mock_result(icon, "Terminal", plugin_id, item_id)
+            if icon
+            else None
+        )
 
     def _create_mock_result(self, icon, name, plugin_id, item_id):
         """Create a mock result object with the given properties"""
+
         class MockResult:
             def __init__(self, icon, name, plugin_id, item_id):
                 self.icon = icon
@@ -696,7 +701,9 @@ class LauncherWindow(Gtk.Window):
 
         return MockResult(icon, name, plugin_id, item_id)
 
-    def _should_deduplicate_history_entry(self, history_name: str, current_name: str) -> bool:
+    def _should_deduplicate_history_entry(
+        self, history_name: str, current_name: str
+    ) -> bool:
         """
         Determine if a history entry should be deduplicated based on similarity to current result.
 
@@ -724,7 +731,7 @@ class LauncherWindow(Gtk.Window):
 
         # Don't deduplicate if the history entry contains additional meaningful content
         # Check for URLs, file paths, or additional arguments
-        if any(char in history_lower for char in ['.', '/', ':', '=', '&', '?']):
+        if any(char in history_lower for char in [".", "/", ":", "=", "&", "?"]):
             return False
 
         # Don't deduplicate if the history entry has multiple words and current is single word
@@ -736,7 +743,10 @@ class LauncherWindow(Gtk.Window):
 
         # Only deduplicate if the history entry is very similar to current result
         # (essentially the same thing with minor variations)
-        if history_lower.startswith(current_lower) and len(history_lower) <= len(current_lower) + 3:
+        if (
+            history_lower.startswith(current_lower)
+            and len(history_lower) <= len(current_lower) + 3
+        ):
             return True
 
         return False
@@ -1000,8 +1010,11 @@ class LauncherWindow(Gtk.Window):
             start_time = None
             if logger.isEnabledFor(logging.DEBUG):
                 import time
+
                 start_time = time.time()
-                logger.debug(f"Starting deduplication for {len(self.current_results)} results")
+                logger.debug(
+                    f"Starting deduplication for {len(self.current_results)} results"
+                )
 
             # Group results by plugin type using list comprehensions for better performance
             history_results = []
@@ -1010,8 +1023,10 @@ class LauncherWindow(Gtk.Window):
             for result in self.current_results:
                 try:
                     # Enhanced validation of result structure
-                    if not hasattr(result, 'plugin_id'):
-                        logger.warning(f"Result missing plugin_id attribute: {getattr(result, 'name', 'unknown')}")
+                    if not hasattr(result, "plugin_id"):
+                        logger.warning(
+                            f"Result missing plugin_id attribute: {getattr(result, 'name', 'unknown')}"
+                        )
                         continue
 
                     if result.plugin_id == "history":
@@ -1025,10 +1040,14 @@ class LauncherWindow(Gtk.Window):
                     other_results.append(result)
                     continue
 
-            logger.debug(f"Found {len(history_results)} history results and {len(other_results)} other results")
+            logger.debug(
+                f"Found {len(history_results)} history results and {len(other_results)} other results"
+            )
 
             if not history_results or not other_results:
-                logger.debug("No deduplication needed - missing history or other results")
+                logger.debug(
+                    "No deduplication needed - missing history or other results"
+                )
                 return  # No deduplication needed
 
             # Performance optimization: create efficient lookup structures
@@ -1039,14 +1058,20 @@ class LauncherWindow(Gtk.Window):
             for result in other_results:
                 try:
                     # Enhanced validation that result has required attributes
-                    if not hasattr(result, 'plugin_id') or not hasattr(result, 'item_id'):
-                        logger.warning(f"Result missing required attributes (plugin_id/item_id): {getattr(result, 'name', 'unknown')}")
+                    if not hasattr(result, "plugin_id") or not hasattr(
+                        result, "item_id"
+                    ):
+                        logger.warning(
+                            f"Result missing required attributes (plugin_id/item_id): {getattr(result, 'name', 'unknown')}"
+                        )
                         invalid_results_count += 1
                         continue
 
                     # Validate that plugin_id and item_id are not None or empty
                     if not result.plugin_id or not result.item_id:
-                        logger.debug(f"Result has empty plugin_id or item_id: {getattr(result, 'name', 'unknown')}")
+                        logger.debug(
+                            f"Result has empty plugin_id or item_id: {getattr(result, 'name', 'unknown')}"
+                        )
                         invalid_results_count += 1
                         continue
 
@@ -1054,15 +1079,21 @@ class LauncherWindow(Gtk.Window):
                     other_result_keys[key] = result
 
                 except AttributeError as e:
-                    logger.warning(f"AttributeError processing result {getattr(result, 'name', 'unknown')}: {e}")
+                    logger.warning(
+                        f"AttributeError processing result {getattr(result, 'name', 'unknown')}: {e}"
+                    )
                     invalid_results_count += 1
                     continue
                 except Exception as e:
-                    logger.error(f"Unexpected error processing result {getattr(result, 'name', 'unknown')}: {e}")
+                    logger.error(
+                        f"Unexpected error processing result {getattr(result, 'name', 'unknown')}: {e}"
+                    )
                     invalid_results_count += 1
                     continue
 
-            logger.debug(f"Created lookup table with {len(other_result_keys)} entries ({invalid_results_count} invalid results skipped)")
+            logger.debug(
+                f"Created lookup table with {len(other_result_keys)} entries ({invalid_results_count} invalid results skipped)"
+            )
 
             # Filter out history results that have exact matches in other plugins
             filtered_history_results = []
@@ -1074,15 +1105,19 @@ class LauncherWindow(Gtk.Window):
             for history_result in history_results:
                 try:
                     # Enhanced validation of history result structure
-                    if not hasattr(history_result, 'metadata'):
-                        logger.warning(f"History result missing metadata attribute: {getattr(history_result, 'name', 'unknown')}")
+                    if not hasattr(history_result, "metadata"):
+                        logger.warning(
+                            f"History result missing metadata attribute: {getattr(history_result, 'name', 'unknown')}"
+                        )
                         filtered_history_results.append(history_result)
                         preserved_count += 1
                         missing_metadata_count += 1
                         continue
 
                     if not isinstance(history_result.metadata, dict):
-                        logger.warning(f"History result has invalid metadata type ({type(history_result.metadata)}): {getattr(history_result, 'name', 'unknown')}")
+                        logger.warning(
+                            f"History result has invalid metadata type ({type(history_result.metadata)}): {getattr(history_result, 'name', 'unknown')}"
+                        )
                         filtered_history_results.append(history_result)
                         preserved_count += 1
                         missing_metadata_count += 1
@@ -1090,10 +1125,16 @@ class LauncherWindow(Gtk.Window):
 
                     # Get original plugin info from history metadata with enhanced validation
                     try:
-                        original_plugin_id = history_result.metadata.get("original_plugin_id")
-                        original_item_id = history_result.metadata.get("original_item_id")
+                        original_plugin_id = history_result.metadata.get(
+                            "original_plugin_id"
+                        )
+                        original_item_id = history_result.metadata.get(
+                            "original_item_id"
+                        )
                     except Exception as e:
-                        logger.warning(f"Error accessing metadata for history result '{getattr(history_result, 'name', 'unknown')}': {e}")
+                        logger.warning(
+                            f"Error accessing metadata for history result '{getattr(history_result, 'name', 'unknown')}': {e}"
+                        )
                         filtered_history_results.append(history_result)
                         preserved_count += 1
                         missing_metadata_count += 1
@@ -1101,15 +1142,21 @@ class LauncherWindow(Gtk.Window):
 
                     # Validate metadata exists and is not empty with type checking
                     if not original_plugin_id or not original_item_id:
-                        logger.debug(f"History result '{getattr(history_result, 'name', 'unknown')}' missing original plugin metadata - preserving")
+                        logger.debug(
+                            f"History result '{getattr(history_result, 'name', 'unknown')}' missing original plugin metadata - preserving"
+                        )
                         filtered_history_results.append(history_result)
                         preserved_count += 1
                         missing_metadata_count += 1
                         continue
 
                     # Ensure metadata values are strings
-                    if not isinstance(original_plugin_id, str) or not isinstance(original_item_id, str):
-                        logger.warning(f"History result '{getattr(history_result, 'name', 'unknown')}' has non-string metadata values - preserving")
+                    if not isinstance(original_plugin_id, str) or not isinstance(
+                        original_item_id, str
+                    ):
+                        logger.warning(
+                            f"History result '{getattr(history_result, 'name', 'unknown')}' has non-string metadata values - preserving"
+                        )
                         filtered_history_results.append(history_result)
                         preserved_count += 1
                         missing_metadata_count += 1
@@ -1123,22 +1170,30 @@ class LauncherWindow(Gtk.Window):
                         # No exact match found, keep this history result
                         filtered_history_results.append(history_result)
                         preserved_count += 1
-                        logger.debug(f"Preserving history result '{getattr(history_result, 'name', 'unknown')}' - no current match for {original_plugin_id}:{original_item_id}")
+                        logger.debug(
+                            f"Preserving history result '{getattr(history_result, 'name', 'unknown')}' - no current match for {original_plugin_id}:{original_item_id}"
+                        )
                     else:
                         # Found a matching result, but only deduplicate if the history entry
                         # represents the same user intent (similar input)
-                        history_name = getattr(history_result, 'name', '')
-                        current_name = getattr(matching_result, 'name', '')
+                        history_name = getattr(history_result, "name", "")
+                        current_name = getattr(matching_result, "name", "")
 
                         # Only deduplicate if the history entry name is very similar to the current result
                         # This prevents removing "brave gmail.com" when "brave" app is found
-                        if self._should_deduplicate_history_entry(history_name, current_name):
+                        if self._should_deduplicate_history_entry(
+                            history_name, current_name
+                        ):
                             deduplicated_count += 1
-                            logger.debug(f"Deduplicating history result '{history_name}' - too similar to current result '{current_name}' ({original_plugin_id}:{original_item_id})")
+                            logger.debug(
+                                f"Deduplicating history result '{history_name}' - too similar to current result '{current_name}' ({original_plugin_id}:{original_item_id})"
+                            )
                         else:
                             filtered_history_results.append(history_result)
                             preserved_count += 1
-                            logger.debug(f"Preserving history result '{history_name}' - different intent from current result '{current_name}' ({original_plugin_id}:{original_item_id})")
+                            logger.debug(
+                                f"Preserving history result '{history_name}' - different intent from current result '{current_name}' ({original_plugin_id}:{original_item_id})"
+                            )
 
                 except AttributeError as e:
                     # Graceful error handling for missing attributes
@@ -1156,7 +1211,9 @@ class LauncherWindow(Gtk.Window):
                     continue
                 except Exception as e:
                     # Graceful error handling - preserve result if processing fails
-                    logger.error(f"Unexpected error processing history result '{getattr(history_result, 'name', 'unknown')}': {e}")
+                    logger.error(
+                        f"Unexpected error processing history result '{getattr(history_result, 'name', 'unknown')}': {e}"
+                    )
                     filtered_history_results.append(history_result)
                     preserved_count += 1
                     error_count += 1
@@ -1169,16 +1226,24 @@ class LauncherWindow(Gtk.Window):
             final_count = len(self.current_results)
 
             # Comprehensive logging summary with error reporting
-            logger.debug(f"Deduplication complete: {original_count} -> {final_count} results")
+            logger.debug(
+                f"Deduplication complete: {original_count} -> {final_count} results"
+            )
             logger.debug(f"  - Deduplicated: {deduplicated_count} history results")
             logger.debug(f"  - Preserved: {preserved_count} history results")
-            logger.debug(f"  - Missing metadata: {missing_metadata_count} history results")
+            logger.debug(
+                f"  - Missing metadata: {missing_metadata_count} history results"
+            )
 
             if error_count > 0:
-                logger.warning(f"  - Errors encountered: {error_count} results had processing errors")
+                logger.warning(
+                    f"  - Errors encountered: {error_count} results had processing errors"
+                )
 
             if invalid_results_count > 0:
-                logger.warning(f"  - Invalid results: {invalid_results_count} results skipped due to missing attributes")
+                logger.warning(
+                    f"  - Invalid results: {invalid_results_count} results skipped due to missing attributes"
+                )
 
             if start_time and logger.isEnabledFor(logging.DEBUG):
                 elapsed_time = time.time() - start_time
@@ -1186,11 +1251,15 @@ class LauncherWindow(Gtk.Window):
 
                 # Performance warning for slow deduplication
                 if elapsed_time > 0.1:  # More than 100ms
-                    logger.warning(f"Deduplication took longer than expected: {elapsed_time:.3f}s for {original_count} results")
+                    logger.warning(
+                        f"Deduplication took longer than expected: {elapsed_time:.3f}s for {original_count} results"
+                    )
 
         except MemoryError as e:
             # Handle memory errors specifically
-            logger.error(f"Memory error during deduplication with {len(self.current_results)} results: {e}")
+            logger.error(
+                f"Memory error during deduplication with {len(self.current_results)} results: {e}"
+            )
             logger.warning("Skipping deduplication due to memory constraints")
             # current_results remains unchanged
         except Exception as e:
@@ -1201,8 +1270,14 @@ class LauncherWindow(Gtk.Window):
 
             # Log additional context for debugging
             try:
-                logger.debug(f"Error context: {len(self.current_results)} total results")
-                history_count = sum(1 for r in self.current_results if hasattr(r, 'plugin_id') and r.plugin_id == "history")
+                logger.debug(
+                    f"Error context: {len(self.current_results)} total results"
+                )
+                history_count = sum(
+                    1
+                    for r in self.current_results
+                    if hasattr(r, "plugin_id") and r.plugin_id == "history"
+                )
                 logger.debug(f"Error context: {history_count} history results")
             except Exception as context_error:
                 logger.debug(f"Could not gather error context: {context_error}")
@@ -1532,9 +1607,13 @@ class LauncherWindow(Gtk.Window):
         )
 
         if incremented:
-            logger.debug(f"Incremented usage count for existing entry: {result.plugin_id}:{result.item_id}")
+            logger.debug(
+                f"Incremented usage count for existing entry: {result.plugin_id}:{result.item_id}"
+            )
         else:
-            logger.debug(f"Skipped storage for partial match without arguments: {user_input}")
+            logger.debug(
+                f"Skipped storage for partial match without arguments: {user_input}"
+            )
 
     def on_configure_event(self, widget, event):
         """Track window position changes"""

@@ -124,6 +124,38 @@ class Plugin(ABC):
         self.config_manager = config_manager
         return True
 
+    def get_config_value(self, key: str, default: Any = None) -> Any:
+        """
+        Helper to get a plugin-specific configuration value with fallback to defaults
+
+        Args:
+            key: Configuration key to retrieve
+            default: Default value if key not found
+
+        Returns:
+            Configuration value or default
+        """
+        defaults = self.get_config_defaults()
+        return self.config.get(key, defaults.get(key, default))
+
+    def get_icon_size(self) -> int:
+        """
+        Helper to get the icon size from general configuration
+
+        Returns:
+            Icon size in pixels (default: 48)
+        """
+        return self.get_general_config("icon_size", 48)
+
+    def get_terminal_command(self) -> str:
+        """
+        Helper to get the terminal command from general configuration
+
+        Returns:
+            Terminal command string (default: "term")
+        """
+        return self.get_general_config("terminal_command", "term")
+
     def start(self) -> bool:
         """
         Start the plugin and perform any necessary setup work

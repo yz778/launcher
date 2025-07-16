@@ -195,28 +195,23 @@ class ExecutablePlugin(Plugin):
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
 
-        # Get general config
-        self.general_config = self.config_manager.get_config().get("general", {})
-        defaults = self.get_config_defaults()
+        # Get locations from config using helper
+        locations = self.get_config_value("locations")
+        self.locations = [os.path.expanduser(loc) for loc in locations]
 
-        # Get locations from config
-        self.locations = [
-            os.path.expanduser(loc)
-            for loc in config.get("locations", defaults["locations"])
-        ]
-
-        # Get include patterns from config
-        include_patterns = config.get("include", defaults["include"])
+        # Get include patterns from config using helper
+        include_patterns = self.get_config_value("include")
         self.include_patterns = [re.compile(pattern) for pattern in include_patterns]
 
-        # Get exclude patterns from config
-        exclude_patterns = config.get("exclude", defaults["exclude"])
+        # Get exclude patterns from config using helper
+        exclude_patterns = self.get_config_value("exclude")
         self.exclude_patterns = [re.compile(pattern) for pattern in exclude_patterns]
 
-        # Get icon size from general config
-        self.icon_size = self.general_config.get("icon_size")
+        # Get icon size using helper
+        self.icon_size = self.get_icon_size()
 
-        self.cache_icons = config.get("cache_icons", defaults["cache_icons"])
+        # Get cache icons setting using helper
+        self.cache_icons = self.get_config_value("cache_icons")
 
         self.cache_file = os.path.join(
             self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json"
@@ -291,14 +286,9 @@ class ExecutablePlugin(Plugin):
 
     def _load_default_icon(self) -> bool:
         """Load the default icon for executables"""
-        try:
-            icon_theme = Gtk.IconTheme.get_default()
-            self.default_icon = icon_theme.load_icon(
-                "utilities-terminal", self.icon_size, 0
-            )
-        except Exception:
-            self.default_icon = None
+        from launcher.utils.icon_utils import load_theme_icon
 
+        self.default_icon = load_theme_icon("utilities-terminal", self.icon_size)
         return False
 
     def _load_custom_icon(self, icon_spec: str):
@@ -306,76 +296,12 @@ class ExecutablePlugin(Plugin):
         if not icon_spec:
             return self.default_icon
 
-        # Check cache first if caching is enabled
-        if self.cache_icons and icon_spec in self.icon_cache:
-            return self.icon_cache[icon_spec]
+        from launcher.utils.icon_utils import load_custom_icon
 
-        try:
-            icon_theme = Gtk.IconTheme.get_default()
-            loaded_icon = None
+        cache = self.icon_cache if self.cache_icons else None
+        loaded_icon = load_custom_icon(icon_spec, self.icon_size, cache)
 
-            if "/" in icon_spec or icon_spec.endswith(
-                (".png", ".svg", ".jpg", ".jpeg", ".ico")
-            ):
-                icon_path = os.path.expanduser(icon_spec)
-                if not os.path.isabs(icon_path):
-                    search_paths = [
-                        os.path.join(
-                            os.path.expanduser("~/.local/share/icons"), icon_path
-                        ),
-                        os.path.join("/usr/share/icons", icon_path),
-                        os.path.join("/usr/share/pixmaps", icon_path),
-                        icon_path,
-                    ]
-
-                    for path in search_paths:
-                        if os.path.isfile(path):
-                            icon_path = path
-                            break
-
-                if os.path.isfile(icon_path):
-                    from gi.repository import GdkPixbuf
-
-                    loaded_icon = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                        icon_path, self.icon_size, self.icon_size, True
-                    )
-                else:
-                    logger.warning(f"Custom icon file not found: {icon_spec}")
-
-            else:
-                try:
-                    loaded_icon = icon_theme.load_icon(icon_spec, self.icon_size, 0)
-                except Exception:
-                    fallback_names = [
-                        f"{icon_spec}-symbolic",
-                        f"application-{icon_spec}",
-                        f"{icon_spec}-icon",
-                    ]
-
-                    for fallback in fallback_names:
-                        try:
-                            loaded_icon = icon_theme.load_icon(
-                                fallback, self.icon_size, 0
-                            )
-                            break
-                        except Exception:
-                            continue
-
-                    if not loaded_icon:
-                        logger.warning(f"Icon not found in theme: {icon_spec}")
-
-            if not loaded_icon:
-                loaded_icon = self.default_icon
-
-            if self.cache_icons:
-                self.icon_cache[icon_spec] = loaded_icon
-
-            return loaded_icon
-
-        except Exception as e:
-            logger.error(f"Error loading custom icon '{icon_spec}': {e}")
-
-        return self.default_icon
+        return loaded_icon or self.default_icon
 
     def _scan_executables(self) -> None:
         """Scan for executable files in the configured locations"""
@@ -400,10 +326,9 @@ class ExecutablePlugin(Plugin):
 
     def _should_include_file(self, filename: str) -> bool:
         """Check if file should be included based on patterns"""
-        return (
-            any(pattern.match(filename) for pattern in self.include_patterns) and
-            not any(pattern.match(filename) for pattern in self.exclude_patterns)
-        )
+        return any(
+            pattern.match(filename) for pattern in self.include_patterns
+        ) and not any(pattern.match(filename) for pattern in self.exclude_patterns)
 
     def _process_executable_file(self, location: str, filename: str) -> None:
         """Process a single executable file"""
@@ -473,7 +398,7 @@ class ExecutablePlugin(Plugin):
             import subprocess
 
             if use_terminal:
-                terminal_command = self.get_general_config("terminal_command")
+                terminal_command = self.get_terminal_command()
                 cmd_parts = terminal_command.split() + cmd_parts
 
             logger.info(f"Executing command: {' '.join(cmd_parts)}")
