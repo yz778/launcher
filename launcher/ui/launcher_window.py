@@ -506,85 +506,85 @@ class LauncherWindow(Gtk.Window):
         if not self.history_manager:
             return
 
-        # Get all history items instead of just 5
-        all_history = self.history_manager.get_recent_history(
-            100
-        )  # Get up to 100 items
+        all_history = self.history_manager.get_recent_history(100)
         if not all_history:
             return
 
-        # Clear previous items
+        self._clear_list_box()
+        self._populate_history_items(all_history)
+        self._finalize_history_display(all_history)
+
+    def _clear_list_box(self):
+        """Clear all items from the list box"""
         for child in self.list_box.get_children():
             child.destroy()
 
-        # Create history result items
-        for i, history_entry in enumerate(all_history):
-            user_input = history_entry.get("user_input", "")
-            plugin_id = history_entry.get("plugin_id", "")
-            item_id = history_entry.get("item_id", "")
-            description = history_entry.get("description", user_input)
-
-            if not user_input:
+    def _populate_history_items(self, all_history):
+        """Populate the list box with history items"""
+        for history_entry in all_history:
+            if not history_entry.get("user_input"):
                 continue
 
-            # Try to get the actual result from plugins to get the current icon
-            # Pass the history_entry so we can check for stored icons
-            actual_result = self._get_result_for_history_entry(
-                plugin_id, item_id, history_entry
-            )
-
-            # Determine the icon to use
-            display_icon = None
-            if actual_result and actual_result.icon:
-                display_icon = actual_result.icon
-            else:
-                # Fallback to history icon
-                try:
-                    icon_theme = Gtk.IconTheme.get_default()
-                    display_icon = icon_theme.load_icon(
-                        "accessories-history", self.icon_size or 48, 0
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not load history icon: {e}")
-                    # Fallback to a generic icon if history icon fails
-                    try:
-                        display_icon = icon_theme.load_icon(
-                            "document-open-recent", self.icon_size or 48, 0
-                        )
-                    except Exception as e:
-                        logger.warning(f"Could not load generic recent icon: {e}")
-                        # If all else fails, display no icon (AppListItem will handle it)
-                        display_icon = None
-
-            # Create history result items
-            history_count = history_entry.get("usage_count", 0)
-            list_item = AppListItem(
-                SearchResult(
-                    plugin_id=plugin_id,
-                    item_id=item_id,
-                    name=user_input,
-                    description=description,
-                    icon=display_icon,
-                    score=0,
-                ),
-                icon_size=self.icon_size or 48,
-                launch_count=history_count,
-                query="",  # No highlighting for history items
-            )
-            list_item.set_name("history-item")
-            list_item.user_input = user_input  # Store the input for selection
-            list_item.history_entry = history_entry  # Store full history entry
+            list_item = self._create_history_list_item(history_entry)
             self.list_box.add(list_item)
 
+    def _create_history_list_item(self, history_entry):
+        """Create a single history list item"""
+        user_input = history_entry.get("user_input", "")
+        plugin_id = history_entry.get("plugin_id", "")
+        item_id = history_entry.get("item_id", "")
+        description = history_entry.get("description", user_input)
+
+        display_icon = self._get_history_icon(plugin_id, item_id, history_entry)
+        history_count = history_entry.get("usage_count", 0)
+
+        list_item = AppListItem(
+            SearchResult(
+                plugin_id=plugin_id,
+                item_id=item_id,
+                name=user_input,
+                description=description,
+                icon=display_icon,
+                score=0,
+            ),
+            icon_size=self.icon_size or 48,
+            launch_count=history_count,
+            query="",
+        )
+        list_item.set_name("history-item")
+        list_item.user_input = user_input
+        list_item.history_entry = history_entry
+        return list_item
+
+    def _get_history_icon(self, plugin_id, item_id, history_entry):
+        """Get the appropriate icon for a history entry"""
+        actual_result = self._get_result_for_history_entry(plugin_id, item_id, history_entry)
+
+        if actual_result and actual_result.icon:
+            return actual_result.icon
+
+        return self._get_fallback_history_icon()
+
+    def _get_fallback_history_icon(self):
+        """Get fallback icon for history items"""
+        icon_theme = Gtk.IconTheme.get_default()
+
+        for icon_name in ["accessories-history", "document-open-recent"]:
+            try:
+                return icon_theme.load_icon(icon_name, self.icon_size or 48, 0)
+            except Exception as e:
+                logger.warning(f"Could not load {icon_name} icon: {e}")
+
+        return None
+
+    def _finalize_history_display(self, all_history):
+        """Finalize the history display setup"""
         self.list_box.show_all()
         self.scrolled.show()
         self.showing_history = True
 
-        # Use the same display logic as search results for consistency
-        self._setup_results_display(
-            all_history,
-            f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}",
-        )
+        count_text = f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}"
+        self._setup_results_display(all_history, count_text)
 
     def _get_result_for_history_entry(
         self, plugin_id: str, item_id: str, history_entry: Dict[str, Any] = None
@@ -593,110 +593,108 @@ class LauncherWindow(Gtk.Window):
         if not self.plugin_manager:
             return None
 
-        # First, check if we have stored icon data in history
-        if history_entry:
-            stored_icon = self.history_manager.get_stored_icon(
-                history_entry, self.icon_size or 48
-            )
-            if stored_icon:
-                # Create a result-like object with the stored icon
-                class MockResult:
-                    def __init__(self, icon, name, plugin_id, item_id):
-                        self.icon = icon
-                        self.name = name
-                        self.plugin_id = plugin_id
-                        self.item_id = item_id
+        # Check for stored icon first
+        stored_result = self._get_stored_icon_result(history_entry, plugin_id, item_id)
+        if stored_result:
+            return stored_result
 
-                return MockResult(
-                    stored_icon,
-                    history_entry.get("user_input", ""),
-                    plugin_id,
-                    item_id,
-                )
+        # Try to get result from plugin
+        return self._get_plugin_result(plugin_id, item_id)
 
+    def _get_stored_icon_result(self, history_entry, plugin_id, item_id):
+        """Get result with stored icon from history entry"""
+        if not history_entry:
+            return None
+
+        stored_icon = self.history_manager.get_stored_icon(
+            history_entry, self.icon_size or 48
+        )
+        if not stored_icon:
+            return None
+
+        return self._create_mock_result(
+            stored_icon,
+            history_entry.get("user_input", ""),
+            plugin_id,
+            item_id
+        )
+
+    def _get_plugin_result(self, plugin_id, item_id):
+        """Get result from plugin based on plugin type"""
         plugin = self.plugin_manager.plugins.get(plugin_id)
         if not plugin:
             return None
 
         try:
-            # Handle different plugin types based on their structure
-            if plugin_id == "desktop_file" and hasattr(plugin, "desktop_files"):
-                # For desktop files, search through the desktop_files dict
-                for desktop_file in plugin.desktop_files.values():
-                    if desktop_file.path == item_id:
-                        # Create a SearchResult-like object with the icon
-                        class MockResult:
-                            def __init__(self, desktop_file, icon_size):
-                                self.icon = desktop_file.get_icon_pixbuf(icon_size)
-                                self.name = desktop_file.name
-                                self.plugin_id = plugin_id
-                                self.item_id = item_id
-
-                        return MockResult(desktop_file, self.icon_size or 48)
-
-            elif plugin_id == "executable" and hasattr(plugin, "executables"):
-                # For executables, search through the executables dict
-                executable = plugin.executables.get(item_id)
-                if executable:
-                    # Try to get custom icon first, then fallback to default
-                    icon = None
-                    if executable.custom_icon:
-                        icon = plugin._load_custom_icon(executable.custom_icon)
-                    if not icon:
-                        icon = plugin.default_icon
-
-                    # Create a SearchResult-like object
-                    class MockResult:
-                        def __init__(self, icon, name):
-                            self.icon = icon
-                            self.name = name
-                            self.plugin_id = plugin_id
-                            self.item_id = item_id
-
-                    return MockResult(icon, executable.name)
-
-            elif plugin_id == "qalculate" or plugin_id == "calculator":
-                # For calculator plugins, use a default icon
-                try:
-                    icon_theme = Gtk.IconTheme.get_default()
-                    icon = icon_theme.load_icon(
-                        "accessories-calculator", self.icon_size or 48, 0
-                    )
-
-                    class MockResult:
-                        def __init__(self, icon):
-                            self.icon = icon
-                            self.name = "Calculator"
-                            self.plugin_id = plugin_id
-                            self.item_id = item_id
-
-                    return MockResult(icon)
-                except:
-                    pass
-
+            if plugin_id == "desktop_file":
+                return self._get_desktop_file_result(plugin, item_id, plugin_id)
+            elif plugin_id == "executable":
+                return self._get_executable_result(plugin, item_id, plugin_id)
+            elif plugin_id in ["qalculate", "calculator"]:
+                return self._get_calculator_result(plugin_id, item_id)
             elif plugin_id == "terminal":
-                # For terminal plugin, use a terminal icon
-                try:
-                    icon_theme = Gtk.IconTheme.get_default()
-                    icon = icon_theme.load_icon(
-                        "utilities-terminal", self.icon_size or 48, 0
-                    )
-
-                    class MockResult:
-                        def __init__(self, icon):
-                            self.icon = icon
-                            self.name = "Terminal"
-                            self.plugin_id = plugin_id
-                            self.item_id = item_id
-
-                    return MockResult(icon)
-                except:
-                    pass
-
+                return self._get_terminal_result(plugin_id, item_id)
         except Exception as e:
             logger.debug(f"Could not get item {item_id} from plugin {plugin_id}: {e}")
 
         return None
+
+    def _get_desktop_file_result(self, plugin, item_id, plugin_id):
+        """Get result for desktop file plugin"""
+        if not hasattr(plugin, "desktop_files"):
+            return None
+
+        for desktop_file in plugin.desktop_files.values():
+            if desktop_file.path == item_id:
+                icon = desktop_file.get_icon_pixbuf(self.icon_size or 48)
+                return self._create_mock_result(icon, desktop_file.name, plugin_id, item_id)
+        return None
+
+    def _get_executable_result(self, plugin, item_id, plugin_id):
+        """Get result for executable plugin"""
+        if not hasattr(plugin, "executables"):
+            return None
+
+        executable = plugin.executables.get(item_id)
+        if not executable:
+            return None
+
+        icon = None
+        if executable.custom_icon:
+            icon = plugin._load_custom_icon(executable.custom_icon)
+        if not icon:
+            icon = plugin.default_icon
+
+        return self._create_mock_result(icon, executable.name, plugin_id, item_id)
+
+    def _get_calculator_result(self, plugin_id, item_id):
+        """Get result for calculator plugins"""
+        try:
+            icon_theme = Gtk.IconTheme.get_default()
+            icon = icon_theme.load_icon("accessories-calculator", self.icon_size or 48, 0)
+            return self._create_mock_result(icon, "Calculator", plugin_id, item_id)
+        except:
+            return None
+
+    def _get_terminal_result(self, plugin_id, item_id):
+        """Get result for terminal plugin"""
+        try:
+            icon_theme = Gtk.IconTheme.get_default()
+            icon = icon_theme.load_icon("utilities-terminal", self.icon_size or 48, 0)
+            return self._create_mock_result(icon, "Terminal", plugin_id, item_id)
+        except:
+            return None
+
+    def _create_mock_result(self, icon, name, plugin_id, item_id):
+        """Create a mock result object with the given properties"""
+        class MockResult:
+            def __init__(self, icon, name, plugin_id, item_id):
+                self.icon = icon
+                self.name = name
+                self.plugin_id = plugin_id
+                self.item_id = item_id
+
+        return MockResult(icon, name, plugin_id, item_id)
 
     def _execute_history_item(self, history_entry: Dict[str, Any]) -> None:
         """
@@ -1402,82 +1400,85 @@ class LauncherWindow(Gtk.Window):
 
     def execute_result(self, result: SearchResult, event=None) -> None:
         """Execute the given search result"""
+        if not self._validate_managers():
+            return
 
-        # Check if history_manager and plugin_manager are available
+        self._capture_modifier_state(result, event)
+
+        if self.plugin_manager.execute(result):
+            self._handle_history_tracking(result)
+            result.metadata["history_manager"] = self.history_manager
+            self.close_window()
+
+    def _validate_managers(self) -> bool:
+        """Validate that required managers are initialized"""
         if self.history_manager is None or self.plugin_manager is None:
             logger.warning("Cannot execute result: managers not initialized yet")
             self.close_window()
-            return
+            return False
+        return True
 
+    def _capture_modifier_state(self, result: SearchResult, event=None) -> None:
+        """Capture and store modifier key states in result metadata"""
         if event:
             state = event.state
-
         else:
             keymap = Gdk.Keymap.get_default()
             state = keymap.get_modifier_state()
 
-        # Store modifier state in the result metadata
         result.metadata["shift_pressed"] = bool(state & Gdk.ModifierType.SHIFT_MASK)
         result.metadata["ctrl_pressed"] = bool(state & Gdk.ModifierType.CONTROL_MASK)
         result.metadata["alt_pressed"] = bool(state & Gdk.ModifierType.MOD1_MASK)
         result.metadata["cmd_pressed"] = bool(state & Gdk.ModifierType.META_MASK)
 
-        # Use plugin manager to execute result, if successful save to history and quit
-        if self.plugin_manager.execute(result):
-            # Check if this result should be tracked in history
-            should_track = result.metadata.get("track_history", True)
+    def _handle_history_tracking(self, result: SearchResult) -> None:
+        """Handle history tracking logic for executed results"""
+        should_track = result.metadata.get("track_history", True)
+        if not should_track:
+            return
 
-            if should_track:
-                # Get current user input and search results for smart storage decision
-                user_input_for_history = self.entry.get_text().strip()
+        user_input = self.entry.get_text().strip()
+        should_store = self.history_manager.should_store_in_history(
+            user_input, self.current_results, result
+        )
 
-                # Use smart storage logic to determine if we should store this execution
-                should_store = self.history_manager.should_store_in_history(
-                    user_input_for_history,
-                    self.current_results,
-                    result
-                )
+        if should_store:
+            self._store_new_history_entry(result, user_input)
+        else:
+            self._increment_existing_usage(result, user_input)
 
-                if should_store:
-                    # Build the complete command that represents what was actually executed
-                    # This should be the full application name/command, not the partial user input
-                    executed_command = self._build_executed_command(result)
+    def _store_new_history_entry(self, result: SearchResult, user_input: str) -> None:
+        """Store a new history entry for the executed result"""
+        executed_command = self._build_executed_command(result)
+        icon_pixbuf = result.icon
 
-                    # Pass the icon pixbuf to history for storage (for all plugin types)
-                    icon_pixbuf = result.icon
+        # Preserve original plugin metadata
+        if not result.metadata.get("original_plugin_id"):
+            result.metadata["original_plugin_id"] = result.plugin_id
+        if not result.metadata.get("original_item_id"):
+            result.metadata["original_item_id"] = result.item_id
 
-                    # Ensure original plugin metadata is preserved when storing history entries
-                    if not result.metadata.get("original_plugin_id"):
-                        result.metadata["original_plugin_id"] = result.plugin_id
-                    if not result.metadata.get("original_item_id"):
-                        result.metadata["original_item_id"] = result.item_id
+        self.history_manager.add_execution(
+            result.plugin_id,
+            result.item_id,
+            executed_command,
+            user_input,
+            result.description,
+            icon_pixbuf,
+        )
+        self.history_manager.save_history()
+        logger.debug(f"Stored execution in history: {user_input} -> {executed_command}")
 
-                    self.history_manager.add_execution(
-                        result.plugin_id,
-                        result.item_id,
-                        executed_command,
-                        user_input_for_history,
-                        result.description,
-                        icon_pixbuf,
-                    )
-                    self.history_manager.save_history()
+    def _increment_existing_usage(self, result: SearchResult, user_input: str) -> None:
+        """Increment usage count for existing history entries"""
+        incremented = self.history_manager.increment_usage_count(
+            result.plugin_id, result.item_id
+        )
 
-                    logger.debug(f"Stored execution in history: {user_input_for_history} -> {executed_command}")
-                else:
-                    # Try to increment usage count for existing entries when skipping duplicate storage
-                    incremented = self.history_manager.increment_usage_count(
-                        result.plugin_id,
-                        result.item_id,
-                        user_input_for_history
-                    )
-
-                    if incremented:
-                        logger.debug(f"Incremented usage count for existing entry: {result.plugin_id}:{result.item_id}")
-                    else:
-                        logger.debug(f"Skipped storage for partial match without arguments: {user_input_for_history}")
-
-            result.metadata["history_manager"] = self.history_manager
-            self.close_window()
+        if incremented:
+            logger.debug(f"Incremented usage count for existing entry: {result.plugin_id}:{result.item_id}")
+        else:
+            logger.debug(f"Skipped storage for partial match without arguments: {user_input}")
 
     def on_configure_event(self, widget, event):
         """Track window position changes"""
