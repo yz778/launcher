@@ -696,6 +696,51 @@ class LauncherWindow(Gtk.Window):
 
         return MockResult(icon, name, plugin_id, item_id)
 
+    def _should_deduplicate_history_entry(self, history_name: str, current_name: str) -> bool:
+        """
+        Determine if a history entry should be deduplicated based on similarity to current result.
+
+        Args:
+            history_name: Name from the history entry (user input)
+            current_name: Name from the current search result
+
+        Returns:
+            True if the history entry should be removed (deduplicated), False to keep it
+        """
+        if not history_name or not current_name:
+            return False
+
+        history_lower = history_name.lower().strip()
+        current_lower = current_name.lower().strip()
+
+        # Don't deduplicate if they're exactly the same (shouldn't happen but be safe)
+        if history_lower == current_lower:
+            return True
+
+        # Don't deduplicate if the history entry is significantly longer
+        # This preserves entries like "brave gmail.com" when "brave" is found
+        if len(history_lower) > len(current_lower) * 1.5:
+            return False
+
+        # Don't deduplicate if the history entry contains additional meaningful content
+        # Check for URLs, file paths, or additional arguments
+        if any(char in history_lower for char in ['.', '/', ':', '=', '&', '?']):
+            return False
+
+        # Don't deduplicate if the history entry has multiple words and current is single word
+        history_words = history_lower.split()
+        current_words = current_lower.split()
+
+        if len(history_words) > 1 and len(current_words) == 1:
+            return False
+
+        # Only deduplicate if the history entry is very similar to current result
+        # (essentially the same thing with minor variations)
+        if history_lower.startswith(current_lower) and len(history_lower) <= len(current_lower) + 3:
+            return True
+
+        return False
+
     def _execute_history_item(self, history_entry: Dict[str, Any]) -> None:
         """
         Execute an item from history by doing a targeted search and executing the first exact match.
@@ -1080,9 +1125,20 @@ class LauncherWindow(Gtk.Window):
                         preserved_count += 1
                         logger.debug(f"Preserving history result '{getattr(history_result, 'name', 'unknown')}' - no current match for {original_plugin_id}:{original_item_id}")
                     else:
-                        # Exact match found, remove history result
-                        deduplicated_count += 1
-                        logger.debug(f"Deduplicating history result '{getattr(history_result, 'name', 'unknown')}' - matches current result '{getattr(matching_result, 'name', 'unknown')}' ({original_plugin_id}:{original_item_id})")
+                        # Found a matching result, but only deduplicate if the history entry
+                        # represents the same user intent (similar input)
+                        history_name = getattr(history_result, 'name', '')
+                        current_name = getattr(matching_result, 'name', '')
+
+                        # Only deduplicate if the history entry name is very similar to the current result
+                        # This prevents removing "brave gmail.com" when "brave" app is found
+                        if self._should_deduplicate_history_entry(history_name, current_name):
+                            deduplicated_count += 1
+                            logger.debug(f"Deduplicating history result '{history_name}' - too similar to current result '{current_name}' ({original_plugin_id}:{original_item_id})")
+                        else:
+                            filtered_history_results.append(history_result)
+                            preserved_count += 1
+                            logger.debug(f"Preserving history result '{history_name}' - different intent from current result '{current_name}' ({original_plugin_id}:{original_item_id})")
 
                 except AttributeError as e:
                     # Graceful error handling for missing attributes

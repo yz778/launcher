@@ -68,68 +68,105 @@ class HistoryPlugin(Plugin):
             return []
 
         query = query.strip()
-        min_length = self.config.get("min_query_length", 2)
-
-        if len(query) < min_length:
+        if not self._is_valid_query(query):
             return []
 
-        max_results = self.config.get("max_results", 10)
-        results = []
-
         try:
-            # Get all history entries with validation
-            all_history = self.history_manager.user_input_history
-
-            if not isinstance(all_history, list):
-                logger.warning(f"History data is not a list ({type(all_history)}) - returning empty results")
+            all_history = self._get_validated_history()
+            if not all_history:
                 return []
 
-            # Search through history entries
-            for entry in all_history:
-                try:
-                    # Validate entry structure
-                    if not isinstance(entry, dict):
-                        logger.debug(f"History entry is not a dict ({type(entry)}) - skipping")
-                        continue
-
-                    user_input = entry.get("user_input", "")
-                    executed_command = entry.get("executed_command", "")
-                    description = entry.get("description", "")
-
-                    # Validate user_input is a string
-                    if not isinstance(user_input, str):
-                        logger.debug(f"user_input is not a string ({type(user_input)}) - skipping entry")
-                        continue
-
-                except Exception as entry_error:
-                    logger.debug(f"Error processing history entry: {entry_error} - skipping")
-                    continue
-
-                # Calculate best match score from all fields
-                best_score = max(
-                    self._calculate_match_score(query, user_input),
-                    self._calculate_match_score(query, executed_command)
-                    if executed_command != user_input
-                    else 0,
-                    self._calculate_match_score(query, description) * 0.5
-                    if description
-                    else 0,
-                )
-
-                if best_score > 0:
-                    # Apply boosts and create result
-                    final_score = self._apply_boosts(entry, best_score)
-                    result = self._create_history_result(entry, final_score, query)
-                    if result:
-                        results.append(result)
-
-            # Sort by score (highest first) and limit results
-            results.sort(key=lambda r: r.score, reverse=True)
-            return results[:max_results]
+            results = self._search_history_entries(all_history, query)
+            return self._sort_and_limit_results(results)
 
         except Exception as e:
             logger.error(f"Error searching history: {e}")
             return []
+
+    def _is_valid_query(self, query: str) -> bool:
+        """Check if query is valid for searching"""
+        min_length = self.config.get("min_query_length", 2)
+        return len(query) >= min_length
+
+    def _get_validated_history(self) -> List[Dict[str, Any]]:
+        """Get and validate history data"""
+        all_history = self.history_manager.user_input_history
+
+        if not isinstance(all_history, list):
+            logger.warning(f"History data is not a list ({type(all_history)}) - returning empty results")
+            return []
+
+        return all_history
+
+    def _search_history_entries(self, all_history: List[Dict[str, Any]], query: str) -> List[SearchResult]:
+        """Search through history entries and create results"""
+        results = []
+
+        for entry in all_history:
+            if not self._is_valid_entry(entry):
+                continue
+
+            entry_data = self._extract_search_fields(entry)
+            if not entry_data:
+                continue
+
+            best_score = self._calculate_best_match_score(query, entry_data)
+            if best_score > 0:
+                final_score = self._apply_boosts(entry, best_score)
+                result = self._create_history_result(entry, final_score, query)
+                if result:
+                    results.append(result)
+
+        return results
+
+    def _is_valid_entry(self, entry: Dict[str, Any]) -> bool:
+        """Validate entry structure"""
+        try:
+            if not isinstance(entry, dict):
+                logger.debug(f"History entry is not a dict ({type(entry)}) - skipping")
+                return False
+
+            user_input = entry.get("user_input", "")
+            if not isinstance(user_input, str):
+                logger.debug(f"user_input is not a string ({type(user_input)}) - skipping entry")
+                return False
+
+            return True
+        except Exception as entry_error:
+            logger.debug(f"Error processing history entry: {entry_error} - skipping")
+            return False
+
+    def _extract_search_fields(self, entry: Dict[str, Any]) -> Dict[str, str]:
+        """Extract searchable fields from entry"""
+        try:
+            return {
+                "user_input": entry.get("user_input", ""),
+                "executed_command": entry.get("executed_command", ""),
+                "description": entry.get("description", "")
+            }
+        except Exception as e:
+            logger.debug(f"Error extracting search fields: {e}")
+            return None
+
+    def _calculate_best_match_score(self, query: str, entry_data: Dict[str, str]) -> float:
+        """Calculate the best match score from all searchable fields"""
+        user_input_score = self._calculate_match_score(query, entry_data["user_input"])
+
+        executed_command_score = 0
+        if entry_data["executed_command"] != entry_data["user_input"]:
+            executed_command_score = self._calculate_match_score(query, entry_data["executed_command"])
+
+        description_score = 0
+        if entry_data["description"]:
+            description_score = self._calculate_match_score(query, entry_data["description"]) * 0.5
+
+        return max(user_input_score, executed_command_score, description_score)
+
+    def _sort_and_limit_results(self, results: List[SearchResult]) -> List[SearchResult]:
+        """Sort results by score and limit to max results"""
+        max_results = self.config.get("max_results", 10)
+        results.sort(key=lambda r: r.score, reverse=True)
+        return results[:max_results]
 
     def _calculate_match_score(self, query: str, text: str) -> float:
         """Calculate match score between query and text"""
@@ -241,157 +278,18 @@ class HistoryPlugin(Plugin):
     ) -> SearchResult:
         """Create a SearchResult from a history entry with enhanced metadata handling"""
         try:
-            # Enhanced input validation
-            if not isinstance(entry, dict):
-                logger.error(f"History entry is not a dict ({type(entry)}): {repr(entry)}")
+            if not self._validate_result_inputs(entry, score, query):
                 return None
 
-            if not isinstance(score, (int, float)):
-                logger.warning(f"Score is not numeric ({type(score)}): {repr(score)} - using 0.0")
-                score = 0.0
-
-            if not isinstance(query, str):
-                logger.warning(f"Query is not a string ({type(query)}): {repr(query)} - using empty string")
-                query = ""
-
-            # Safely extract entry data with validation
-            try:
-                user_input = entry.get("user_input", "")
-                if not isinstance(user_input, str):
-                    logger.warning(f"user_input is not a string ({type(user_input)}): {repr(user_input)} - using empty string")
-                    user_input = ""
-            except Exception as e:
-                logger.warning(f"Error getting user_input from entry: {e} - using empty string")
-                user_input = ""
-
-            try:
-                executed_command = entry.get("executed_command", user_input)
-                if not isinstance(executed_command, str):
-                    logger.warning(f"executed_command is not a string ({type(executed_command)}): {repr(executed_command)} - using user_input")
-                    executed_command = user_input
-            except Exception as e:
-                logger.warning(f"Error getting executed_command from entry: {e} - using user_input")
-                executed_command = user_input
-
-            try:
-                description = entry.get("description", "")
-                if description is not None and not isinstance(description, str):
-                    logger.warning(f"description is not a string ({type(description)}): {repr(description)} - using empty string")
-                    description = ""
-                elif description is None:
-                    description = ""
-            except Exception as e:
-                logger.warning(f"Error getting description from entry: {e} - using empty string")
-                description = ""
-
-            try:
-                usage_count = entry.get("usage_count", 1)
-                if not isinstance(usage_count, (int, float)):
-                    logger.warning(f"usage_count is not numeric ({type(usage_count)}): {repr(usage_count)} - using 1")
-                    usage_count = 1
-                else:
-                    usage_count = int(usage_count)
-            except Exception as e:
-                logger.warning(f"Error getting usage_count from entry: {e} - using 1")
-                usage_count = 1
-
-            # Enhanced metadata validation and handling
-            try:
-                original_plugin_id = self._validate_original_plugin_id(entry)
-                original_item_id = self._validate_original_item_id(entry)
-            except Exception as metadata_error:
-                logger.warning(f"Error validating original plugin metadata: {metadata_error} - using empty strings")
-                original_plugin_id = ""
-                original_item_id = ""
-
-            # Log metadata validation results for debugging
-            if not original_plugin_id or not original_item_id:
-                logger.debug(
-                    f"History entry missing original plugin metadata - "
-                    f"plugin_id: '{original_plugin_id}', item_id: '{original_item_id}', "
-                    f"user_input: '{user_input}'"
-                )
-
-            # Try to get the original icon if available with error handling
-            try:
-                icon = self._get_history_icon(entry)
-            except Exception as icon_error:
-                logger.warning(f"Error getting history icon: {icon_error} - using None")
-                icon = None
-
-            # Create display name and description with validation
-            try:
-                display_name = user_input if user_input else "Unknown Command"
-            except Exception as e:
-                logger.warning(f"Error creating display name: {e} - using fallback")
-                display_name = "Unknown Command"
-
-            # Build description without usage count (usage count will be shown separately)
-            try:
-                display_description = ""
-                if executed_command and executed_command != user_input:
-                    display_description = executed_command
-
-                if (description and
-                    description != executed_command and
-                    description != user_input):
-                    if display_description:
-                        display_description += f" - {description}"
-                    else:
-                        display_description = description
-            except Exception as desc_error:
-                logger.warning(f"Error building display description: {desc_error} - using empty string")
-                display_description = ""
-
-            # Create enhanced metadata with proper validation and error handling
-            try:
-                metadata = {
-                    "original_plugin_id": original_plugin_id,
-                    "original_item_id": original_item_id,
-                    "history_entry": entry,
-                    "usage_count": usage_count,
-                    "track_history": False,  # Don't track history searches in history
-                    "has_original_metadata": bool(original_plugin_id and original_item_id),
-                }
-            except Exception as metadata_create_error:
-                logger.error(f"Error creating metadata dict: {metadata_create_error} - using minimal metadata")
-                metadata = {
-                    "original_plugin_id": "",
-                    "original_item_id": "",
-                    "usage_count": usage_count,
-                    "track_history": False,
-                }
-
-            # Create item_id with error handling
-            try:
-                timestamp = entry.get('timestamp', 0)
-                if not isinstance(timestamp, (int, float)):
-                    logger.warning(f"timestamp is not numeric ({type(timestamp)}): {repr(timestamp)} - using 0")
-                    timestamp = 0
-                item_id = f"history_{timestamp}"
-            except Exception as id_error:
-                logger.warning(f"Error creating item_id: {id_error} - using fallback")
-                import time
-                item_id = f"history_{int(time.time())}"
-
-            # Create the search result with comprehensive error handling
-            try:
-                result = SearchResult(
-                    plugin_id="history",
-                    item_id=item_id,
-                    name=display_name,
-                    description=display_description,
-                    icon=icon,
-                    score=score,
-                    metadata=metadata,
-                )
-
-                logger.debug(f"Created history result: '{display_name}' with score {score}")
-                return result
-
-            except Exception as result_error:
-                logger.error(f"Error creating SearchResult object: {result_error}")
+            entry_data = self._extract_entry_data_safely(entry)
+            if not entry_data:
                 return None
+
+            metadata = self._build_result_metadata(entry, entry_data)
+            icon = self._get_history_icon_safely(entry)
+            item_id = self._create_item_id(entry)
+
+            return self._create_search_result_object(entry_data, metadata, icon, item_id, score)
 
         except MemoryError as e:
             logger.error(f"MemoryError creating history result: {e}")
@@ -399,7 +297,156 @@ class HistoryPlugin(Plugin):
         except Exception as e:
             logger.error(f"Critical error creating history result: {e}")
             logger.debug(f"Error context - entry: {repr(entry)}, score: {repr(score)}, query: {repr(query)}")
-            # Return None to indicate failure, allowing caller to handle gracefully
+            return None
+
+    def _validate_result_inputs(self, entry: Dict[str, Any], score: float, query: str) -> bool:
+        """Validate inputs for result creation"""
+        if not isinstance(entry, dict):
+            logger.error(f"History entry is not a dict ({type(entry)}): {repr(entry)}")
+            return False
+
+        if not isinstance(score, (int, float)):
+            logger.warning(f"Score is not numeric ({type(score)}): {repr(score)} - using 0.0")
+            score = 0.0
+
+        if not isinstance(query, str):
+            logger.warning(f"Query is not a string ({type(query)}): {repr(query)} - using empty string")
+            query = ""
+
+        return True
+
+    def _extract_entry_data_safely(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        """Safely extract and validate entry data"""
+        try:
+            user_input = self._get_string_field(entry, "user_input", "")
+            executed_command = self._get_string_field(entry, "executed_command", user_input)
+            description = self._get_string_field(entry, "description", "")
+            usage_count = self._get_numeric_field(entry, "usage_count", 1)
+
+            original_plugin_id = self._validate_original_plugin_id(entry)
+            original_item_id = self._validate_original_item_id(entry)
+
+            display_name = user_input if user_input else "Unknown Command"
+            display_description = self._build_display_description(executed_command, description, user_input)
+
+            return {
+                "user_input": user_input,
+                "executed_command": executed_command,
+                "description": description,
+                "usage_count": usage_count,
+                "original_plugin_id": original_plugin_id,
+                "original_item_id": original_item_id,
+                "display_name": display_name,
+                "display_description": display_description
+            }
+        except Exception as e:
+            logger.error(f"Error extracting entry data: {e}")
+            return None
+
+    def _get_string_field(self, entry: Dict[str, Any], field_name: str, default: str) -> str:
+        """Safely get string field from entry"""
+        try:
+            value = entry.get(field_name, default)
+            if not isinstance(value, str):
+                logger.warning(f"{field_name} is not a string ({type(value)}): {repr(value)} - using default")
+                return default
+            return value
+        except Exception as e:
+            logger.warning(f"Error getting {field_name} from entry: {e} - using default")
+            return default
+
+    def _get_numeric_field(self, entry: Dict[str, Any], field_name: str, default: int) -> int:
+        """Safely get numeric field from entry"""
+        try:
+            value = entry.get(field_name, default)
+            if not isinstance(value, (int, float)):
+                logger.warning(f"{field_name} is not numeric ({type(value)}): {repr(value)} - using default")
+                return default
+            return int(value)
+        except Exception as e:
+            logger.warning(f"Error getting {field_name} from entry: {e} - using default")
+            return default
+
+    def _build_display_description(self, executed_command: str, description: str, user_input: str) -> str:
+        """Build display description from entry data"""
+        try:
+            display_description = ""
+            if executed_command and executed_command != user_input:
+                display_description = executed_command
+
+            if (description and
+                description != executed_command and
+                description != user_input):
+                if display_description:
+                    display_description += f" - {description}"
+                else:
+                    display_description = description
+
+            return display_description
+        except Exception as desc_error:
+            logger.warning(f"Error building display description: {desc_error} - using empty string")
+            return ""
+
+    def _build_result_metadata(self, entry: Dict[str, Any], entry_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Build metadata for the search result"""
+        try:
+            return {
+                "original_plugin_id": entry_data["original_plugin_id"],
+                "original_item_id": entry_data["original_item_id"],
+                "history_entry": entry,
+                "usage_count": entry_data["usage_count"],
+                "track_history": False,
+                "has_original_metadata": bool(entry_data["original_plugin_id"] and entry_data["original_item_id"]),
+            }
+        except Exception as metadata_create_error:
+            logger.error(f"Error creating metadata dict: {metadata_create_error} - using minimal metadata")
+            return {
+                "original_plugin_id": "",
+                "original_item_id": "",
+                "usage_count": entry_data.get("usage_count", 1),
+                "track_history": False,
+            }
+
+    def _get_history_icon_safely(self, entry: Dict[str, Any]) -> object:
+        """Safely get history icon"""
+        try:
+            return self._get_history_icon(entry)
+        except Exception as icon_error:
+            logger.warning(f"Error getting history icon: {icon_error} - using None")
+            return None
+
+    def _create_item_id(self, entry: Dict[str, Any]) -> str:
+        """Create item ID for the result"""
+        try:
+            timestamp = entry.get('timestamp', 0)
+            if not isinstance(timestamp, (int, float)):
+                logger.warning(f"timestamp is not numeric ({type(timestamp)}): {repr(timestamp)} - using 0")
+                timestamp = 0
+            return f"history_{timestamp}"
+        except Exception as id_error:
+            logger.warning(f"Error creating item_id: {id_error} - using fallback")
+            import time
+            return f"history_{int(time.time())}"
+
+    def _create_search_result_object(self, entry_data: Dict[str, Any], metadata: Dict[str, Any],
+                                   icon: object, item_id: str, score: float) -> SearchResult:
+        """Create the final SearchResult object"""
+        try:
+            result = SearchResult(
+                plugin_id="history",
+                item_id=item_id,
+                name=entry_data["display_name"],
+                description=entry_data["display_description"],
+                icon=icon,
+                score=score,
+                metadata=metadata,
+            )
+
+            logger.debug(f"Created history result: '{entry_data['display_name']}' with score {score}")
+            return result
+
+        except Exception as result_error:
+            logger.error(f"Error creating SearchResult object: {result_error}")
             return None
 
     def _get_history_icon(self, entry: Dict[str, Any]) -> object:
