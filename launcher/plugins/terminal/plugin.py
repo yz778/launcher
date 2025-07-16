@@ -10,7 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # GLib might not be strictly needed if no idle_add
 
 from ..base import Plugin, SearchResult
-from launcher.utils.scoring_system import score_name_match
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -71,13 +71,10 @@ class TerminalPlugin(Plugin):
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         super().initialize(config, config_manager)
-        self.general_config = self.config_manager.get_config().get(
-            "general", {}
-        )  # Get general config from config_manager
-        defaults = self.get_config_defaults()
 
-        self.prefix = config.get("prefix", defaults["prefix"])
-        self.icon_size = self.general_config.get("icon_size")
+        # Get configuration using helpers
+        self.prefix = self.get_config_value("prefix")
+        self.icon_size = self.get_icon_size()
         return True
 
     def start(self) -> bool:
@@ -87,13 +84,9 @@ class TerminalPlugin(Plugin):
 
     def _load_default_icon(self) -> bool:
         """Load the default terminal icon from the icon theme"""
-        try:
-            icon_theme = Gtk.IconTheme.get_default()
-            self.default_icon = icon_theme.load_icon(
-                "utilities-terminal", self.icon_size, 0
-            )
-        except Exception:
-            self.default_icon = None
+        from launcher.utils.icon_utils import load_theme_icon
+
+        self.default_icon = load_theme_icon("utilities-terminal", self.icon_size)
 
         # Return False to ensure this function is only called once by idle_add
         return False
@@ -110,7 +103,7 @@ class TerminalPlugin(Plugin):
                 name=command,
                 description="Execute in terminal",
                 icon=self.default_icon,
-                score=score_name_match(query, command),
+                score=calculate_match_score(query, command, is_name=True),
                 metadata={
                     "command": command,
                     "track_history": self.should_track_history(),
@@ -130,7 +123,7 @@ class TerminalPlugin(Plugin):
         try:
             import subprocess
 
-            terminal_command = self.get_general_config("terminal_command")
+            terminal_command = self.get_terminal_command()
             cmd_parts = terminal_command.split() + shlex.split(command)
 
             logger.info(f"Executing command: {' '.join(cmd_parts)}")

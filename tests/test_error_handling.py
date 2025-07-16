@@ -10,7 +10,7 @@ import json
 import time
 
 # Add the launcher directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from launcher.core.history_manager import HistoryManager
 from launcher.plugins.base import SearchResult
@@ -28,21 +28,22 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         self.history_file = os.path.join(self.temp_dir, "test_history.json")
 
         # Create HistoryManager with test config
-        config = {
-            "general": {
-                "history_file": self.history_file
-            }
-        }
+        config = {"general": {"history_file": self.history_file}}
         self.history_manager = HistoryManager(config)
 
         # Set up logging to capture messages
         self.log_messages = []
         self.log_handler = logging.Handler()
-        self.log_handler.emit = lambda record: self.log_messages.append(record.getMessage())
+        self.log_handler.emit = lambda record: self.log_messages.append(
+            record.getMessage()
+        )
 
         # Add handler to all relevant loggers
-        for logger_name in ['launcher.core.history_manager', 'launcher.utils.result_analyzer',
-                           'launcher.plugins.history.plugin']:
+        for logger_name in [
+            "launcher.core.history_manager",
+            "launcher.utils.result_analyzer",
+            "launcher.plugins.history.plugin",
+        ]:
             logger = logging.getLogger(logger_name)
             logger.addHandler(self.log_handler)
             logger.setLevel(logging.DEBUG)
@@ -50,16 +51,22 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
     def tearDown(self):
         """Clean up after tests"""
         # Remove log handlers
-        for logger_name in ['launcher.core.history_manager', 'launcher.utils.result_analyzer',
-                           'launcher.plugins.history.plugin']:
+        for logger_name in [
+            "launcher.core.history_manager",
+            "launcher.utils.result_analyzer",
+            "launcher.plugins.history.plugin",
+        ]:
             logger = logging.getLogger(logger_name)
             logger.removeHandler(self.log_handler)
 
         # Clean up temp files
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def create_search_result(self, plugin_id, item_id, name, description="", score=1.0, metadata=None):
+    def create_search_result(
+        self, plugin_id, item_id, name, description="", score=1.0, metadata=None
+    ):
         """Helper to create SearchResult objects"""
         result = SearchResult(
             plugin_id=plugin_id,
@@ -67,7 +74,7 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
             name=name,
             description=description,
             icon=None,
-            score=score
+            score=score,
         )
         if metadata:
             result.metadata = metadata
@@ -81,7 +88,9 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         # Should handle gracefully and not crash
         result = self.history_manager.increment_usage_count("test", "test")
         self.assertFalse(result)
-        self.assertTrue(any("History data is corrupted" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("History data is corrupted" in msg for msg in self.log_messages)
+        )
 
     def test_history_storage_with_invalid_entries(self):
         """Test history storage with invalid entry structures"""
@@ -97,12 +106,16 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         # Should handle gracefully
         result = self.history_manager.increment_usage_count("test", "test")
         self.assertFalse(result)
-        self.assertTrue(any("invalid plugin_id/item_id types" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("invalid plugin_id/item_id types" in msg for msg in self.log_messages)
+        )
 
     def test_result_analyzer_with_none_inputs(self):
         """Test ResultAnalyzer gracefully handles None inputs"""
         # Test with None query
-        result = ResultAnalyzer.is_exact_match(None, self.create_search_result("test", "test", "test"))
+        result = ResultAnalyzer.is_exact_match(
+            None, self.create_search_result("test", "test", "test")
+        )
         self.assertFalse(result)
 
         # Test with None result
@@ -119,7 +132,9 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
     def test_result_analyzer_with_invalid_types(self):
         """Test ResultAnalyzer with invalid input types"""
         # Test with non-string query
-        result = ResultAnalyzer.is_exact_match(123, self.create_search_result("test", "test", "test"))
+        result = ResultAnalyzer.is_exact_match(
+            123, self.create_search_result("test", "test", "test")
+        )
         self.assertFalse(result)
 
         # Test with invalid result object
@@ -129,14 +144,17 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         self.assertFalse(result)
 
         # Should log warnings about invalid types
-        self.assertTrue(any("Query is not a string" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("Query is not a string" in msg for msg in self.log_messages)
+        )
 
     def test_result_analyzer_with_attribute_errors(self):
         """Test ResultAnalyzer handles AttributeError gracefully"""
+
         # Create a problematic result that will cause getattr to fail
         class ProblematicResult:
             def __getattribute__(self, name):
-                if name == 'name':
+                if name == "name":
                     raise AttributeError("Test error")
                 return super().__getattribute__(name)
 
@@ -146,16 +164,23 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         self.assertFalse(result)
 
         # Should log the error and continue gracefully - check for various possible log messages
-        self.assertTrue(any("Error accessing result attributes" in msg for msg in self.log_messages) or
-                       any("Critical error in exact match check" in msg for msg in self.log_messages) or
-                       any("Result has no name attribute" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("Error accessing result attributes" in msg for msg in self.log_messages)
+            or any(
+                "Critical error in exact match check" in msg
+                for msg in self.log_messages
+            )
+            or any("Result has no name attribute" in msg for msg in self.log_messages)
+        )
 
     def test_command_arguments_with_malformed_queries(self):
         """Test command arguments detection with malformed queries"""
         test_result = self.create_search_result("test", "test", "firefox")
 
         # Test with malformed shell quotes
-        result = ResultAnalyzer.has_command_arguments('firefox "unclosed quote', test_result)
+        result = ResultAnalyzer.has_command_arguments(
+            'firefox "unclosed quote', test_result
+        )
         self.assertFalse(result)  # Should handle gracefully
 
         # Test with very long query
@@ -165,7 +190,9 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         self.assertIsInstance(result, bool)
 
         # Should log debug messages about parsing issues
-        self.assertTrue(any("shlex failed to parse" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("shlex failed to parse" in msg for msg in self.log_messages)
+        )
 
     def test_history_plugin_with_corrupted_entries(self):
         """Test history plugin handles corrupted history entries"""
@@ -185,9 +212,11 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         results = plugin.search("fire")
         self.assertIsInstance(results, list)
         # Should log warnings about corrupted entries - check for various possible log messages
-        self.assertTrue(any("user_input is not a string" in msg for msg in self.log_messages) or
-                       any("History entry is not a dict" in msg for msg in self.log_messages) or
-                       any("Error searching history" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("user_input is not a string" in msg for msg in self.log_messages)
+            or any("History entry is not a dict" in msg for msg in self.log_messages)
+            or any("Error searching history" in msg for msg in self.log_messages)
+        )
 
     def test_history_plugin_create_result_with_invalid_data(self):
         """Test history plugin result creation with invalid data"""
@@ -207,31 +236,57 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         self.assertIsNotNone(result)  # Should handle and use fallback
 
         # Should log appropriate warnings
-        self.assertTrue(any("History entry is not a dict" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("History entry is not a dict" in msg for msg in self.log_messages)
+        )
 
     def test_memory_error_handling(self):
         """Test system behavior under memory pressure"""
         # Mock MemoryError in critical functions
-        with patch.object(ResultAnalyzer, 'get_match_quality', side_effect=MemoryError("Out of memory")):
+        with patch.object(
+            ResultAnalyzer,
+            "get_match_quality",
+            side_effect=MemoryError("Out of memory"),
+        ):
             should_store = self.history_manager.should_store_in_history(
                 "test", [], self.create_search_result("test", "test", "test")
             )
             # Should fallback to default behavior
             self.assertTrue(should_store)
-            self.assertTrue(any("MemoryError during storage analysis" in msg for msg in self.log_messages) or
-                           any("Unexpected error in match quality analysis" in msg for msg in self.log_messages))
+            self.assertTrue(
+                any(
+                    "MemoryError during storage analysis" in msg
+                    for msg in self.log_messages
+                )
+                or any(
+                    "Unexpected error in match quality analysis" in msg
+                    for msg in self.log_messages
+                )
+            )
 
     def test_recursion_error_handling(self):
         """Test system behavior with recursion errors"""
         # Mock RecursionError in analysis
-        with patch.object(ResultAnalyzer, 'get_match_quality', side_effect=RecursionError("Maximum recursion depth")):
+        with patch.object(
+            ResultAnalyzer,
+            "get_match_quality",
+            side_effect=RecursionError("Maximum recursion depth"),
+        ):
             should_store = self.history_manager.should_store_in_history(
                 "test", [], self.create_search_result("test", "test", "test")
             )
             # Should fallback to default behavior
             self.assertTrue(should_store)
-            self.assertTrue(any("RecursionError during storage analysis" in msg for msg in self.log_messages) or
-                           any("Unexpected error in match quality analysis" in msg for msg in self.log_messages))
+            self.assertTrue(
+                any(
+                    "RecursionError during storage analysis" in msg
+                    for msg in self.log_messages
+                )
+                or any(
+                    "Unexpected error in match quality analysis" in msg
+                    for msg in self.log_messages
+                )
+            )
 
     def test_file_system_errors(self):
         """Test handling of file system errors"""
@@ -258,12 +313,16 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
 
         def modify_during_increment():
             # Modify the history list during increment operation
-            self.history_manager.user_input_history.append({"user_input": "concurrent", "plugin_id": "test", "item_id": "test"})
+            self.history_manager.user_input_history.append(
+                {"user_input": "concurrent", "plugin_id": "test", "item_id": "test"}
+            )
             return True
 
         # This simulates what could happen with concurrent access
         # The system should handle it gracefully
-        result = self.history_manager.increment_usage_count("desktop_file", "firefox.desktop")
+        result = self.history_manager.increment_usage_count(
+            "desktop_file", "firefox.desktop"
+        )
         self.assertTrue(result)
 
     def test_unicode_and_encoding_errors(self):
@@ -279,7 +338,9 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
 
         for query in unicode_queries:
             try:
-                result = ResultAnalyzer.is_exact_match(query, self.create_search_result("test", "test", query))
+                result = ResultAnalyzer.is_exact_match(
+                    query, self.create_search_result("test", "test", query)
+                )
                 self.assertIsInstance(result, bool)
             except Exception as e:
                 self.fail(f"Unicode handling failed for '{repr(query)}': {e}")
@@ -289,13 +350,15 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         # Create large history dataset
         large_history = []
         for i in range(1000):
-            large_history.append({
-                "user_input": f"command_{i}",
-                "plugin_id": f"plugin_{i % 10}",
-                "item_id": f"item_{i}",
-                "usage_count": i % 5 + 1,
-                "timestamp": time.time() - i
-            })
+            large_history.append(
+                {
+                    "user_input": f"command_{i}",
+                    "plugin_id": f"plugin_{i % 10}",
+                    "item_id": f"item_{i}",
+                    "usage_count": i % 5 + 1,
+                    "timestamp": time.time() - i,
+                }
+            )
 
         self.history_manager.user_input_history = large_history
 
@@ -332,7 +395,9 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         problematic_results = [
             Mock(plugin_id="history", name="test1"),  # Missing metadata
             Mock(plugin_id="history", metadata="not_a_dict"),  # Invalid metadata type
-            Mock(plugin_id="history", metadata={"original_plugin_id": None}),  # None values
+            Mock(
+                plugin_id="history", metadata={"original_plugin_id": None}
+            ),  # None values
         ]
 
         # The system should handle these gracefully in real deduplication
@@ -340,7 +405,7 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         for result in problematic_results:
             try:
                 # Simulate metadata access that might fail
-                metadata = getattr(result, 'metadata', None)
+                metadata = getattr(result, "metadata", None)
                 if isinstance(metadata, dict):
                     plugin_id = metadata.get("original_plugin_id")
                     item_id = metadata.get("original_item_id")
@@ -352,7 +417,11 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
     def test_graceful_degradation_with_missing_dependencies(self):
         """Test graceful degradation when dependencies are missing"""
         # Test behavior when ResultAnalyzer method fails
-        with patch.object(ResultAnalyzer, 'get_match_quality', side_effect=ImportError("Module not found")):
+        with patch.object(
+            ResultAnalyzer,
+            "get_match_quality",
+            side_effect=ImportError("Module not found"),
+        ):
             should_store = self.history_manager.should_store_in_history(
                 "test", [], self.create_search_result("test", "test", "test")
             )
@@ -360,21 +429,39 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
             self.assertTrue(should_store)
             # The ImportError should be caught and logged, but the current implementation
             # catches it as a general Exception, so check for that instead
-            self.assertTrue(any("ImportError - ResultAnalyzer not available" in msg for msg in self.log_messages) or
-                           any("Critical error analyzing match quality" in msg for msg in self.log_messages) or
-                           any("Unexpected error in match quality analysis" in msg for msg in self.log_messages))
+            self.assertTrue(
+                any(
+                    "ImportError - ResultAnalyzer not available" in msg
+                    for msg in self.log_messages
+                )
+                or any(
+                    "Critical error analyzing match quality" in msg
+                    for msg in self.log_messages
+                )
+                or any(
+                    "Unexpected error in match quality analysis" in msg
+                    for msg in self.log_messages
+                )
+            )
 
     def test_error_context_logging(self):
         """Test that error context is properly logged for debugging"""
         # Trigger an error condition that should log context
-        with patch.object(ResultAnalyzer, 'get_match_quality', side_effect=Exception("Test error")):
+        with patch.object(
+            ResultAnalyzer, "get_match_quality", side_effect=Exception("Test error")
+        ):
             self.history_manager.should_store_in_history(
                 "test_query", [], self.create_search_result("test", "test", "test")
             )
 
         # Should log error context for debugging
-        self.assertTrue(any("Error details - user_input:" in msg for msg in self.log_messages) or
-                       any("Unexpected error in match quality analysis" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("Error details - user_input:" in msg for msg in self.log_messages)
+            or any(
+                "Unexpected error in match quality analysis" in msg
+                for msg in self.log_messages
+            )
+        )
 
     def test_performance_degradation_warnings(self):
         """Test that performance warnings are logged when operations are slow"""
@@ -401,7 +488,9 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         ]
 
         for invalid_input, description in invalid_inputs:
-            result = ResultAnalyzer.is_exact_match(invalid_input, self.create_search_result("test", "test", "test"))
+            result = ResultAnalyzer.is_exact_match(
+                invalid_input, self.create_search_result("test", "test", "test")
+            )
             self.assertFalse(result, f"Failed validation for {description}")
 
     def test_error_propagation_and_isolation(self):
@@ -409,14 +498,20 @@ class TestErrorHandlingAndRecovery(unittest.TestCase):
         # Test that an error in one component doesn't break others
 
         # Create a problematic result analyzer
-        with patch.object(ResultAnalyzer, 'is_exact_match', side_effect=Exception("Component error")):
+        with patch.object(
+            ResultAnalyzer, "is_exact_match", side_effect=Exception("Component error")
+        ):
             # The get_match_quality should handle this gracefully
-            result = ResultAnalyzer.get_match_quality("test", self.create_search_result("test", "test", "test"))
+            result = ResultAnalyzer.get_match_quality(
+                "test", self.create_search_result("test", "test", "test")
+            )
             # Should return a safe fallback, but might be "partial" if partial match succeeds
             self.assertIn(result, ["exact", "partial", "fuzzy", "none"])
 
         # Should log the error but continue functioning
-        self.assertTrue(any("Error checking exact match" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("Error checking exact match" in msg for msg in self.log_messages)
+        )
 
 
 class TestSystemResilience(unittest.TestCase):
@@ -430,6 +525,7 @@ class TestSystemResilience(unittest.TestCase):
     def tearDown(self):
         """Clean up after tests"""
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_system_continues_after_component_failure(self):
@@ -473,9 +569,12 @@ class TestSystemResilience(unittest.TestCase):
         for query, result, description in test_cases:
             match_quality = ResultAnalyzer.get_match_quality(query, result)
             # Should always return a valid match quality string
-            self.assertIn(match_quality, ["exact", "partial", "fuzzy", "none"],
-                         f"Invalid match quality for {description}")
+            self.assertIn(
+                match_quality,
+                ["exact", "partial", "fuzzy", "none"],
+                f"Invalid match quality for {description}",
+            )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

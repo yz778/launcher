@@ -51,7 +51,8 @@ class PluginManager:
 
         # Look for plugin directories (not files)
         plugin_dirs = [
-            d for d in os.listdir(plugins_dir)
+            d
+            for d in os.listdir(plugins_dir)
             if os.path.isdir(os.path.join(plugins_dir, d))
             and d != "__pycache__"
             and not d.startswith(".")
@@ -63,7 +64,7 @@ class PluginManager:
                 plugin_file = os.path.join(plugins_dir, plugin_dir, "plugin.py")
                 if not os.path.exists(plugin_file):
                     continue
-                    
+
                 module_name = f"plugins.{plugin_dir}.plugin"
                 module = importlib.import_module(module_name)
                 for name, obj in inspect.getmembers(module):

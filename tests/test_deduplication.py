@@ -7,12 +7,12 @@ import sys
 import os
 
 # Add the launcher directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from launcher.plugins.base import SearchResult
 
 # Global logger for the mock class
-logger = logging.getLogger('test_deduplication')
+logger = logging.getLogger("test_deduplication")
 
 
 class MockLauncherWindow:
@@ -35,17 +35,28 @@ class MockLauncherWindow:
             start_time = None
             if logger.isEnabledFor(logging.DEBUG):
                 import time
+
                 start_time = time.time()
-                logger.debug(f"Starting deduplication for {len(self.current_results)} results")
+                logger.debug(
+                    f"Starting deduplication for {len(self.current_results)} results"
+                )
 
             # Group results by plugin type using list comprehensions for better performance
-            history_results = [r for r in self.current_results if r.plugin_id == "history"]
-            other_results = [r for r in self.current_results if r.plugin_id != "history"]
+            history_results = [
+                r for r in self.current_results if r.plugin_id == "history"
+            ]
+            other_results = [
+                r for r in self.current_results if r.plugin_id != "history"
+            ]
 
-            logger.debug(f"Found {len(history_results)} history results and {len(other_results)} other results")
+            logger.debug(
+                f"Found {len(history_results)} history results and {len(other_results)} other results"
+            )
 
             if not history_results or not other_results:
-                logger.debug("No deduplication needed - missing history or other results")
+                logger.debug(
+                    "No deduplication needed - missing history or other results"
+                )
                 return  # No deduplication needed
 
             # Performance optimization: create efficient lookup structures
@@ -54,7 +65,9 @@ class MockLauncherWindow:
             for result in other_results:
                 try:
                     # Validate that result has required attributes
-                    if not hasattr(result, 'plugin_id') or not hasattr(result, 'item_id'):
+                    if not hasattr(result, "plugin_id") or not hasattr(
+                        result, "item_id"
+                    ):
                         logger.warning(f"Result missing required attributes: {result}")
                         continue
 
@@ -75,20 +88,28 @@ class MockLauncherWindow:
             for history_result in history_results:
                 try:
                     # Validate history result structure
-                    if not hasattr(history_result, 'metadata') or not isinstance(history_result.metadata, dict):
-                        logger.warning(f"History result missing or invalid metadata: {history_result.name}")
+                    if not hasattr(history_result, "metadata") or not isinstance(
+                        history_result.metadata, dict
+                    ):
+                        logger.warning(
+                            f"History result missing or invalid metadata: {history_result.name}"
+                        )
                         filtered_history_results.append(history_result)
                         preserved_count += 1
                         missing_metadata_count += 1
                         continue
 
                     # Get original plugin info from history metadata with validation
-                    original_plugin_id = history_result.metadata.get("original_plugin_id")
+                    original_plugin_id = history_result.metadata.get(
+                        "original_plugin_id"
+                    )
                     original_item_id = history_result.metadata.get("original_item_id")
 
                     # Validate metadata exists and is not empty
                     if not original_plugin_id or not original_item_id:
-                        logger.debug(f"History result '{history_result.name}' missing original plugin metadata - preserving")
+                        logger.debug(
+                            f"History result '{history_result.name}' missing original plugin metadata - preserving"
+                        )
                         filtered_history_results.append(history_result)
                         preserved_count += 1
                         missing_metadata_count += 1
@@ -102,15 +123,21 @@ class MockLauncherWindow:
                         # No exact match found, keep this history result
                         filtered_history_results.append(history_result)
                         preserved_count += 1
-                        logger.debug(f"Preserving history result '{history_result.name}' - no current match for {original_plugin_id}:{original_item_id}")
+                        logger.debug(
+                            f"Preserving history result '{history_result.name}' - no current match for {original_plugin_id}:{original_item_id}"
+                        )
                     else:
                         # Exact match found, remove history result
                         deduplicated_count += 1
-                        logger.debug(f"Deduplicating history result '{history_result.name}' - matches current result '{matching_result.name}' ({original_plugin_id}:{original_item_id})")
+                        logger.debug(
+                            f"Deduplicating history result '{history_result.name}' - matches current result '{matching_result.name}' ({original_plugin_id}:{original_item_id})"
+                        )
 
                 except Exception as e:
                     # Graceful error handling - preserve result if processing fails
-                    logger.warning(f"Error processing history result '{getattr(history_result, 'name', 'unknown')}': {e}")
+                    logger.warning(
+                        f"Error processing history result '{getattr(history_result, 'name', 'unknown')}': {e}"
+                    )
                     filtered_history_results.append(history_result)
                     preserved_count += 1
                     continue
@@ -122,10 +149,14 @@ class MockLauncherWindow:
             final_count = len(self.current_results)
 
             # Comprehensive logging summary
-            logger.debug(f"Deduplication complete: {original_count} -> {final_count} results")
+            logger.debug(
+                f"Deduplication complete: {original_count} -> {final_count} results"
+            )
             logger.debug(f"  - Deduplicated: {deduplicated_count} history results")
             logger.debug(f"  - Preserved: {preserved_count} history results")
-            logger.debug(f"  - Missing metadata: {missing_metadata_count} history results")
+            logger.debug(
+                f"  - Missing metadata: {missing_metadata_count} history results"
+            )
 
             if start_time and logger.isEnabledFor(logging.DEBUG):
                 elapsed_time = time.time() - start_time
@@ -149,7 +180,9 @@ class TestDeduplication(unittest.TestCase):
         # Set up logging to capture debug messages
         self.log_messages = []
         self.log_handler = logging.Handler()
-        self.log_handler.emit = lambda record: self.log_messages.append(record.getMessage())
+        self.log_handler.emit = lambda record: self.log_messages.append(
+            record.getMessage()
+        )
 
         logger.addHandler(self.log_handler)
         logger.setLevel(logging.DEBUG)
@@ -158,7 +191,9 @@ class TestDeduplication(unittest.TestCase):
         """Clean up after tests"""
         logger.removeHandler(self.log_handler)
 
-    def create_search_result(self, plugin_id, item_id, name, description="", metadata=None):
+    def create_search_result(
+        self, plugin_id, item_id, name, description="", metadata=None
+    ):
         """Helper to create SearchResult objects"""
         result = SearchResult(
             plugin_id=plugin_id,
@@ -166,7 +201,7 @@ class TestDeduplication(unittest.TestCase):
             name=name,
             description=description,
             icon=None,
-            score=1.0
+            score=1.0,
         )
         if metadata:
             result.metadata = metadata
@@ -178,50 +213,71 @@ class TestDeduplication(unittest.TestCase):
         self.launcher._deduplicate_results()
 
         # Should log that there are no results
-        self.assertTrue(any("No results to deduplicate" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("No results to deduplicate" in msg for msg in self.log_messages)
+        )
         self.assertEqual(len(self.launcher.current_results), 0)
 
     def test_no_history_results(self):
         """Test deduplication when there are no history results"""
         self.launcher.current_results = [
             self.create_search_result("desktop_file", "firefox.desktop", "Firefox"),
-            self.create_search_result("executable", "/usr/bin/vim", "Vim")
+            self.create_search_result("executable", "/usr/bin/vim", "Vim"),
         ]
 
         self.launcher._deduplicate_results()
 
         # Should log that no deduplication is needed
-        self.assertTrue(any("No deduplication needed" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("No deduplication needed" in msg for msg in self.log_messages)
+        )
         self.assertEqual(len(self.launcher.current_results), 2)
 
     def test_no_other_results(self):
         """Test deduplication when there are only history results"""
         self.launcher.current_results = [
-            self.create_search_result("history", "hist1", "Firefox", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "firefox.desktop"
-            })
+            self.create_search_result(
+                "history",
+                "hist1",
+                "Firefox",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "firefox.desktop",
+                },
+            )
         ]
 
         self.launcher._deduplicate_results()
 
         # Should log that no deduplication is needed
-        self.assertTrue(any("No deduplication needed" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("No deduplication needed" in msg for msg in self.log_messages)
+        )
         self.assertEqual(len(self.launcher.current_results), 1)
 
     def test_exact_match_deduplication(self):
         """Test removing history results with exact matches in other plugins"""
         self.launcher.current_results = [
             self.create_search_result("desktop_file", "firefox.desktop", "Firefox"),
-            self.create_search_result("history", "hist1", "Firefox", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "firefox.desktop"
-            }),
+            self.create_search_result(
+                "history",
+                "hist1",
+                "Firefox",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "firefox.desktop",
+                },
+            ),
             self.create_search_result("executable", "/usr/bin/vim", "Vim"),
-            self.create_search_result("history", "hist2", "Vim", metadata={
-                "original_plugin_id": "executable",
-                "original_item_id": "/usr/bin/vim"
-            })
+            self.create_search_result(
+                "history",
+                "hist2",
+                "Vim",
+                metadata={
+                    "original_plugin_id": "executable",
+                    "original_item_id": "/usr/bin/vim",
+                },
+            ),
         ]
 
         self.launcher._deduplicate_results()
@@ -234,20 +290,32 @@ class TestDeduplication(unittest.TestCase):
         self.assertNotIn("history", plugin_ids)
 
         # Should log deduplication actions
-        self.assertTrue(any("Deduplicating history result" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("Deduplicating history result" in msg for msg in self.log_messages)
+        )
 
     def test_preserve_history_without_current_match(self):
         """Test preserving history results that don't have current matches"""
         self.launcher.current_results = [
             self.create_search_result("desktop_file", "firefox.desktop", "Firefox"),
-            self.create_search_result("history", "hist1", "Old App", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "old_app.desktop"
-            }),
-            self.create_search_result("history", "hist2", "Firefox", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "firefox.desktop"
-            })
+            self.create_search_result(
+                "history",
+                "hist1",
+                "Old App",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "old_app.desktop",
+                },
+            ),
+            self.create_search_result(
+                "history",
+                "hist2",
+                "Firefox",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "firefox.desktop",
+                },
+            ),
         ]
 
         self.launcher._deduplicate_results()
@@ -259,18 +327,27 @@ class TestDeduplication(unittest.TestCase):
         self.assertIn("Old App", names)
 
         # Should log preservation of history result without match
-        self.assertTrue(any("Preserving history result 'Old App'" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any(
+                "Preserving history result 'Old App'" in msg
+                for msg in self.log_messages
+            )
+        )
 
     def test_preserve_history_with_missing_metadata(self):
         """Test preserving history results that lack original plugin metadata"""
         self.launcher.current_results = [
             self.create_search_result("desktop_file", "firefox.desktop", "Firefox"),
             self.create_search_result("history", "hist1", "Some Command", metadata={}),
-            self.create_search_result("history", "hist2", "Another Command", metadata={
-                "original_plugin_id": None,
-                "original_item_id": "something"
-            }),
-            self.create_search_result("history", "hist3", "Third Command")  # No metadata at all
+            self.create_search_result(
+                "history",
+                "hist2",
+                "Another Command",
+                metadata={"original_plugin_id": None, "original_item_id": "something"},
+            ),
+            self.create_search_result(
+                "history", "hist3", "Third Command"
+            ),  # No metadata at all
         ]
 
         # Mock the third result to not have metadata attribute
@@ -280,11 +357,15 @@ class TestDeduplication(unittest.TestCase):
 
         # Should preserve all history results due to missing metadata
         self.assertEqual(len(self.launcher.current_results), 4)
-        history_results = [r for r in self.launcher.current_results if r.plugin_id == "history"]
+        history_results = [
+            r for r in self.launcher.current_results if r.plugin_id == "history"
+        ]
         self.assertEqual(len(history_results), 3)
 
         # Should log missing metadata warnings
-        self.assertTrue(any("missing original plugin metadata" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("missing original plugin metadata" in msg for msg in self.log_messages)
+        )
 
     def test_mixed_scenario_complex(self):
         """Test complex scenario with mixed results"""
@@ -293,21 +374,37 @@ class TestDeduplication(unittest.TestCase):
             self.create_search_result("desktop_file", "firefox.desktop", "Firefox"),
             self.create_search_result("executable", "/usr/bin/vim", "Vim"),
             self.create_search_result("calculator", "calc1", "2+2=4"),
-
             # History results - some with matches, some without
-            self.create_search_result("history", "hist1", "Firefox", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "firefox.desktop"
-            }),  # Should be removed
-            self.create_search_result("history", "hist2", "Old Firefox", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "old_firefox.desktop"
-            }),  # Should be preserved (no current match)
-            self.create_search_result("history", "hist3", "Vim", metadata={
-                "original_plugin_id": "executable",
-                "original_item_id": "/usr/bin/vim"
-            }),  # Should be removed
-            self.create_search_result("history", "hist4", "Some Command", metadata={}),  # Should be preserved (no metadata)
+            self.create_search_result(
+                "history",
+                "hist1",
+                "Firefox",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "firefox.desktop",
+                },
+            ),  # Should be removed
+            self.create_search_result(
+                "history",
+                "hist2",
+                "Old Firefox",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "old_firefox.desktop",
+                },
+            ),  # Should be preserved (no current match)
+            self.create_search_result(
+                "history",
+                "hist3",
+                "Vim",
+                metadata={
+                    "original_plugin_id": "executable",
+                    "original_item_id": "/usr/bin/vim",
+                },
+            ),  # Should be removed
+            self.create_search_result(
+                "history", "hist4", "Some Command", metadata={}
+            ),  # Should be preserved (no metadata)
         ]
 
         self.launcher._deduplicate_results()
@@ -318,13 +415,15 @@ class TestDeduplication(unittest.TestCase):
         # Check specific results
         names = [r.name for r in self.launcher.current_results]
         self.assertIn("Firefox", names)  # From desktop_file
-        self.assertIn("Vim", names)      # From executable
-        self.assertIn("2+2=4", names)    # From calculator
+        self.assertIn("Vim", names)  # From executable
+        self.assertIn("2+2=4", names)  # From calculator
         self.assertIn("Old Firefox", names)  # From history (preserved)
-        self.assertIn("Some Command", names) # From history (preserved)
+        self.assertIn("Some Command", names)  # From history (preserved)
 
         # Should not have duplicate Firefox or Vim from history
-        firefox_count = sum(1 for r in self.launcher.current_results if r.name == "Firefox")
+        firefox_count = sum(
+            1 for r in self.launcher.current_results if r.name == "Firefox"
+        )
         vim_count = sum(1 for r in self.launcher.current_results if r.name == "Vim")
         self.assertEqual(firefox_count, 1)
         self.assertEqual(vim_count, 1)
@@ -345,24 +444,35 @@ class TestDeduplication(unittest.TestCase):
             if i % 2 == 0:
                 # Has match in current results
                 large_results.append(
-                    self.create_search_result("history", f"hist_{i}", f"App {i}", metadata={
-                        "original_plugin_id": f"plugin_{i % 10}",
-                        "original_item_id": f"item_{i}"
-                    })
+                    self.create_search_result(
+                        "history",
+                        f"hist_{i}",
+                        f"App {i}",
+                        metadata={
+                            "original_plugin_id": f"plugin_{i % 10}",
+                            "original_item_id": f"item_{i}",
+                        },
+                    )
                 )
             else:
                 # No match in current results
                 large_results.append(
-                    self.create_search_result("history", f"hist_{i}", f"Old App {i}", metadata={
-                        "original_plugin_id": f"old_plugin_{i % 10}",
-                        "original_item_id": f"old_item_{i}"
-                    })
+                    self.create_search_result(
+                        "history",
+                        f"hist_{i}",
+                        f"Old App {i}",
+                        metadata={
+                            "original_plugin_id": f"old_plugin_{i % 10}",
+                            "original_item_id": f"old_item_{i}",
+                        },
+                    )
                 )
 
         self.launcher.current_results = large_results
 
         # Measure performance (should complete quickly)
         import time
+
         start_time = time.time()
         self.launcher._deduplicate_results()
         end_time = time.time()
@@ -387,10 +497,15 @@ class TestDeduplication(unittest.TestCase):
         self.launcher.current_results = [
             self.create_search_result("desktop_file", "firefox.desktop", "Firefox"),
             malformed_result,
-            self.create_search_result("history", "hist1", "Good History", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "firefox.desktop"
-            })
+            self.create_search_result(
+                "history",
+                "hist1",
+                "Good History",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "firefox.desktop",
+                },
+            ),
         ]
 
         # Should not raise an exception
@@ -400,7 +515,9 @@ class TestDeduplication(unittest.TestCase):
             self.fail(f"Deduplication raised an exception with malformed results: {e}")
 
         # Should log warnings about malformed results (missing metadata)
-        self.assertTrue(any("missing or invalid metadata" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("missing or invalid metadata" in msg for msg in self.log_messages)
+        )
 
     def test_error_handling_exception_during_processing(self):
         """Test graceful error handling when exceptions occur during processing"""
@@ -416,7 +533,7 @@ class TestDeduplication(unittest.TestCase):
 
         self.launcher.current_results = [
             self.create_search_result("desktop_file", "firefox.desktop", "Firefox"),
-            problematic_result
+            problematic_result,
         ]
 
         # Should not raise an exception and should preserve the problematic result
@@ -429,22 +546,34 @@ class TestDeduplication(unittest.TestCase):
         self.assertEqual(len(self.launcher.current_results), 2)
 
         # Should log the error
-        self.assertTrue(any("Error processing history result" in msg for msg in self.log_messages))
+        self.assertTrue(
+            any("Error processing history result" in msg for msg in self.log_messages)
+        )
 
     def test_maintain_result_order(self):
         """Test that deduplication maintains proper result ordering"""
         self.launcher.current_results = [
             self.create_search_result("desktop_file", "app1.desktop", "App 1"),
             self.create_search_result("executable", "/usr/bin/app2", "App 2"),
-            self.create_search_result("history", "hist1", "App 1", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "app1.desktop"
-            }),
+            self.create_search_result(
+                "history",
+                "hist1",
+                "App 1",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "app1.desktop",
+                },
+            ),
             self.create_search_result("desktop_file", "app3.desktop", "App 3"),
-            self.create_search_result("history", "hist2", "Old App", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "old_app.desktop"
-            })
+            self.create_search_result(
+                "history",
+                "hist2",
+                "Old App",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "old_app.desktop",
+                },
+            ),
         ]
 
         self.launcher._deduplicate_results()
@@ -458,14 +587,24 @@ class TestDeduplication(unittest.TestCase):
         """Test that comprehensive logging is working correctly"""
         self.launcher.current_results = [
             self.create_search_result("desktop_file", "firefox.desktop", "Firefox"),
-            self.create_search_result("history", "hist1", "Firefox", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "firefox.desktop"
-            }),
-            self.create_search_result("history", "hist2", "Old App", metadata={
-                "original_plugin_id": "desktop_file",
-                "original_item_id": "old_app.desktop"
-            })
+            self.create_search_result(
+                "history",
+                "hist1",
+                "Firefox",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "firefox.desktop",
+                },
+            ),
+            self.create_search_result(
+                "history",
+                "hist2",
+                "Old App",
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "old_app.desktop",
+                },
+            ),
         ]
 
         self.launcher._deduplicate_results()
@@ -503,7 +642,7 @@ class TestDeduplicationPerformance(unittest.TestCase):
                     name=f"App {i}",
                     description=f"Description {i}",
                     icon=None,
-                    score=100.0 - i * 0.01
+                    score=100.0 - i * 0.01,
                 )
             )
 
@@ -515,14 +654,14 @@ class TestDeduplicationPerformance(unittest.TestCase):
                 metadata = {
                     "original_plugin_id": f"plugin_{i % 20}",
                     "original_item_id": f"item_{i % 500}",
-                    "usage_count": i % 10 + 1
+                    "usage_count": i % 10 + 1,
                 }
             elif i % 3 == 1:
                 # No match in current results
                 metadata = {
                     "original_plugin_id": f"old_plugin_{i % 20}",
                     "original_item_id": f"old_item_{i}",
-                    "usage_count": i % 5 + 1
+                    "usage_count": i % 5 + 1,
                 }
             else:
                 # Missing or invalid metadata
@@ -532,7 +671,7 @@ class TestDeduplicationPerformance(unittest.TestCase):
                     metadata = {
                         "original_plugin_id": "",
                         "original_item_id": None,
-                        "usage_count": i % 3 + 1
+                        "usage_count": i % 3 + 1,
                     }
 
             large_results.append(
@@ -543,7 +682,7 @@ class TestDeduplicationPerformance(unittest.TestCase):
                     description=f"Historical item {i}",
                     icon=None,
                     score=90.0 - i * 0.01,
-                    metadata=metadata
+                    metadata=metadata,
                 )
             )
 
@@ -551,13 +690,18 @@ class TestDeduplicationPerformance(unittest.TestCase):
 
         # Measure performance
         import time
+
         start_time = time.time()
         self.launcher._deduplicate_results()
         end_time = time.time()
 
         # Should complete in reasonable time (less than 2 seconds for this large dataset)
         elapsed_time = end_time - start_time
-        self.assertLess(elapsed_time, 2.0, f"Deduplication took {elapsed_time:.3f}s, expected < 2.0s")
+        self.assertLess(
+            elapsed_time,
+            2.0,
+            f"Deduplication took {elapsed_time:.3f}s, expected < 2.0s",
+        )
 
         # Verify correctness - should have removed about 1/3 of history results (those with matches)
         final_count = len(self.launcher.current_results)
@@ -587,7 +731,7 @@ class TestDeduplicationPerformance(unittest.TestCase):
                         name=f"App {i}",
                         description=f"Description {i}",
                         icon=None,
-                        score=100.0 - i * 0.01
+                        score=100.0 - i * 0.01,
                     )
                 )
             else:
@@ -602,9 +746,9 @@ class TestDeduplicationPerformance(unittest.TestCase):
                         score=90.0 - i * 0.01,
                         metadata={
                             "original_plugin_id": f"plugin_{i % 10}",
-                            "original_item_id": f"item_{i-1}" if i > 0 else "item_0",
-                            "usage_count": i % 5 + 1
-                        }
+                            "original_item_id": f"item_{i - 1}" if i > 0 else "item_0",
+                            "usage_count": i % 5 + 1,
+                        },
                     )
                 )
 
@@ -621,8 +765,11 @@ class TestDeduplicationPerformance(unittest.TestCase):
         # Allow for some growth but not more than 50% increase in objects
         object_growth = final_objects - initial_objects
         max_allowed_growth = initial_objects * 0.5
-        self.assertLess(object_growth, max_allowed_growth,
-                       f"Memory usage grew by {object_growth} objects, expected < {max_allowed_growth}")
+        self.assertLess(
+            object_growth,
+            max_allowed_growth,
+            f"Memory usage grew by {object_growth} objects, expected < {max_allowed_growth}",
+        )
 
     def test_deduplication_with_concurrent_modifications(self):
         """Test deduplication behavior when results list is modified during processing"""
@@ -630,11 +777,22 @@ class TestDeduplicationPerformance(unittest.TestCase):
         # during deduplication (though this shouldn't happen in normal operation)
 
         results = [
-            SearchResult(plugin_id="desktop_file", item_id="app1.desktop", name="App 1", score=100.0),
             SearchResult(
-                plugin_id="history", item_id="hist_1", name="App 1", score=90.0,
-                metadata={"original_plugin_id": "desktop_file", "original_item_id": "app1.desktop"}
-            )
+                plugin_id="desktop_file",
+                item_id="app1.desktop",
+                name="App 1",
+                score=100.0,
+            ),
+            SearchResult(
+                plugin_id="history",
+                item_id="hist_1",
+                name="App 1",
+                score=90.0,
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "app1.desktop",
+                },
+            ),
         ]
 
         self.launcher.current_results = results
@@ -656,14 +814,18 @@ class TestDeduplicationPerformance(unittest.TestCase):
                 self.launcher.current_results.append(new_result)
 
             # Continue with original logic (simplified)
-            history_results = [r for r in self.launcher.current_results if r.plugin_id == "history"]
-            other_results = [r for r in self.launcher.current_results if r.plugin_id != "history"]
+            history_results = [
+                r for r in self.launcher.current_results if r.plugin_id == "history"
+            ]
+            other_results = [
+                r for r in self.launcher.current_results if r.plugin_id != "history"
+            ]
 
             if history_results and other_results:
                 # Simple deduplication
                 filtered_history = []
                 for hist_result in history_results:
-                    if hasattr(hist_result, 'metadata') and hist_result.metadata:
+                    if hasattr(hist_result, "metadata") and hist_result.metadata:
                         orig_plugin = hist_result.metadata.get("original_plugin_id")
                         orig_item = hist_result.metadata.get("original_item_id")
 
@@ -701,15 +863,32 @@ class TestDeduplicationEdgeCases(unittest.TestCase):
     def test_deduplication_with_unicode_characters(self):
         """Test deduplication with Unicode characters in names and metadata"""
         results = [
-            SearchResult(plugin_id="desktop_file", item_id="café.desktop", name="Café App", score=100.0),
             SearchResult(
-                plugin_id="history", item_id="hist_1", name="Café App", score=90.0,
-                metadata={"original_plugin_id": "desktop_file", "original_item_id": "café.desktop"}
+                plugin_id="desktop_file",
+                item_id="café.desktop",
+                name="Café App",
+                score=100.0,
             ),
             SearchResult(
-                plugin_id="history", item_id="hist_2", name="测试应用", score=85.0,
-                metadata={"original_plugin_id": "desktop_file", "original_item_id": "test_app.desktop"}
-            )
+                plugin_id="history",
+                item_id="hist_1",
+                name="Café App",
+                score=90.0,
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "café.desktop",
+                },
+            ),
+            SearchResult(
+                plugin_id="history",
+                item_id="hist_2",
+                name="测试应用",
+                score=85.0,
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "test_app.desktop",
+                },
+            ),
         ]
 
         self.launcher.current_results = results
@@ -733,17 +912,29 @@ class TestDeduplicationEdgeCases(unittest.TestCase):
         long_string = "a" * 10000  # 10KB string
 
         results = [
-            SearchResult(plugin_id="desktop_file", item_id=long_string, name="Long App", score=100.0),
             SearchResult(
-                plugin_id="history", item_id="hist_1", name="Long App", score=90.0,
-                metadata={"original_plugin_id": "desktop_file", "original_item_id": long_string}
-            )
+                plugin_id="desktop_file",
+                item_id=long_string,
+                name="Long App",
+                score=100.0,
+            ),
+            SearchResult(
+                plugin_id="history",
+                item_id="hist_1",
+                name="Long App",
+                score=90.0,
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": long_string,
+                },
+            ),
         ]
 
         self.launcher.current_results = results
 
         # Should handle long strings without performance issues
         import time
+
         start_time = time.time()
         self.launcher._deduplicate_results()
         end_time = time.time()
@@ -761,11 +952,22 @@ class TestDeduplicationEdgeCases(unittest.TestCase):
         special_chars = "!@#$%^&*()[]{}|;:,.<>?/~`"
 
         results = [
-            SearchResult(plugin_id="plugin@#$", item_id="item!@#", name="Special App", score=100.0),
             SearchResult(
-                plugin_id="history", item_id="hist_1", name="Special App", score=90.0,
-                metadata={"original_plugin_id": "plugin@#$", "original_item_id": "item!@#"}
-            )
+                plugin_id="plugin@#$",
+                item_id="item!@#",
+                name="Special App",
+                score=100.0,
+            ),
+            SearchResult(
+                plugin_id="history",
+                item_id="hist_1",
+                name="Special App",
+                score=90.0,
+                metadata={
+                    "original_plugin_id": "plugin@#$",
+                    "original_item_id": "item!@#",
+                },
+            ),
         ]
 
         self.launcher.current_results = results
@@ -779,16 +981,32 @@ class TestDeduplicationEdgeCases(unittest.TestCase):
     def test_deduplication_with_circular_references(self):
         """Test deduplication with circular reference patterns in metadata"""
         results = [
-            SearchResult(plugin_id="plugin_a", item_id="item_1", name="App A", score=100.0),
-            SearchResult(plugin_id="plugin_b", item_id="item_2", name="App B", score=95.0),
             SearchResult(
-                plugin_id="history", item_id="hist_1", name="App A", score=90.0,
-                metadata={"original_plugin_id": "plugin_b", "original_item_id": "item_2"}  # Points to B
+                plugin_id="plugin_a", item_id="item_1", name="App A", score=100.0
             ),
             SearchResult(
-                plugin_id="history", item_id="hist_2", name="App B", score=85.0,
-                metadata={"original_plugin_id": "plugin_a", "original_item_id": "item_1"}  # Points to A
-            )
+                plugin_id="plugin_b", item_id="item_2", name="App B", score=95.0
+            ),
+            SearchResult(
+                plugin_id="history",
+                item_id="hist_1",
+                name="App A",
+                score=90.0,
+                metadata={
+                    "original_plugin_id": "plugin_b",
+                    "original_item_id": "item_2",
+                },  # Points to B
+            ),
+            SearchResult(
+                plugin_id="history",
+                item_id="hist_2",
+                name="App B",
+                score=85.0,
+                metadata={
+                    "original_plugin_id": "plugin_a",
+                    "original_item_id": "item_1",
+                },  # Points to A
+            ),
         ]
 
         self.launcher.current_results = results
@@ -796,7 +1014,9 @@ class TestDeduplicationEdgeCases(unittest.TestCase):
 
         # Should handle circular references correctly
         final_results = self.launcher.current_results
-        self.assertEqual(len(final_results), 2)  # Both history results should be removed
+        self.assertEqual(
+            len(final_results), 2
+        )  # Both history results should be removed
 
         # Should keep the non-history results
         plugin_ids = [r.plugin_id for r in final_results]
@@ -804,5 +1024,5 @@ class TestDeduplicationEdgeCases(unittest.TestCase):
         self.assertIn("plugin_b", plugin_ids)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

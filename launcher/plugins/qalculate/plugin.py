@@ -10,7 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
 from ..base import Plugin, SearchResult
-from launcher.utils.scoring_system import score_name_match
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -78,17 +78,15 @@ class QalculatePlugin(Plugin):
 
         # Check if qalc is available before proceeding with initialization
         try:
-            subprocess.run(["qalc", "--version"], check=True, capture_output=True, text=True)
+            subprocess.run(
+                ["qalc", "--version"], check=True, capture_output=True, text=True
+            )
         except (FileNotFoundError, subprocess.CalledProcessError):
             logger.warning("qalc command not found. Qalculate plugin will be disabled.")
             return False
 
-        # Get general config
-        self.general_config = self.config_manager.get_config().get("general", {})
-        defaults = self.get_config_defaults()
-
-        # Get icon size from general config
-        self.icon_size = self.get_general_config("icon_size")
+        # Get icon size using helper
+        self.icon_size = self.get_icon_size()
 
         return True
 
@@ -103,36 +101,33 @@ class QalculatePlugin(Plugin):
 
     def _load_icon(self) -> bool:
         """Load the calculator icon"""
-        try:
-            icon_theme = Gtk.IconTheme.get_default()
-            self.icon = icon_theme.load_icon("qalculate", self.icon_size, 0)
-        except Exception:
-            self.icon = None
+        from launcher.utils.icon_utils import load_theme_icon
 
+        self.icon = load_theme_icon("qalculate", self.icon_size)
         return False
 
     def _is_calculation(self, query: str) -> bool:
         """Check if the query looks like a calculation using simple heuristics"""
         if not query:
             return False
-            
+
         query = query.strip()
-        
+
         # 1. Explicit calculation trigger
-        if query.startswith('='):
+        if query.startswith("="):
             return True
-            
+
         # 2. Starts with a number (most calculations do)
         if query and query[0].isdigit():
             return True
-            
+
         # 3. Contains conversion keywords
         conversion_keywords = [" to ", " in ", " as ", " into "]
         if any(keyword in query.lower() for keyword in conversion_keywords):
             return True
-            
+
         # 4. Contains function call pattern (something followed by parentheses)
-        if '(' in query and ')' in query:
+        if "(" in query and ")" in query:
             return True
 
         return False
@@ -193,7 +188,7 @@ class QalculatePlugin(Plugin):
             name=result,
             description=query,
             icon=self.icon,
-            score=score_name_match(query, result),
+            score=calculate_match_score(query, result, is_name=True),
             metadata={
                 "result": result,
                 "track_history": self.should_track_history(),
