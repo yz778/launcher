@@ -6,7 +6,7 @@ import sys
 import os
 
 # Add the launcher directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from launcher.plugins.base import SearchResult
 
@@ -28,7 +28,7 @@ class TestExecutionIntegration(unittest.TestCase):
                 name="Firefox",
                 description="Web Browser",
                 icon=None,
-                score=95.0
+                score=95.0,
             ),
             SearchResult(
                 plugin_id="history",
@@ -40,8 +40,8 @@ class TestExecutionIntegration(unittest.TestCase):
                 metadata={
                     "original_plugin_id": "desktop_file",
                     "original_item_id": "firefox.desktop",
-                    "usage_count": 3
-                }
+                    "usage_count": 3,
+                },
             ),
             SearchResult(
                 plugin_id="executable",
@@ -49,7 +49,7 @@ class TestExecutionIntegration(unittest.TestCase):
                 name="Vim",
                 description="Text Editor",
                 icon=None,
-                score=85.0
+                score=85.0,
             ),
             SearchResult(
                 plugin_id="history",
@@ -61,13 +61,14 @@ class TestExecutionIntegration(unittest.TestCase):
                 metadata={
                     "original_plugin_id": "desktop_file",
                     "original_item_id": "old_app.desktop",
-                    "usage_count": 1
-                }
-            )
+                    "usage_count": 1,
+                },
+            ),
         ]
 
         # Mock the deduplication process
         from tests.test_deduplication import MockLauncherWindow
+
         launcher = MockLauncherWindow()
         launcher.current_results = results.copy()
 
@@ -97,7 +98,7 @@ class TestExecutionIntegration(unittest.TestCase):
             "original_item_id": "old_app.desktop",
             "usage_count": 5,
             "custom_field": "test_value",
-            "nested_data": {"key": "value"}
+            "nested_data": {"key": "value"},
         }
 
         results = [
@@ -108,7 +109,7 @@ class TestExecutionIntegration(unittest.TestCase):
                 description="Web Browser",
                 icon=None,
                 score=95.0,
-                metadata={"some_field": "some_value"}
+                metadata={"some_field": "some_value"},
             ),
             SearchResult(
                 plugin_id="history",
@@ -117,11 +118,12 @@ class TestExecutionIntegration(unittest.TestCase):
                 description="Historical app",
                 icon=None,
                 score=80.0,
-                metadata=original_metadata.copy()
-            )
+                metadata=original_metadata.copy(),
+            ),
         ]
 
         from tests.test_deduplication import MockLauncherWindow
+
         launcher = MockLauncherWindow()
         launcher.current_results = results.copy()
 
@@ -153,7 +155,7 @@ class TestExecutionIntegration(unittest.TestCase):
                 name="Firefox Browser",
                 description="Mozilla Firefox Web Browser",
                 icon=mock_icon,
-                score=95.0
+                score=95.0,
             ),
             SearchResult(
                 plugin_id="history",
@@ -165,12 +167,13 @@ class TestExecutionIntegration(unittest.TestCase):
                 metadata={
                     "original_plugin_id": "desktop_file",
                     "original_item_id": "old_firefox.desktop",
-                    "usage_count": 2
-                }
-            )
+                    "usage_count": 2,
+                },
+            ),
         ]
 
         from tests.test_deduplication import MockLauncherWindow
+
         launcher = MockLauncherWindow()
         launcher.current_results = results.copy()
 
@@ -202,7 +205,7 @@ class TestExecutionIntegration(unittest.TestCase):
                 name="Firefox",
                 description="Web Browser",
                 icon=None,
-                score=95.0
+                score=95.0,
             ),
             SearchResult(
                 plugin_id="history",
@@ -214,8 +217,8 @@ class TestExecutionIntegration(unittest.TestCase):
                 metadata={
                     "original_plugin_id": "desktop_file",
                     "original_item_id": "firefox.desktop",
-                    "usage_count": 3
-                }
+                    "usage_count": 3,
+                },
             ),
             SearchResult(
                 plugin_id="history",
@@ -227,9 +230,9 @@ class TestExecutionIntegration(unittest.TestCase):
                 metadata={
                     "original_plugin_id": "desktop_file",
                     "original_item_id": "old_app.desktop",
-                    "usage_count": 1
-                }
-            )
+                    "usage_count": 1,
+                },
+            ),
         ]
 
         # Mock the launcher window's styling logic
@@ -243,8 +246,12 @@ class TestExecutionIntegration(unittest.TestCase):
                 if not self.current_results:
                     return
 
-                history_results = [r for r in self.current_results if r.plugin_id == "history"]
-                other_results = [r for r in self.current_results if r.plugin_id != "history"]
+                history_results = [
+                    r for r in self.current_results if r.plugin_id == "history"
+                ]
+                other_results = [
+                    r for r in self.current_results if r.plugin_id != "history"
+                ]
 
                 if not history_results or not other_results:
                     return
@@ -256,11 +263,15 @@ class TestExecutionIntegration(unittest.TestCase):
 
                 filtered_history_results = []
                 for history_result in history_results:
-                    if not hasattr(history_result, 'metadata') or not isinstance(history_result.metadata, dict):
+                    if not hasattr(history_result, "metadata") or not isinstance(
+                        history_result.metadata, dict
+                    ):
                         filtered_history_results.append(history_result)
                         continue
 
-                    original_plugin_id = history_result.metadata.get("original_plugin_id")
+                    original_plugin_id = history_result.metadata.get(
+                        "original_plugin_id"
+                    )
                     original_item_id = history_result.metadata.get("original_item_id")
 
                     if not original_plugin_id or not original_item_id:
@@ -278,9 +289,13 @@ class TestExecutionIntegration(unittest.TestCase):
                 self.styled_items = []
                 for result in self.current_results:
                     styled_item = {
-                        'result': result,
-                        'name': 'history-search-result' if result.plugin_id == "history" else 'app-list-item',
-                        'css_classes': ['history-result'] if result.plugin_id == "history" else [f'{result.plugin_id}-result']
+                        "result": result,
+                        "name": "history-search-result"
+                        if result.plugin_id == "history"
+                        else "app-list-item",
+                        "css_classes": ["history-result"]
+                        if result.plugin_id == "history"
+                        else [f"{result.plugin_id}-result"],
                     }
                     self.styled_items.append(styled_item)
 
@@ -294,55 +309,91 @@ class TestExecutionIntegration(unittest.TestCase):
         launcher._apply_styling()
 
         # Verify results after deduplication
-        self.assertEqual(len(launcher.current_results), 2)  # Firefox history should be removed
+        self.assertEqual(
+            len(launcher.current_results), 2
+        )  # Firefox history should be removed
 
         # Verify styling is applied correctly
         self.assertEqual(len(launcher.styled_items), 2)
 
         # Check that the remaining history item gets proper styling
-        history_styled_item = next(item for item in launcher.styled_items if item['result'].plugin_id == "history")
-        self.assertEqual(history_styled_item['name'], 'history-search-result')
-        self.assertIn('history-result', history_styled_item['css_classes'])
-        self.assertEqual(history_styled_item['result'].name, "Old App")
+        history_styled_item = next(
+            item
+            for item in launcher.styled_items
+            if item["result"].plugin_id == "history"
+        )
+        self.assertEqual(history_styled_item["name"], "history-search-result")
+        self.assertIn("history-result", history_styled_item["css_classes"])
+        self.assertEqual(history_styled_item["result"].name, "Old App")
 
         # Check that the regular item gets normal styling
-        regular_styled_item = next(item for item in launcher.styled_items if item['result'].plugin_id == "desktop_file")
-        self.assertEqual(regular_styled_item['name'], 'app-list-item')
-        self.assertIn('desktop_file-result', regular_styled_item['css_classes'])
-        self.assertEqual(regular_styled_item['result'].name, "Firefox")
+        regular_styled_item = next(
+            item
+            for item in launcher.styled_items
+            if item["result"].plugin_id == "desktop_file"
+        )
+        self.assertEqual(regular_styled_item["name"], "app-list-item")
+        self.assertIn("desktop_file-result", regular_styled_item["css_classes"])
+        self.assertEqual(regular_styled_item["result"].name, "Firefox")
 
     def test_score_ordering_after_deduplication_complex(self):
         """Test complex score ordering scenario after deduplication"""
         results = [
             # High score current result
-            SearchResult(plugin_id="desktop_file", item_id="app1.desktop", name="App 1", score=100.0),
-
+            SearchResult(
+                plugin_id="desktop_file",
+                item_id="app1.desktop",
+                name="App 1",
+                score=100.0,
+            ),
             # History result that should be removed (matches app1)
             SearchResult(
-                plugin_id="history", item_id="hist_1", name="App 1", score=95.0,
-                metadata={"original_plugin_id": "desktop_file", "original_item_id": "app1.desktop"}
+                plugin_id="history",
+                item_id="hist_1",
+                name="App 1",
+                score=95.0,
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "app1.desktop",
+                },
             ),
-
             # Medium score current result
-            SearchResult(plugin_id="executable", item_id="/usr/bin/app2", name="App 2", score=85.0),
-
+            SearchResult(
+                plugin_id="executable",
+                item_id="/usr/bin/app2",
+                name="App 2",
+                score=85.0,
+            ),
             # History result that should be preserved (no current match)
             SearchResult(
-                plugin_id="history", item_id="hist_2", name="Old App", score=90.0,
-                metadata={"original_plugin_id": "desktop_file", "original_item_id": "old_app.desktop"}
+                plugin_id="history",
+                item_id="hist_2",
+                name="Old App",
+                score=90.0,
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "old_app.desktop",
+                },
             ),
-
             # Low score current result
-            SearchResult(plugin_id="calculator", item_id="calc1", name="Calculator", score=70.0),
-
+            SearchResult(
+                plugin_id="calculator", item_id="calc1", name="Calculator", score=70.0
+            ),
             # Another history result that should be preserved
             SearchResult(
-                plugin_id="history", item_id="hist_3", name="Another Old App", score=75.0,
-                metadata={"original_plugin_id": "desktop_file", "original_item_id": "another_old.desktop"}
-            )
+                plugin_id="history",
+                item_id="hist_3",
+                name="Another Old App",
+                score=75.0,
+                metadata={
+                    "original_plugin_id": "desktop_file",
+                    "original_item_id": "another_old.desktop",
+                },
+            ),
         ]
 
         from tests.test_deduplication import MockLauncherWindow
+
         launcher = MockLauncherWindow()
         launcher.current_results = results.copy()
 
@@ -362,14 +413,16 @@ class TestExecutionIntegration(unittest.TestCase):
             ("Old App", 90.0, "history"),
             ("App 2", 85.0, "executable"),
             ("Another Old App", 75.0, "history"),
-            ("Calculator", 70.0, "calculator")
+            ("Calculator", 70.0, "calculator"),
         ]
 
-        for i, (expected_name, expected_score, expected_plugin) in enumerate(expected_order):
+        for i, (expected_name, expected_score, expected_plugin) in enumerate(
+            expected_order
+        ):
             self.assertEqual(final_results[i].name, expected_name)
             self.assertEqual(final_results[i].score, expected_score)
             self.assertEqual(final_results[i].plugin_id, expected_plugin)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

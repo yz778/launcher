@@ -35,9 +35,15 @@ class TestHistoryPluginMetadata(unittest.TestCase):
         self.mock_plugin_manager = Mock()
         self.plugin.plugin_manager = self.mock_plugin_manager
 
-    def create_history_entry(self, user_input="test", plugin_id="test_plugin",
-                           item_id="test_item", description="Test Description",
-                           usage_count=1, timestamp=None):
+    def create_history_entry(
+        self,
+        user_input="test",
+        plugin_id="test_plugin",
+        item_id="test_item",
+        description="Test Description",
+        usage_count=1,
+        timestamp=None,
+    ):
         """Helper to create history entry"""
         if timestamp is None:
             timestamp = time.time()
@@ -58,10 +64,10 @@ class TestHistoryPluginMetadata(unittest.TestCase):
             user_input="firefox",
             plugin_id="desktop_file",
             item_id="firefox.desktop",
-            description="Firefox Web Browser"
+            description="Firefox Web Browser",
         )
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "firefox")
 
         self.assertIsNotNone(result)
@@ -85,10 +91,10 @@ class TestHistoryPluginMetadata(unittest.TestCase):
             user_input="firefox",
             plugin_id="",  # Empty plugin_id
             item_id="firefox.desktop",
-            description="Firefox Web Browser"
+            description="Firefox Web Browser",
         )
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "firefox")
 
         self.assertIsNotNone(result)
@@ -97,7 +103,9 @@ class TestHistoryPluginMetadata(unittest.TestCase):
         metadata = result.metadata
         self.assertEqual(metadata["original_plugin_id"], "")
         self.assertEqual(metadata["original_item_id"], "firefox.desktop")
-        self.assertFalse(metadata["has_original_metadata"])  # Should be False due to missing plugin_id
+        self.assertFalse(
+            metadata["has_original_metadata"]
+        )  # Should be False due to missing plugin_id
 
     def test_create_history_result_with_missing_item_id(self):
         """Test creating history result when item_id is missing"""
@@ -105,10 +113,10 @@ class TestHistoryPluginMetadata(unittest.TestCase):
             user_input="firefox",
             plugin_id="desktop_file",
             item_id="",  # Empty item_id
-            description="Firefox Web Browser"
+            description="Firefox Web Browser",
         )
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "firefox")
 
         self.assertIsNotNone(result)
@@ -117,7 +125,9 @@ class TestHistoryPluginMetadata(unittest.TestCase):
         metadata = result.metadata
         self.assertEqual(metadata["original_plugin_id"], "desktop_file")
         self.assertEqual(metadata["original_item_id"], "")
-        self.assertFalse(metadata["has_original_metadata"])  # Should be False due to missing item_id
+        self.assertFalse(
+            metadata["has_original_metadata"]
+        )  # Should be False due to missing item_id
 
     def test_create_history_result_with_no_metadata(self):
         """Test creating history result when both plugin_id and item_id are missing"""
@@ -130,7 +140,7 @@ class TestHistoryPluginMetadata(unittest.TestCase):
             # No plugin_id or item_id
         }
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "firefox")
 
         self.assertIsNotNone(result)
@@ -219,11 +229,11 @@ class TestHistoryPluginMetadata(unittest.TestCase):
             user_input="ff",
             plugin_id="desktop_file",
             item_id="firefox.desktop",
-            description="Firefox Web Browser"
+            description="Firefox Web Browser",
         )
         entry["executed_command"] = "firefox"
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "ff")
 
         self.assertIsNotNone(result)
@@ -237,17 +247,19 @@ class TestHistoryPluginMetadata(unittest.TestCase):
             user_input="ff",
             plugin_id="desktop_file",
             item_id="firefox.desktop",
-            description="Firefox Web Browser"
+            description="Firefox Web Browser",
         )
         entry["executed_command"] = "firefox --private-window"
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "ff")
 
         self.assertIsNotNone(result)
         self.assertEqual(result.name, "ff")
         # Should combine executed_command and description
-        self.assertEqual(result.description, "firefox --private-window - Firefox Web Browser")
+        self.assertEqual(
+            result.description, "firefox --private-window - Firefox Web Browser"
+        )
 
     def test_create_history_result_error_handling(self):
         """Test error handling in _create_history_result"""
@@ -259,17 +271,17 @@ class TestHistoryPluginMetadata(unittest.TestCase):
         # Should return None on error
         self.assertIsNone(result)
 
-    @patch('launcher.plugins.history.plugin.logger')
+    @patch("launcher.plugins.history.plugin.logger")
     def test_create_history_result_logs_missing_metadata(self, mock_logger):
         """Test that missing metadata is logged for debugging"""
         entry = self.create_history_entry(
             user_input="firefox",
             plugin_id="",  # Missing plugin_id
             item_id="firefox.desktop",
-            description="Firefox Web Browser"
+            description="Firefox Web Browser",
         )
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "firefox")
 
         self.assertIsNotNone(result)
@@ -277,7 +289,9 @@ class TestHistoryPluginMetadata(unittest.TestCase):
         # Should log debug message about missing metadata
         mock_logger.debug.assert_called()
         debug_calls = [call[0][0] for call in mock_logger.debug.call_args_list]
-        self.assertTrue(any("missing original plugin metadata" in call for call in debug_calls))
+        self.assertTrue(
+            any("missing original plugin metadata" in call for call in debug_calls)
+        )
 
     def test_create_history_result_preserves_usage_count(self):
         """Test that usage count is properly preserved in metadata"""
@@ -285,10 +299,10 @@ class TestHistoryPluginMetadata(unittest.TestCase):
             user_input="firefox",
             plugin_id="desktop_file",
             item_id="firefox.desktop",
-            usage_count=5
+            usage_count=5,
         )
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "firefox")
 
         self.assertIsNotNone(result)
@@ -301,15 +315,15 @@ class TestHistoryPluginMetadata(unittest.TestCase):
             user_input="firefox",
             plugin_id="desktop_file",
             item_id="firefox.desktop",
-            timestamp=timestamp
+            timestamp=timestamp,
         )
 
-        with patch.object(self.plugin, '_get_history_icon', return_value=None):
+        with patch.object(self.plugin, "_get_history_icon", return_value=None):
             result = self.plugin._create_history_result(entry, 100.0, "firefox")
 
         self.assertIsNotNone(result)
         self.assertEqual(result.item_id, f"history_{timestamp}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

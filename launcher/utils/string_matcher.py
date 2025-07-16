@@ -55,7 +55,7 @@ class StringMatcher(Generic[T]):
 
     def _calculate_score(self, query: str, item: T) -> float:
         """
-        Calculate match score between query and item using simplified scoring
+        Calculate match score between query and item using unified scoring system
 
         Args:
             query: The normalized query string (lowercase)
@@ -64,15 +64,18 @@ class StringMatcher(Generic[T]):
         Returns:
             Score using unified scoring system (higher is better)
         """
-        from launcher.utils.scoring_system import score_name_match, apply_history_boost
-        
+        from launcher.utils.scoring_system import (
+            calculate_match_score,
+            apply_history_boost,
+        )
+
         key = self.key_func(item)
-        
-        # Calculate base score
-        base_score = score_name_match(query, key)
-        
+
+        # Calculate base score using unified system
+        base_score = calculate_match_score(query, key, is_name=True)
+
         # Apply history boost if item is in history
         if self.history and item in self.history:
             return apply_history_boost(base_score)
-        
+
         return base_score
