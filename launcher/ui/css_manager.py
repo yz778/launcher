@@ -91,6 +91,32 @@ class CssManager:
     background-color: rgba(120, 120, 120, 0.4);
 }
 
+/* History search result styling */
+#history-search-result {
+    padding: 8px;
+    border-radius: 6px;
+    min-height: 40px;
+}
+
+#history-search-result:hover {
+    background-color: rgba(100, 100, 100, 0.3);
+}
+
+#history-search-result:selected {
+    background-color: rgba(120, 120, 120, 0.4);
+}
+
+/* History result class styling - ensures bold font weight */
+.history-result #app-name {
+    font-weight: bold;
+    color: #e0e0e0;
+}
+
+.history-result #app-description {
+    color: #a0a0a0;
+    font-style: normal; /* Ensure no italic styling */
+}
+
 #history-icon {
     color: #a0a0a0;
     font-size: 18px;
