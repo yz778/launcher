@@ -382,25 +382,35 @@ class ExecutablePlugin(Plugin):
         self.executables = {}
 
         for location in self.locations:
-            if not os.path.isdir(location):
-                continue
-
-            try:
-                for filename in os.listdir(location):
-                    if any(
-                        pattern.match(filename) for pattern in self.include_patterns
-                    ) and not any(
-                        pattern.match(filename) for pattern in self.exclude_patterns
-                    ):
-                        path = os.path.join(location, filename)
-                        executable = ExecutableFile(path)
-                        if executable.is_executable:
-                            self.executables[path] = executable
-
-            except Exception as e:
-                logger.error(f"Error scanning directory {location}: {e}")
+            self._scan_executable_location(location)
 
         logger.info(f"Loaded {len(self.executables)} executable files")
+
+    def _scan_executable_location(self, location: str) -> None:
+        """Scan a single location for executable files"""
+        if not os.path.isdir(location):
+            return
+
+        try:
+            for filename in os.listdir(location):
+                if self._should_include_file(filename):
+                    self._process_executable_file(location, filename)
+        except Exception as e:
+            logger.error(f"Error scanning directory {location}: {e}")
+
+    def _should_include_file(self, filename: str) -> bool:
+        """Check if file should be included based on patterns"""
+        return (
+            any(pattern.match(filename) for pattern in self.include_patterns) and
+            not any(pattern.match(filename) for pattern in self.exclude_patterns)
+        )
+
+    def _process_executable_file(self, location: str, filename: str) -> None:
+        """Process a single executable file"""
+        path = os.path.join(location, filename)
+        executable = ExecutableFile(path)
+        if executable.is_executable:
+            self.executables[path] = executable
 
     def cleanup(self) -> None:
         """Clean up plugin resources"""

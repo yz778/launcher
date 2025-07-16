@@ -94,65 +94,89 @@ class DesktopFile:
 
     def get_icon_pixbuf(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
         """Load the icon as a pixbuf with exact size using pyxdg for icon lookup"""
-
         if size in self._icon_cache:
             return self._icon_cache[size]
 
-        from xdg.IconTheme import getIconPath
-
         try:
-            pixbuf = None
-            icon_theme = Gtk.IconTheme.get_default()
-
-            if os.path.isfile(self.icon):
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(self.icon, size, size)
-            else:
-                icon_path = getIconPath(self.icon, size)
-
-                if not icon_path and "." in self.icon:
-                    icon_name = os.path.splitext(self.icon)[0]
-                    icon_path = getIconPath(icon_name, size)
-
-                if icon_path:
-                    try:
-                        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(
-                            icon_path, size, size
-                        )
-                    except GLib.Error:
-                        pass
-
-                if not pixbuf:
-                    if icon_theme.has_icon(self.icon):
-                        try:
-                            pixbuf = icon_theme.load_icon(self.icon, size, 0)
-                        except GLib.Error:
-                            pass
-                    elif "." in self.icon:
-                        icon_name = os.path.splitext(self.icon)[0]
-                        if icon_theme.has_icon(icon_name):
-                            try:
-                                pixbuf = icon_theme.load_icon(icon_name, size, 0)
-                            except GLib.Error:
-                                pass
-
-            if not pixbuf:
-                pixbuf = self._get_fallback_icon(size)
-
-            if pixbuf and (pixbuf.get_width() != size or pixbuf.get_height() != size):
-                original_pixbuf = pixbuf
-                pixbuf = pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
-                if original_pixbuf is not pixbuf:
-                    original_pixbuf = None
-
+            pixbuf = self._load_icon_pixbuf(size)
+            pixbuf = self._ensure_correct_size(pixbuf, size)
             self._icon_cache[size] = pixbuf
             return pixbuf
-
         except Exception as e:
             logger.error(f"Error loading icon {self.icon}: {e}")
-
             pixbuf = self._get_fallback_icon(size)
             self._icon_cache[size] = pixbuf
             return pixbuf
+
+    def _load_icon_pixbuf(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
+        """Load icon pixbuf from various sources"""
+        # Try direct file path first
+        if os.path.isfile(self.icon):
+            return GdkPixbuf.Pixbuf.new_from_file_at_size(self.icon, size, size)
+
+        # Try XDG icon theme lookup
+        pixbuf = self._load_from_xdg_theme(size)
+        if pixbuf:
+            return pixbuf
+
+        # Try GTK icon theme
+        pixbuf = self._load_from_gtk_theme(size)
+        if pixbuf:
+            return pixbuf
+
+        # Fallback to default icon
+        return self._get_fallback_icon(size)
+
+    def _load_from_xdg_theme(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
+        """Load icon from XDG icon theme"""
+        from xdg.IconTheme import getIconPath
+
+        icon_path = getIconPath(self.icon, size)
+
+        # Try without extension if not found
+        if not icon_path and "." in self.icon:
+            icon_name = os.path.splitext(self.icon)[0]
+            icon_path = getIconPath(icon_name, size)
+
+        if icon_path:
+            try:
+                return GdkPixbuf.Pixbuf.new_from_file_at_size(icon_path, size, size)
+            except GLib.Error:
+                pass
+
+        return None
+
+    def _load_from_gtk_theme(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
+        """Load icon from GTK icon theme"""
+        icon_theme = Gtk.IconTheme.get_default()
+
+        # Try original icon name
+        if icon_theme.has_icon(self.icon):
+            try:
+                return icon_theme.load_icon(self.icon, size, 0)
+            except GLib.Error:
+                pass
+
+        # Try without extension
+        if "." in self.icon:
+            icon_name = os.path.splitext(self.icon)[0]
+            if icon_theme.has_icon(icon_name):
+                try:
+                    return icon_theme.load_icon(icon_name, size, 0)
+                except GLib.Error:
+                    pass
+
+        return None
+
+    def _ensure_correct_size(self, pixbuf: Optional[GdkPixbuf.Pixbuf], size: int) -> Optional[GdkPixbuf.Pixbuf]:
+        """Ensure pixbuf is the correct size"""
+        if not pixbuf:
+            return pixbuf
+
+        if pixbuf.get_width() != size or pixbuf.get_height() != size:
+            return pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+
+        return pixbuf
 
     def cleanup(self) -> None:
         """Clean up cached pixbufs to prevent memory leaks"""
@@ -360,23 +384,34 @@ class DesktopFilePlugin(Plugin):
         self.desktop_files = {}
 
         for location in reversed(self.locations):
-            if not os.path.isdir(location):
-                continue
+            self._scan_location(location)
 
-            pattern = os.path.join(location, "*.desktop")
-            for file_path in glob.glob(pattern):
-                try:
-                    desktop_file = DesktopFile(file_path)
-                    if (
-                        desktop_file.name
-                        and desktop_file.exec_cmd
-                        and desktop_file.is_visible()
-                    ):
-                        # Use basename as key to handle overrides
-                        key = os.path.basename(file_path)
-                        self.desktop_files[key] = desktop_file
-                except Exception as e:
-                    logger.error(f"Error processing {file_path}: {e}")
+    def _scan_location(self, location: str) -> None:
+        """Scan a single location for desktop files"""
+        if not os.path.isdir(location):
+            return
+
+        pattern = os.path.join(location, "*.desktop")
+        for file_path in glob.glob(pattern):
+            self._process_desktop_file(file_path)
+
+    def _process_desktop_file(self, file_path: str) -> None:
+        """Process a single desktop file"""
+        try:
+            desktop_file = DesktopFile(file_path)
+            if self._is_valid_desktop_file(desktop_file):
+                key = os.path.basename(file_path)
+                self.desktop_files[key] = desktop_file
+        except Exception as e:
+            logger.error(f"Error processing {file_path}: {e}")
+
+    def _is_valid_desktop_file(self, desktop_file: DesktopFile) -> bool:
+        """Check if desktop file is valid and should be included"""
+        return (
+            desktop_file.name
+            and desktop_file.exec_cmd
+            and desktop_file.is_visible()
+        )
 
     def cleanup(self) -> None:
         """Clean up plugin resources"""
