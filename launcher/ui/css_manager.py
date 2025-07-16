@@ -99,7 +99,7 @@ class CssManager:
 #history-text {
     color: #e0e0e0;
     font-size: 16px;
-    font-style: italic;
+    font-weight: bold;
 }
 
 #app-name {

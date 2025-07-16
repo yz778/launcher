@@ -841,6 +841,9 @@ class LauncherWindow(Gtk.Window):
 
         self.current_results.extend(plugin_results)
 
+        # Apply deduplication: remove history results if exact match exists from other plugins
+        self._deduplicate_results()
+
         # Adjust scores based on history for all current results
         for result in self.current_results:
             if (
@@ -932,6 +935,51 @@ class LauncherWindow(Gtk.Window):
             self.handle_search_finished,
         )
         return False  # Remove from timeout
+
+    def _deduplicate_results(self):
+        """Remove history results if exact matches exist from other plugins"""
+        if not self.current_results:
+            return
+
+        # Group results by plugin type
+        history_results = []
+        other_results = []
+        
+        for result in self.current_results:
+            if result.plugin_id == "history":
+                history_results.append(result)
+            else:
+                other_results.append(result)
+        
+        if not history_results or not other_results:
+            return  # No deduplication needed
+        
+        # Create a set of (plugin_id, item_id) tuples from non-history results
+        other_result_keys = set()
+        for result in other_results:
+            other_result_keys.add((result.plugin_id, result.item_id))
+        
+        # Filter out history results that have exact matches in other plugins
+        filtered_history_results = []
+        for history_result in history_results:
+            # Get original plugin info from history metadata
+            original_plugin_id = history_result.metadata.get("original_plugin_id")
+            original_item_id = history_result.metadata.get("original_item_id")
+            
+            # Check if this history item has an exact match in current results
+            if original_plugin_id and original_item_id:
+                match_key = (original_plugin_id, original_item_id)
+                if match_key not in other_result_keys:
+                    # No exact match found, keep this history result
+                    filtered_history_results.append(history_result)
+                else:
+                    logger.debug(f"Deduplicating history result: {history_result.name} (matches {original_plugin_id}:{original_item_id})")
+            else:
+                # No original plugin info, keep the history result
+                filtered_history_results.append(history_result)
+        
+        # Update current_results with deduplicated list
+        self.current_results = other_results + filtered_history_results
 
     def on_entry_key_press(self, widget, event) -> bool:
         """Handle key presses in the entry field"""
