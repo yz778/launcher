@@ -304,11 +304,11 @@ class AppListItem(Gtk.ListBoxRow):
         desc_label.set_name("app-description")
         desc_label.get_style_context().add_class("dim-label")
         desc_label.set_ellipsize(Pango.EllipsizeMode.END)
-        
+
         # Apply highlighting to description as well
         if result.description:
             self._apply_highlighting(desc_label, result.description, self.query)
-        
+
         vbox.pack_start(desc_label, True, True, 0)
 
         hbox.pack_start(vbox, True, True, 0)
@@ -506,85 +506,85 @@ class LauncherWindow(Gtk.Window):
         if not self.history_manager:
             return
 
-        # Get all history items instead of just 5
-        all_history = self.history_manager.get_recent_history(
-            100
-        )  # Get up to 100 items
+        all_history = self.history_manager.get_recent_history(100)
         if not all_history:
             return
 
-        # Clear previous items
+        self._clear_list_box()
+        self._populate_history_items(all_history)
+        self._finalize_history_display(all_history)
+
+    def _clear_list_box(self):
+        """Clear all items from the list box"""
         for child in self.list_box.get_children():
             child.destroy()
 
-        # Create history result items
-        for i, history_entry in enumerate(all_history):
-            user_input = history_entry.get("user_input", "")
-            plugin_id = history_entry.get("plugin_id", "")
-            item_id = history_entry.get("item_id", "")
-            description = history_entry.get("description", user_input)
-
-            if not user_input:
+    def _populate_history_items(self, all_history):
+        """Populate the list box with history items"""
+        for history_entry in all_history:
+            if not history_entry.get("user_input"):
                 continue
 
-            # Try to get the actual result from plugins to get the current icon
-            # Pass the history_entry so we can check for stored icons
-            actual_result = self._get_result_for_history_entry(
-                plugin_id, item_id, history_entry
-            )
-
-            # Determine the icon to use
-            display_icon = None
-            if actual_result and actual_result.icon:
-                display_icon = actual_result.icon
-            else:
-                # Fallback to history icon
-                try:
-                    icon_theme = Gtk.IconTheme.get_default()
-                    display_icon = icon_theme.load_icon(
-                        "accessories-history", self.icon_size or 48, 0
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not load history icon: {e}")
-                    # Fallback to a generic icon if history icon fails
-                    try:
-                        display_icon = icon_theme.load_icon(
-                            "document-open-recent", self.icon_size or 48, 0
-                        )
-                    except Exception as e:
-                        logger.warning(f"Could not load generic recent icon: {e}")
-                        # If all else fails, display no icon (AppListItem will handle it)
-                        display_icon = None
-
-            # Create history result items
-            history_count = history_entry.get("usage_count", 0)
-            list_item = AppListItem(
-                SearchResult(
-                    plugin_id=plugin_id,
-                    item_id=item_id,
-                    name=user_input,
-                    description=description,
-                    icon=display_icon,
-                    score=0,
-                ),
-                icon_size=self.icon_size or 48,
-                launch_count=history_count,
-                query="",  # No highlighting for history items
-            )
-            list_item.set_name("history-item")
-            list_item.user_input = user_input  # Store the input for selection
-            list_item.history_entry = history_entry  # Store full history entry
+            list_item = self._create_history_list_item(history_entry)
             self.list_box.add(list_item)
 
+    def _create_history_list_item(self, history_entry):
+        """Create a single history list item"""
+        user_input = history_entry.get("user_input", "")
+        plugin_id = history_entry.get("plugin_id", "")
+        item_id = history_entry.get("item_id", "")
+        description = history_entry.get("description", user_input)
+
+        display_icon = self._get_history_icon(plugin_id, item_id, history_entry)
+        history_count = history_entry.get("usage_count", 0)
+
+        list_item = AppListItem(
+            SearchResult(
+                plugin_id=plugin_id,
+                item_id=item_id,
+                name=user_input,
+                description=description,
+                icon=display_icon,
+                score=0,
+            ),
+            icon_size=self.icon_size or 48,
+            launch_count=history_count,
+            query="",
+        )
+        list_item.set_name("history-item")
+        list_item.user_input = user_input
+        list_item.history_entry = history_entry
+        return list_item
+
+    def _get_history_icon(self, plugin_id, item_id, history_entry):
+        """Get the appropriate icon for a history entry"""
+        actual_result = self._get_result_for_history_entry(plugin_id, item_id, history_entry)
+
+        if actual_result and actual_result.icon:
+            return actual_result.icon
+
+        return self._get_fallback_history_icon()
+
+    def _get_fallback_history_icon(self):
+        """Get fallback icon for history items"""
+        icon_theme = Gtk.IconTheme.get_default()
+
+        for icon_name in ["accessories-history", "document-open-recent"]:
+            try:
+                return icon_theme.load_icon(icon_name, self.icon_size or 48, 0)
+            except Exception as e:
+                logger.warning(f"Could not load {icon_name} icon: {e}")
+
+        return None
+
+    def _finalize_history_display(self, all_history):
+        """Finalize the history display setup"""
         self.list_box.show_all()
         self.scrolled.show()
         self.showing_history = True
 
-        # Use the same display logic as search results for consistency
-        self._setup_results_display(
-            all_history,
-            f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}",
-        )
+        count_text = f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}"
+        self._setup_results_display(all_history, count_text)
 
     def _get_result_for_history_entry(
         self, plugin_id: str, item_id: str, history_entry: Dict[str, Any] = None
@@ -593,110 +593,153 @@ class LauncherWindow(Gtk.Window):
         if not self.plugin_manager:
             return None
 
-        # First, check if we have stored icon data in history
-        if history_entry:
-            stored_icon = self.history_manager.get_stored_icon(
-                history_entry, self.icon_size or 48
-            )
-            if stored_icon:
-                # Create a result-like object with the stored icon
-                class MockResult:
-                    def __init__(self, icon, name, plugin_id, item_id):
-                        self.icon = icon
-                        self.name = name
-                        self.plugin_id = plugin_id
-                        self.item_id = item_id
+        # Check for stored icon first
+        stored_result = self._get_stored_icon_result(history_entry, plugin_id, item_id)
+        if stored_result:
+            return stored_result
 
-                return MockResult(
-                    stored_icon,
-                    history_entry.get("user_input", ""),
-                    plugin_id,
-                    item_id,
-                )
+        # Try to get result from plugin
+        return self._get_plugin_result(plugin_id, item_id)
 
+    def _get_stored_icon_result(self, history_entry, plugin_id, item_id):
+        """Get result with stored icon from history entry"""
+        if not history_entry:
+            return None
+
+        stored_icon = self.history_manager.get_stored_icon(
+            history_entry, self.icon_size or 48
+        )
+        if not stored_icon:
+            return None
+
+        return self._create_mock_result(
+            stored_icon,
+            history_entry.get("user_input", ""),
+            plugin_id,
+            item_id
+        )
+
+    def _get_plugin_result(self, plugin_id, item_id):
+        """Get result from plugin based on plugin type"""
         plugin = self.plugin_manager.plugins.get(plugin_id)
         if not plugin:
             return None
 
         try:
-            # Handle different plugin types based on their structure
-            if plugin_id == "desktop_file" and hasattr(plugin, "desktop_files"):
-                # For desktop files, search through the desktop_files dict
-                for desktop_file in plugin.desktop_files.values():
-                    if desktop_file.path == item_id:
-                        # Create a SearchResult-like object with the icon
-                        class MockResult:
-                            def __init__(self, desktop_file, icon_size):
-                                self.icon = desktop_file.get_icon_pixbuf(icon_size)
-                                self.name = desktop_file.name
-                                self.plugin_id = plugin_id
-                                self.item_id = item_id
-
-                        return MockResult(desktop_file, self.icon_size or 48)
-
-            elif plugin_id == "executable" and hasattr(plugin, "executables"):
-                # For executables, search through the executables dict
-                executable = plugin.executables.get(item_id)
-                if executable:
-                    # Try to get custom icon first, then fallback to default
-                    icon = None
-                    if executable.custom_icon:
-                        icon = plugin._load_custom_icon(executable.custom_icon)
-                    if not icon:
-                        icon = plugin.default_icon
-
-                    # Create a SearchResult-like object
-                    class MockResult:
-                        def __init__(self, icon, name):
-                            self.icon = icon
-                            self.name = name
-                            self.plugin_id = plugin_id
-                            self.item_id = item_id
-
-                    return MockResult(icon, executable.name)
-
-            elif plugin_id == "qalculate" or plugin_id == "calculator":
-                # For calculator plugins, use a default icon
-                try:
-                    icon_theme = Gtk.IconTheme.get_default()
-                    icon = icon_theme.load_icon(
-                        "accessories-calculator", self.icon_size or 48, 0
-                    )
-
-                    class MockResult:
-                        def __init__(self, icon):
-                            self.icon = icon
-                            self.name = "Calculator"
-                            self.plugin_id = plugin_id
-                            self.item_id = item_id
-
-                    return MockResult(icon)
-                except:
-                    pass
-
+            if plugin_id == "desktop_file":
+                return self._get_desktop_file_result(plugin, item_id, plugin_id)
+            elif plugin_id == "executable":
+                return self._get_executable_result(plugin, item_id, plugin_id)
+            elif plugin_id in ["qalculate", "calculator"]:
+                return self._get_calculator_result(plugin_id, item_id)
             elif plugin_id == "terminal":
-                # For terminal plugin, use a terminal icon
-                try:
-                    icon_theme = Gtk.IconTheme.get_default()
-                    icon = icon_theme.load_icon(
-                        "utilities-terminal", self.icon_size or 48, 0
-                    )
-
-                    class MockResult:
-                        def __init__(self, icon):
-                            self.icon = icon
-                            self.name = "Terminal"
-                            self.plugin_id = plugin_id
-                            self.item_id = item_id
-
-                    return MockResult(icon)
-                except:
-                    pass
-
+                return self._get_terminal_result(plugin_id, item_id)
         except Exception as e:
             logger.debug(f"Could not get item {item_id} from plugin {plugin_id}: {e}")
 
         return None
+
+    def _get_desktop_file_result(self, plugin, item_id, plugin_id):
+        """Get result for desktop file plugin"""
+        if not hasattr(plugin, "desktop_files"):
+            return None
+
+        for desktop_file in plugin.desktop_files.values():
+            if desktop_file.path == item_id:
+                icon = desktop_file.get_icon_pixbuf(self.icon_size or 48)
+                return self._create_mock_result(icon, desktop_file.name, plugin_id, item_id)
+        return None
+
+    def _get_executable_result(self, plugin, item_id, plugin_id):
+        """Get result for executable plugin"""
+        if not hasattr(plugin, "executables"):
+            return None
+
+        executable = plugin.executables.get(item_id)
+        if not executable:
+            return None
+
+        icon = None
+        if executable.custom_icon:
+            icon = plugin._load_custom_icon(executable.custom_icon)
+        if not icon:
+            icon = plugin.default_icon
+
+        return self._create_mock_result(icon, executable.name, plugin_id, item_id)
+
+    def _get_calculator_result(self, plugin_id, item_id):
+        """Get result for calculator plugins"""
+        try:
+            icon_theme = Gtk.IconTheme.get_default()
+            icon = icon_theme.load_icon("accessories-calculator", self.icon_size or 48, 0)
+            return self._create_mock_result(icon, "Calculator", plugin_id, item_id)
+        except:
+            return None
+
+    def _get_terminal_result(self, plugin_id, item_id):
+        """Get result for terminal plugin"""
+        try:
+            icon_theme = Gtk.IconTheme.get_default()
+            icon = icon_theme.load_icon("utilities-terminal", self.icon_size or 48, 0)
+            return self._create_mock_result(icon, "Terminal", plugin_id, item_id)
+        except:
+            return None
+
+    def _create_mock_result(self, icon, name, plugin_id, item_id):
+        """Create a mock result object with the given properties"""
+        class MockResult:
+            def __init__(self, icon, name, plugin_id, item_id):
+                self.icon = icon
+                self.name = name
+                self.plugin_id = plugin_id
+                self.item_id = item_id
+
+        return MockResult(icon, name, plugin_id, item_id)
+
+    def _should_deduplicate_history_entry(self, history_name: str, current_name: str) -> bool:
+        """
+        Determine if a history entry should be deduplicated based on similarity to current result.
+
+        Args:
+            history_name: Name from the history entry (user input)
+            current_name: Name from the current search result
+
+        Returns:
+            True if the history entry should be removed (deduplicated), False to keep it
+        """
+        if not history_name or not current_name:
+            return False
+
+        history_lower = history_name.lower().strip()
+        current_lower = current_name.lower().strip()
+
+        # Don't deduplicate if they're exactly the same (shouldn't happen but be safe)
+        if history_lower == current_lower:
+            return True
+
+        # Don't deduplicate if the history entry is significantly longer
+        # This preserves entries like "brave gmail.com" when "brave" is found
+        if len(history_lower) > len(current_lower) * 1.5:
+            return False
+
+        # Don't deduplicate if the history entry contains additional meaningful content
+        # Check for URLs, file paths, or additional arguments
+        if any(char in history_lower for char in ['.', '/', ':', '=', '&', '?']):
+            return False
+
+        # Don't deduplicate if the history entry has multiple words and current is single word
+        history_words = history_lower.split()
+        current_words = current_lower.split()
+
+        if len(history_words) > 1 and len(current_words) == 1:
+            return False
+
+        # Only deduplicate if the history entry is very similar to current result
+        # (essentially the same thing with minor variations)
+        if history_lower.startswith(current_lower) and len(history_lower) <= len(current_lower) + 3:
+            return True
+
+        return False
 
     def _execute_history_item(self, history_entry: Dict[str, Any]) -> None:
         """
@@ -776,6 +819,13 @@ class LauncherWindow(Gtk.Window):
                 launch_count=history_count,
                 query=self.entry.get_text().strip(),
             )
+
+            # Apply special styling for history plugin results to ensure bold font weight
+            if result.plugin_id == "history":
+                list_item.set_name("history-search-result")
+                # Ensure history results display with bold font weight
+                list_item.get_style_context().add_class("history-result")
+
             self.list_box.add(list_item)
 
         self.list_box.show_all()
@@ -840,6 +890,9 @@ class LauncherWindow(Gtk.Window):
         # No need to handle highlighting here - UI layer will handle it based on current query
 
         self.current_results.extend(plugin_results)
+
+        # Apply deduplication: remove history results if exact match exists from other plugins
+        self._deduplicate_results()
 
         # Adjust scores based on history for all current results
         for result in self.current_results:
@@ -932,6 +985,227 @@ class LauncherWindow(Gtk.Window):
             self.handle_search_finished,
         )
         return False  # Remove from timeout
+
+    def _deduplicate_results(self):
+        """
+        Remove history results if exact matches exist from other plugins.
+        Enhanced with comprehensive logging, error handling, and performance optimization.
+        """
+        if not self.current_results:
+            logger.debug("No results to deduplicate")
+            return
+
+        try:
+            # Performance optimization: use efficient data structures for large result sets
+            start_time = None
+            if logger.isEnabledFor(logging.DEBUG):
+                import time
+                start_time = time.time()
+                logger.debug(f"Starting deduplication for {len(self.current_results)} results")
+
+            # Group results by plugin type using list comprehensions for better performance
+            history_results = []
+            other_results = []
+
+            for result in self.current_results:
+                try:
+                    # Enhanced validation of result structure
+                    if not hasattr(result, 'plugin_id'):
+                        logger.warning(f"Result missing plugin_id attribute: {getattr(result, 'name', 'unknown')}")
+                        continue
+
+                    if result.plugin_id == "history":
+                        history_results.append(result)
+                    else:
+                        other_results.append(result)
+
+                except Exception as e:
+                    logger.error(f"Error categorizing result: {e}")
+                    # Preserve result in other_results as fallback to avoid data loss
+                    other_results.append(result)
+                    continue
+
+            logger.debug(f"Found {len(history_results)} history results and {len(other_results)} other results")
+
+            if not history_results or not other_results:
+                logger.debug("No deduplication needed - missing history or other results")
+                return  # No deduplication needed
+
+            # Performance optimization: create efficient lookup structures
+            # Use dict for O(1) lookups with enhanced error handling
+            other_result_keys = {}  # (plugin_id, item_id) -> result for debugging
+            invalid_results_count = 0
+
+            for result in other_results:
+                try:
+                    # Enhanced validation that result has required attributes
+                    if not hasattr(result, 'plugin_id') or not hasattr(result, 'item_id'):
+                        logger.warning(f"Result missing required attributes (plugin_id/item_id): {getattr(result, 'name', 'unknown')}")
+                        invalid_results_count += 1
+                        continue
+
+                    # Validate that plugin_id and item_id are not None or empty
+                    if not result.plugin_id or not result.item_id:
+                        logger.debug(f"Result has empty plugin_id or item_id: {getattr(result, 'name', 'unknown')}")
+                        invalid_results_count += 1
+                        continue
+
+                    key = (result.plugin_id, result.item_id)
+                    other_result_keys[key] = result
+
+                except AttributeError as e:
+                    logger.warning(f"AttributeError processing result {getattr(result, 'name', 'unknown')}: {e}")
+                    invalid_results_count += 1
+                    continue
+                except Exception as e:
+                    logger.error(f"Unexpected error processing result {getattr(result, 'name', 'unknown')}: {e}")
+                    invalid_results_count += 1
+                    continue
+
+            logger.debug(f"Created lookup table with {len(other_result_keys)} entries ({invalid_results_count} invalid results skipped)")
+
+            # Filter out history results that have exact matches in other plugins
+            filtered_history_results = []
+            deduplicated_count = 0
+            preserved_count = 0
+            missing_metadata_count = 0
+            error_count = 0
+
+            for history_result in history_results:
+                try:
+                    # Enhanced validation of history result structure
+                    if not hasattr(history_result, 'metadata'):
+                        logger.warning(f"History result missing metadata attribute: {getattr(history_result, 'name', 'unknown')}")
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    if not isinstance(history_result.metadata, dict):
+                        logger.warning(f"History result has invalid metadata type ({type(history_result.metadata)}): {getattr(history_result, 'name', 'unknown')}")
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    # Get original plugin info from history metadata with enhanced validation
+                    try:
+                        original_plugin_id = history_result.metadata.get("original_plugin_id")
+                        original_item_id = history_result.metadata.get("original_item_id")
+                    except Exception as e:
+                        logger.warning(f"Error accessing metadata for history result '{getattr(history_result, 'name', 'unknown')}': {e}")
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    # Validate metadata exists and is not empty with type checking
+                    if not original_plugin_id or not original_item_id:
+                        logger.debug(f"History result '{getattr(history_result, 'name', 'unknown')}' missing original plugin metadata - preserving")
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    # Ensure metadata values are strings
+                    if not isinstance(original_plugin_id, str) or not isinstance(original_item_id, str):
+                        logger.warning(f"History result '{getattr(history_result, 'name', 'unknown')}' has non-string metadata values - preserving")
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    # Check if this history item has an exact match in current results
+                    match_key = (original_plugin_id, original_item_id)
+                    matching_result = other_result_keys.get(match_key)
+
+                    if matching_result is None:
+                        # No exact match found, keep this history result
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        logger.debug(f"Preserving history result '{getattr(history_result, 'name', 'unknown')}' - no current match for {original_plugin_id}:{original_item_id}")
+                    else:
+                        # Found a matching result, but only deduplicate if the history entry
+                        # represents the same user intent (similar input)
+                        history_name = getattr(history_result, 'name', '')
+                        current_name = getattr(matching_result, 'name', '')
+
+                        # Only deduplicate if the history entry name is very similar to the current result
+                        # This prevents removing "brave gmail.com" when "brave" app is found
+                        if self._should_deduplicate_history_entry(history_name, current_name):
+                            deduplicated_count += 1
+                            logger.debug(f"Deduplicating history result '{history_name}' - too similar to current result '{current_name}' ({original_plugin_id}:{original_item_id})")
+                        else:
+                            filtered_history_results.append(history_result)
+                            preserved_count += 1
+                            logger.debug(f"Preserving history result '{history_name}' - different intent from current result '{current_name}' ({original_plugin_id}:{original_item_id})")
+
+                except AttributeError as e:
+                    # Graceful error handling for missing attributes
+                    logger.warning(f"AttributeError processing history result: {e}")
+                    filtered_history_results.append(history_result)
+                    preserved_count += 1
+                    error_count += 1
+                    continue
+                except KeyError as e:
+                    # Graceful error handling for missing dictionary keys
+                    logger.warning(f"KeyError processing history result metadata: {e}")
+                    filtered_history_results.append(history_result)
+                    preserved_count += 1
+                    error_count += 1
+                    continue
+                except Exception as e:
+                    # Graceful error handling - preserve result if processing fails
+                    logger.error(f"Unexpected error processing history result '{getattr(history_result, 'name', 'unknown')}': {e}")
+                    filtered_history_results.append(history_result)
+                    preserved_count += 1
+                    error_count += 1
+                    continue
+
+            # Update current_results with deduplicated list
+            # Maintain original order: other results first, then filtered history results
+            original_count = len(self.current_results)
+            self.current_results = other_results + filtered_history_results
+            final_count = len(self.current_results)
+
+            # Comprehensive logging summary with error reporting
+            logger.debug(f"Deduplication complete: {original_count} -> {final_count} results")
+            logger.debug(f"  - Deduplicated: {deduplicated_count} history results")
+            logger.debug(f"  - Preserved: {preserved_count} history results")
+            logger.debug(f"  - Missing metadata: {missing_metadata_count} history results")
+
+            if error_count > 0:
+                logger.warning(f"  - Errors encountered: {error_count} results had processing errors")
+
+            if invalid_results_count > 0:
+                logger.warning(f"  - Invalid results: {invalid_results_count} results skipped due to missing attributes")
+
+            if start_time and logger.isEnabledFor(logging.DEBUG):
+                elapsed_time = time.time() - start_time
+                logger.debug(f"Deduplication took {elapsed_time:.3f}s")
+
+                # Performance warning for slow deduplication
+                if elapsed_time > 0.1:  # More than 100ms
+                    logger.warning(f"Deduplication took longer than expected: {elapsed_time:.3f}s for {original_count} results")
+
+        except MemoryError as e:
+            # Handle memory errors specifically
+            logger.error(f"Memory error during deduplication with {len(self.current_results)} results: {e}")
+            logger.warning("Skipping deduplication due to memory constraints")
+            # current_results remains unchanged
+        except Exception as e:
+            # Graceful error handling - log error but don't break search functionality
+            logger.error(f"Critical error during deduplication: {e}")
+            logger.debug("Continuing with original results due to deduplication error")
+            # current_results remains unchanged, ensuring search continues to work
+
+            # Log additional context for debugging
+            try:
+                logger.debug(f"Error context: {len(self.current_results)} total results")
+                history_count = sum(1 for r in self.current_results if hasattr(r, 'plugin_id') and r.plugin_id == "history")
+                logger.debug(f"Error context: {history_count} history results")
+            except Exception as context_error:
+                logger.debug(f"Could not gather error context: {context_error}")
 
     def on_entry_key_press(self, widget, event) -> bool:
         """Handle key presses in the entry field"""
@@ -1182,52 +1456,85 @@ class LauncherWindow(Gtk.Window):
 
     def execute_result(self, result: SearchResult, event=None) -> None:
         """Execute the given search result"""
+        if not self._validate_managers():
+            return
 
-        # Check if history_manager and plugin_manager are available
+        self._capture_modifier_state(result, event)
+
+        if self.plugin_manager.execute(result):
+            self._handle_history_tracking(result)
+            result.metadata["history_manager"] = self.history_manager
+            self.close_window()
+
+    def _validate_managers(self) -> bool:
+        """Validate that required managers are initialized"""
         if self.history_manager is None or self.plugin_manager is None:
             logger.warning("Cannot execute result: managers not initialized yet")
             self.close_window()
-            return
+            return False
+        return True
 
+    def _capture_modifier_state(self, result: SearchResult, event=None) -> None:
+        """Capture and store modifier key states in result metadata"""
         if event:
             state = event.state
-
         else:
             keymap = Gdk.Keymap.get_default()
             state = keymap.get_modifier_state()
 
-        # Store modifier state in the result metadata
         result.metadata["shift_pressed"] = bool(state & Gdk.ModifierType.SHIFT_MASK)
         result.metadata["ctrl_pressed"] = bool(state & Gdk.ModifierType.CONTROL_MASK)
         result.metadata["alt_pressed"] = bool(state & Gdk.ModifierType.MOD1_MASK)
         result.metadata["cmd_pressed"] = bool(state & Gdk.ModifierType.META_MASK)
 
-        # Use plugin manager to execute result, if successful save to history and quit
-        if self.plugin_manager.execute(result):
-            # Check if this result should be tracked in history
-            should_track = result.metadata.get("track_history", True)
+    def _handle_history_tracking(self, result: SearchResult) -> None:
+        """Handle history tracking logic for executed results"""
+        should_track = result.metadata.get("track_history", True)
+        if not should_track:
+            return
 
-            if should_track:
-                # Build the complete command that represents what was actually executed
-                # This should be the full application name/command, not the partial user input
-                executed_command = self._build_executed_command(result)
+        user_input = self.entry.get_text().strip()
+        should_store = self.history_manager.should_store_in_history(
+            user_input, self.current_results, result
+        )
 
-                # Pass the icon pixbuf to history for storage (for all plugin types)
-                icon_pixbuf = result.icon
-                user_input_for_history = self.entry.get_text().strip()
+        if should_store:
+            self._store_new_history_entry(result, user_input)
+        else:
+            self._increment_existing_usage(result, user_input)
 
-                self.history_manager.add_execution(
-                    result.plugin_id,
-                    result.item_id,
-                    executed_command,
-                    user_input_for_history,
-                    result.description,
-                    icon_pixbuf,
-                )
-                self.history_manager.save_history()
+    def _store_new_history_entry(self, result: SearchResult, user_input: str) -> None:
+        """Store a new history entry for the executed result"""
+        executed_command = self._build_executed_command(result)
+        icon_pixbuf = result.icon
 
-            result.metadata["history_manager"] = self.history_manager
-            self.close_window()
+        # Preserve original plugin metadata
+        if not result.metadata.get("original_plugin_id"):
+            result.metadata["original_plugin_id"] = result.plugin_id
+        if not result.metadata.get("original_item_id"):
+            result.metadata["original_item_id"] = result.item_id
+
+        self.history_manager.add_execution(
+            result.plugin_id,
+            result.item_id,
+            executed_command,
+            user_input,
+            result.description,
+            icon_pixbuf,
+        )
+        self.history_manager.save_history()
+        logger.debug(f"Stored execution in history: {user_input} -> {executed_command}")
+
+    def _increment_existing_usage(self, result: SearchResult, user_input: str) -> None:
+        """Increment usage count for existing history entries"""
+        incremented = self.history_manager.increment_usage_count(
+            result.plugin_id, result.item_id
+        )
+
+        if incremented:
+            logger.debug(f"Incremented usage count for existing entry: {result.plugin_id}:{result.item_id}")
+        else:
+            logger.debug(f"Skipped storage for partial match without arguments: {user_input}")
 
     def on_configure_event(self, widget, event):
         """Track window position changes"""

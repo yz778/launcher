@@ -10,6 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib  # GLib might not be strictly needed if no idle_add
 
 from ..base import Plugin, SearchResult
+from launcher.utils.scoring_system import score_name_match
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ class TerminalPlugin(Plugin):
                 name=command,
                 description="Execute in terminal",
                 icon=self.default_icon,
-                score=100,
+                score=score_name_match(query, command),
                 metadata={
                     "command": command,
                     "track_history": self.should_track_history(),

@@ -10,6 +10,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
 
 from ..base import Plugin, SearchResult
+from launcher.utils.scoring_system import score_name_match
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +193,7 @@ class QalculatePlugin(Plugin):
             name=result,
             description=query,
             icon=self.icon,
-            score=100.0,
+            score=score_name_match(query, result),
             metadata={
                 "result": result,
                 "track_history": self.should_track_history(),
