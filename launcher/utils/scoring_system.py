@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 # Simple scoring constants
 NAME_MATCH_BASE = 100
 DESCRIPTION_MATCH_BASE = 50
-HISTORY_BOOST = 20  # Reduced so fresh exact matches can beat history fuzzy matches
+HISTORY_BOOST = 20
+EXACT_MATCH_BONUS = 100
 
 
 def calculate_match_score(query: str, text: str, is_name: bool = True) -> float:
@@ -44,7 +45,7 @@ def calculate_match_score(query: str, text: str, is_name: bool = True) -> float:
 
     # Exact match
     if query == text:
-        return base_score + 30
+        return base_score + EXACT_MATCH_BONUS
 
     # Prefix match
     if text.startswith(query):
