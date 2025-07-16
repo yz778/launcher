@@ -150,15 +150,19 @@ class HistoryPlugin(Plugin):
 
     def _calculate_best_match_score(self, query: str, entry_data: Dict[str, str]) -> float:
         """Calculate the best match score from all searchable fields"""
-        user_input_score = self._calculate_match_score(query, entry_data["user_input"])
-
+        from launcher.utils.scoring_system import score_name_match, score_description_match
+        
+        # Name matches (user input and executed command)
+        user_input_score = score_name_match(query, entry_data["user_input"])
+        
         executed_command_score = 0
         if entry_data["executed_command"] != entry_data["user_input"]:
-            executed_command_score = self._calculate_match_score(query, entry_data["executed_command"])
+            executed_command_score = score_name_match(query, entry_data["executed_command"])
 
+        # Description match (gets lower scoring automatically)
         description_score = 0
         if entry_data["description"]:
-            description_score = self._calculate_match_score(query, entry_data["description"]) * 0.5
+            description_score = score_description_match(query, entry_data["description"])
 
         return max(user_input_score, executed_command_score, description_score)
 
@@ -168,74 +172,27 @@ class HistoryPlugin(Plugin):
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:max_results]
 
-    def _calculate_match_score(self, query: str, text: str) -> float:
-        """Calculate match score between query and text"""
-        if not text:
-            return 0.0
-
-        query_lower = query.lower()
-        text_lower = text.lower()
-
-        # History plugin gets priority scores above all other plugins
-        # Base scores are set higher than string matcher's HISTORY_BASE (300.0)
-
-        # Exact match gets highest score
-        if query_lower == text_lower:
-            return 500.0
-
-        # Prefix match gets high score
-        if text_lower.startswith(query_lower):
-            return 400.0 + (len(query_lower) / len(text_lower)) * 50
-
-        # Substring match gets medium score
-        if query_lower in text_lower:
-            return 350.0 + (len(query_lower) / len(text_lower)) * 30
-
-        # Fuzzy match for individual characters
-        return self._fuzzy_match_score(query_lower, text_lower)
-
-    def _fuzzy_match_score(self, query: str, text: str) -> float:
-        """Calculate fuzzy match score"""
-        if not query or not text:
-            return 0.0
-
-        query_idx = 0
-        text_idx = 0
-        matches = 0
-
-        while query_idx < len(query) and text_idx < len(text):
-            if query[query_idx] == text[text_idx]:
-                matches += 1
-                query_idx += 1
-            text_idx += 1
-
-        if matches == len(query):
-            # All query characters found in order - prioritize over other plugins
-            return 320.0 + (matches / len(text)) * 30
-        else:
-            return 0.0
 
     def _apply_boosts(self, entry: Dict[str, Any], base_score: float) -> float:
         """Apply boosts based on recency and frequency"""
+        from launcher.utils.scoring_system import apply_history_boost, apply_usage_boost, apply_recency_boost
+        
         score = base_score
 
-        # Boost for frequency (usage count) - increased for history priority
+        # Apply history boost (this is a history plugin, so always boost)
+        score = apply_history_boost(score)
+
+        # Boost for frequency (usage count)
         if self.config.get("boost_frequent", True):
             usage_count = entry.get("usage_count", 1)
-            if usage_count > 1:
-                frequency_boost = min(50, 10 * math.log2(usage_count))
-                score += frequency_boost
+            score = apply_usage_boost(score, usage_count)
 
-        # Boost for recency - increased for history priority
+        # Boost for recency
         if self.config.get("boost_recent", True):
             timestamp = entry.get("timestamp", 0)
             current_time = time.time()
             age_hours = (current_time - timestamp) / 3600
-
-            # Boost recent items (within last 24 hours)
-            if age_hours < 24:
-                recency_boost = max(0, 25 * (1 - age_hours / 24))
-                score += recency_boost
+            score = apply_recency_boost(score, age_hours)
 
         return score
 
