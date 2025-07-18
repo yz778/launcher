@@ -4,6 +4,7 @@ import logging
 from typing import Dict, List, Any, Optional
 import subprocess
 
+import pyperclip
 import gi
 
 gi.require_version("Gtk", "3.0")
@@ -36,7 +37,7 @@ class QalculatePlugin(Plugin):
     def get_config_defaults(self) -> Dict[str, Any]:
         """Get default configuration for this plugin"""
         return {
-            "track_history": False,  # Don't track calculator results in history by default
+            "track_history": True,  # Track calculator results in history
         }
 
     def get_default_css(self) -> str:
@@ -185,10 +186,10 @@ class QalculatePlugin(Plugin):
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,
-            name=result,
-            description=query,
+            name=query,
+            description=result,
             icon=self.icon,
-            score=calculate_match_score(query, result, is_name=True),
+            score=calculate_match_score(query, query, is_name=True),
             metadata={
                 "result": result,
                 "track_history": self.should_track_history(),
@@ -198,10 +199,22 @@ class QalculatePlugin(Plugin):
         return [search_result]
 
     def execute(self, result: SearchResult) -> bool:
-        """Execute the calculation result (copy to clipboard)"""
+        """Execute the calculation result - copy to clipboard or launch qalc based on modifiers"""
         if result.plugin_id != self.get_id():
             return False
 
+        # Check if shift was pressed (for launching qalc)
+        shift_pressed = result.metadata.get("shift_pressed", False)
+
+        if shift_pressed:
+            # Shift+Enter: Launch qalculate-gtk
+            return self._launch_qalculate_gui(result)
+        else:
+            # Enter: Copy result to clipboard
+            return self._copy_to_clipboard(result)
+
+    def _launch_qalculate_gui(self, result: SearchResult) -> bool:
+        """Launch qalculate-gtk with the expression"""
         query = result.description
         if not query:
             return False
@@ -224,4 +237,19 @@ class QalculatePlugin(Plugin):
 
         except Exception as e:
             logger.error(f"Error launching qalculate-gtk: {e}")
+            return False
+
+    def _copy_to_clipboard(self, result: SearchResult) -> bool:
+        """Copy the calculation result to clipboard using pyperclip"""
+        calculation_result = result.metadata.get("result")
+        if not calculation_result:
+            return False
+
+        try:
+            pyperclip.copy(calculation_result)
+            logger.info(f"Copied calculation result to clipboard: {calculation_result}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error copying to clipboard: {e}")
             return False
