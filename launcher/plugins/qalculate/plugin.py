@@ -215,7 +215,7 @@ class QalculatePlugin(Plugin):
 
     def _launch_qalculate_gui(self, result: SearchResult) -> bool:
         """Launch qalculate-gtk with the expression"""
-        query = result.description
+        query = result.name
         if not query:
             return False
 
