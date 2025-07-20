@@ -379,6 +379,10 @@ class LauncherWindow(Gtk.Window):
         self.set_decorated(False)
         self.connect("configure-event", self.on_configure_event)
 
+        # Use GTK's built-in centering for better Wayland compatibility
+        self.set_position(Gtk.WindowPosition.CENTER)
+        
+        # Try to get monitor info for saved position (fallback for X11)
         try:
             display = Gdk.Display.get_default()
             monitor = display.get_primary_monitor()
@@ -388,13 +392,13 @@ class LauncherWindow(Gtk.Window):
             monitor_height = geometry.height // scale_factor
             x = geometry.x + (monitor_width - self.window_width) // 2
             y = geometry.y + (monitor_height - self.window_height) // 4
-            self.move(x, y)
             self.saved_x = x
             self.saved_y = y
-
+            logger.debug(f"Calculated fallback position: ({x}, {y})")
         except Exception as e:
-            logger.error(f"Unable to set window position: {e}")
-            self.set_position(Gtk.WindowPosition.CENTER)
+            logger.debug(f"Could not calculate monitor position (normal on Wayland): {e}")
+            self.saved_x = None
+            self.saved_y = None
 
         self.set_default_size(self.window_width, self.window_height)
         self.set_keep_above(True)
@@ -1633,12 +1637,52 @@ class LauncherWindow(Gtk.Window):
             logger.debug(f"Saved window position: ({x}, {y})")
         return False  # Remove from timeout
 
+    def _is_wayland_session(self):
+        """Detect if we're running on Wayland"""
+        import os
+        
+        # Check environment variables
+        if os.environ.get('WAYLAND_DISPLAY'):
+            return True
+        if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+            return True
+        
+        # Check GDK backend
+        try:
+            display = Gdk.Display.get_default()
+            if hasattr(display, 'get_name'):
+                display_name = display.get_name().lower()
+                if 'wayland' in display_name:
+                    return True
+            
+            # Check display type
+            if hasattr(Gdk, 'WaylandDisplay') and isinstance(display, Gdk.WaylandDisplay):
+                return True
+        except Exception as e:
+            logger.debug(f"Error checking display type: {e}")
+        
+        return False
+
     def show_and_focus(self):
         """Show window at saved position and grab focus"""
-        # Restore saved position if we have one
+        # Only try to restore saved position on X11, not on Wayland
         if self.saved_x is not None and self.saved_y is not None:
-            self.move(self.saved_x, self.saved_y)
+            try:
+                # Check if we're running on Wayland by checking environment or display type
+                is_wayland = self._is_wayland_session()
+                if not is_wayland:
+                    # Only move window on X11
+                    self.move(self.saved_x, self.saved_y)
+                    logger.debug(f"Restored window position: ({self.saved_x}, {self.saved_y})")
+                else:
+                    logger.debug("Wayland session detected, using GTK centering instead of manual positioning")
+            except Exception as e:
+                logger.debug(f"Could not restore window position: {e}")
 
+        # Ensure window is centered before showing (especially important on Wayland)
+        if self._is_wayland_session():
+            self.set_position(Gtk.WindowPosition.CENTER)
+        
         # Show the window
         self.show_all()
 
