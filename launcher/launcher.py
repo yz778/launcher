@@ -205,12 +205,15 @@ def main() -> None:
         launcher_window = LauncherWindow(
             None, None, config, foreground_mode=args.foreground
         )
-        launcher_window.show_all()
+        # Don't show immediately - let the window position itself first
         launcher_window.scrolled.hide()
         launcher_window.resize(
             config["general"]["window_width"],
             config["general"]["window_height"],
         )
+
+        # Position and show the window
+        launcher_window._position_and_show_initial()
 
         while Gtk.events_pending():
             Gtk.main_iteration()

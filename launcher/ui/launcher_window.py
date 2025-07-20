@@ -16,6 +16,239 @@ from ui.css_manager import CssManager
 logger = logging.getLogger(__name__)
 
 
+class WindowPositioner:
+    """Handles cross-platform window positioning for consistent launcher placement"""
+
+    def __init__(self, window: Gtk.Window, config: Dict[str, Any] = None):
+        self.window = window
+        self.config = config or {}
+        self.logger = logging.getLogger(__name__)
+
+        # Configuration options
+        general_config = self.config.get("general", {})
+        self.vertical_percent = general_config.get("window_position_vertical_percent", 25)
+        self.force_center = general_config.get("window_position_force_center", True)
+        self.debug_mode = general_config.get("window_position_debug", False)
+
+    def position_window(self) -> bool:
+        """
+        Position window at center horizontal and configured vertical percentage.
+        Returns True if positioning was successful, False otherwise.
+        """
+        try:
+            if self.debug_mode:
+                self.logger.info("Starting window positioning")
+
+            # Get display information
+            display_info = self.get_main_display_info()
+            if not display_info:
+                self.logger.warning("Could not get display information, using fallback")
+                return self._position_window_fallback()
+
+            # Store display info for potential recalculation
+            self._last_display_info = display_info
+
+            # Get window size
+            window_width, window_height = self.window.get_size()
+
+            # Calculate target position
+            target_x, target_y = self.calculate_position(display_info, (window_width, window_height))
+
+            if self.debug_mode:
+                self.logger.info(f"Positioning window at ({target_x}, {target_y}) on display {display_info}")
+
+            # Apply position
+            return self.apply_position(target_x, target_y)
+
+        except Exception as e:
+            self.logger.error(f"Error in position_window: {e}")
+            return self._position_window_fallback()
+
+    def get_main_display_info(self) -> Dict[str, int]:
+        """
+        Get main display dimensions and position.
+        Returns dict with width, height, x, y, scale_factor or None if failed.
+        """
+        try:
+            display_system = self.detect_display_system()
+
+            if display_system == "x11":
+                return self.get_display_info_x11()
+            elif display_system == "wayland":
+                return self.get_display_info_wayland()
+            else:
+                return self.get_display_info_fallback()
+
+        except Exception as e:
+            self.logger.error(f"Error getting display info: {e}")
+            return self.get_display_info_fallback()
+
+    def detect_display_system(self) -> str:
+        """Detect current display system (x11, wayland, etc.)"""
+        import os
+
+        # Check environment variables first
+        if os.environ.get("WAYLAND_DISPLAY"):
+            return "wayland"
+        if os.environ.get("XDG_SESSION_TYPE") == "wayland":
+            return "wayland"
+        if os.environ.get("DISPLAY"):
+            return "x11"
+
+        # Check GDK backend
+        try:
+            display = Gdk.Display.get_default()
+            if hasattr(display, "get_name"):
+                display_name = display.get_name().lower()
+                if "wayland" in display_name:
+                    return "wayland"
+                if "x11" in display_name:
+                    return "x11"
+
+            # Check display type
+            if hasattr(Gdk, "WaylandDisplay") and isinstance(display, Gdk.WaylandDisplay):
+                return "wayland"
+            if hasattr(Gdk, "X11Display") and isinstance(display, Gdk.X11Display):
+                return "x11"
+
+        except Exception as e:
+            self.logger.debug(f"Error detecting display system: {e}")
+
+        return "unknown"
+
+    def get_display_info_x11(self) -> Dict[str, int]:
+        """Get display info using X11 methods"""
+        try:
+            display = Gdk.Display.get_default()
+            monitor = display.get_primary_monitor()
+            if not monitor:
+                monitor = display.get_monitor(0)
+
+            geometry = monitor.get_geometry()
+            scale_factor = monitor.get_scale_factor()
+
+            return {
+                'width': geometry.width,
+                'height': geometry.height,
+                'x': geometry.x,
+                'y': geometry.y,
+                'scale_factor': scale_factor
+            }
+
+        except Exception as e:
+            self.logger.debug(f"X11 display info failed: {e}")
+            return self.get_display_info_fallback()
+
+    def get_display_info_wayland(self) -> Dict[str, int]:
+        """Get display info using Wayland-compatible methods"""
+        try:
+            # Wayland uses the same GTK methods as fallback
+            return self.get_display_info_fallback()
+
+        except Exception as e:
+            self.logger.debug(f"Wayland display info failed: {e}")
+            return self.get_display_info_fallback()
+
+    def get_display_info_fallback(self) -> Dict[str, int]:
+        """Fallback display info using GTK methods"""
+        try:
+            display = Gdk.Display.get_default()
+            monitor = display.get_primary_monitor()
+            if not monitor:
+                # Fall back to first monitor if no primary
+                if display.get_n_monitors() > 0:
+                    monitor = display.get_monitor(0)
+                else:
+                    raise Exception("No monitors found")
+
+            geometry = monitor.get_geometry()
+            scale_factor = monitor.get_scale_factor() if hasattr(monitor, 'get_scale_factor') else 1
+
+            return {
+                'width': geometry.width,
+                'height': geometry.height,
+                'x': geometry.x,
+                'y': geometry.y,
+                'scale_factor': scale_factor
+            }
+
+        except Exception as e:
+            self.logger.error(f"Fallback display info failed: {e}")
+            # Last resort - use screen dimensions
+            try:
+                screen = Gdk.Screen.get_default()
+                return {
+                    'width': screen.get_width(),
+                    'height': screen.get_height(),
+                    'x': 0,
+                    'y': 0,
+                    'scale_factor': 1
+                }
+            except Exception as e2:
+                self.logger.error(f"Screen fallback failed: {e2}")
+                return None
+
+    def calculate_position(self, display_info: Dict[str, int], window_size: tuple) -> tuple:
+        """Calculate target window position for center horizontal and configured vertical percentage"""
+        window_width, window_height = window_size
+
+        # Calculate center horizontal position
+        target_x = display_info['x'] + (display_info['width'] - window_width) // 2
+
+        # Calculate vertical position at configured percentage (default 25% for eye level)
+        vertical_offset = int(display_info['height'] * (self.vertical_percent / 100.0))
+        target_y = display_info['y'] + vertical_offset
+
+        # Ensure window stays within screen bounds
+        target_x = max(display_info['x'], min(target_x, display_info['x'] + display_info['width'] - window_width))
+        target_y = max(display_info['y'], min(target_y, display_info['y'] + display_info['height'] - window_height))
+
+        return target_x, target_y
+
+    def apply_position(self, x: int, y: int) -> bool:
+        """Apply calculated position to window"""
+        try:
+            # Ensure window is realized and mapped before positioning
+            if not self.window.get_realized():
+                self.window.realize()
+
+            # For positioning before show, we don't need the window to be mapped
+            # Just ensure it's realized so we can call move()
+
+            # Get the actual window size after it's mapped (might be different from set_default_size)
+            actual_width, actual_height = self.window.get_size()
+
+            # Recalculate position with actual window size if it's different
+            if hasattr(self, '_last_display_info') and self._last_display_info:
+                recalc_x, recalc_y = self.calculate_position(self._last_display_info, (actual_width, actual_height))
+                if recalc_x != x or recalc_y != y:
+                    if self.debug_mode:
+                        self.logger.info(f"Recalculating position with actual window size {actual_width}x{actual_height}")
+                    x, y = recalc_x, recalc_y
+
+            # Move window to calculated position
+            self.window.move(x, y)
+
+            if self.debug_mode:
+                self.logger.info(f"Window positioned at ({x}, {y}) with size {actual_width}x{actual_height}")
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Failed to apply position ({x}, {y}): {e}")
+            return False
+
+    def _position_window_fallback(self) -> bool:
+        """Fallback positioning when all else fails"""
+        try:
+            self.logger.info("Using fallback positioning")
+            self.window.set_position(Gtk.WindowPosition.CENTER)
+            return True
+        except Exception as e:
+            self.logger.error(f"Fallback positioning failed: {e}")
+            return False
+
+
 class HighlightSegment:
     """Represents a segment of text to be highlighted"""
 
@@ -373,32 +606,10 @@ class LauncherWindow(Gtk.Window):
         self.window_height = general_config.get("window_height")
         self.window_height_results = general_config.get("window_height_results")
 
-        self.saved_x = None
-        self.saved_y = None
-
         self.set_decorated(False)
-        self.connect("configure-event", self.on_configure_event)
 
-        # Use GTK's built-in centering for better Wayland compatibility
-        self.set_position(Gtk.WindowPosition.CENTER)
-        
-        # Try to get monitor info for saved position (fallback for X11)
-        try:
-            display = Gdk.Display.get_default()
-            monitor = display.get_primary_monitor()
-            geometry = monitor.get_geometry()
-            scale_factor = monitor.get_scale_factor()
-            monitor_width = geometry.width // scale_factor
-            monitor_height = geometry.height // scale_factor
-            x = geometry.x + (monitor_width - self.window_width) // 2
-            y = geometry.y + (monitor_height - self.window_height) // 4
-            self.saved_x = x
-            self.saved_y = y
-            logger.debug(f"Calculated fallback position: ({x}, {y})")
-        except Exception as e:
-            logger.debug(f"Could not calculate monitor position (normal on Wayland): {e}")
-            self.saved_x = None
-            self.saved_y = None
+        # Initialize window positioner for consistent cross-platform positioning
+        self.positioner = WindowPositioner(self, config)
 
         self.set_default_size(self.window_width, self.window_height)
         self.set_keep_above(True)
@@ -493,6 +704,25 @@ class LauncherWindow(Gtk.Window):
         self.scrolled.hide()
 
         self.entry.grab_focus()
+
+    def _position_and_show_initial(self):
+        """Position window with default config and show it (for initial launch)"""
+        try:
+            # Position window with current config before showing
+            success = self.positioner.position_window()
+            if not success:
+                logger.warning("Initial positioning failed, using center fallback")
+                self.set_position(Gtk.WindowPosition.CENTER)
+        except Exception as e:
+            logger.error(f"Error in initial positioning: {e}")
+            # Fallback to center
+            try:
+                self.set_position(Gtk.WindowPosition.CENTER)
+            except Exception as e2:
+                logger.error(f"Center fallback failed: {e2}")
+
+        # Now show the window at the correct position
+        self.show_all()
 
     def _clear_list_box_and_hide(self):
         """Clears all items from the list box and hides the results area."""
@@ -1619,71 +1849,11 @@ class LauncherWindow(Gtk.Window):
                 f"Skipped storage for partial match without arguments: {user_input}"
             )
 
-    def on_configure_event(self, widget, event):
-        """Track window position changes"""
-        # Only track position if window is visible and we're not in the middle of showing
-        if self.get_visible() and self.get_mapped():
-            # Add a small delay to avoid tracking intermediate positions during window showing
-            from gi.repository import GLib
-
-            GLib.timeout_add(100, self._save_position, event.x, event.y)
-        return False
-
-    def _save_position(self, x, y):
-        """Save position after a small delay to ensure it's the final position"""
-        if self.get_visible():
-            self.saved_x = x
-            self.saved_y = y
-            logger.debug(f"Saved window position: ({x}, {y})")
-        return False  # Remove from timeout
-
-    def _is_wayland_session(self):
-        """Detect if we're running on Wayland"""
-        import os
-        
-        # Check environment variables
-        if os.environ.get('WAYLAND_DISPLAY'):
-            return True
-        if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
-            return True
-        
-        # Check GDK backend
-        try:
-            display = Gdk.Display.get_default()
-            if hasattr(display, 'get_name'):
-                display_name = display.get_name().lower()
-                if 'wayland' in display_name:
-                    return True
-            
-            # Check display type
-            if hasattr(Gdk, 'WaylandDisplay') and isinstance(display, Gdk.WaylandDisplay):
-                return True
-        except Exception as e:
-            logger.debug(f"Error checking display type: {e}")
-        
-        return False
 
     def show_and_focus(self):
-        """Show window at saved position and grab focus"""
-        # Only try to restore saved position on X11, not on Wayland
-        if self.saved_x is not None and self.saved_y is not None:
-            try:
-                # Check if we're running on Wayland by checking environment or display type
-                is_wayland = self._is_wayland_session()
-                if not is_wayland:
-                    # Only move window on X11
-                    self.move(self.saved_x, self.saved_y)
-                    logger.debug(f"Restored window position: ({self.saved_x}, {self.saved_y})")
-                else:
-                    logger.debug("Wayland session detected, using GTK centering instead of manual positioning")
-            except Exception as e:
-                logger.debug(f"Could not restore window position: {e}")
+        """Show window at consistent position and grab focus"""
 
-        # Ensure window is centered before showing (especially important on Wayland)
-        if self._is_wayland_session():
-            self.set_position(Gtk.WindowPosition.CENTER)
-        
-        # Show the window
+        # Show the window first
         self.show_all()
 
         # Clear entry and reset state
@@ -1697,17 +1867,35 @@ class LauncherWindow(Gtk.Window):
         # Present window and grab focus
         self.present()
 
-        # Use GLib.idle_add to ensure this happens after window is mapped
+        # Use GLib.idle_add to ensure positioning and focus happen after window is mapped
         from gi.repository import GLib
 
-        GLib.idle_add(self._delayed_focus)
+        GLib.idle_add(self._delayed_focus_and_position)
 
-    def _delayed_focus(self):
-        """Delayed focus grabbing to ensure window is fully shown"""
+    def _delayed_focus_and_position(self):
+        """Position window and grab focus after window is fully shown and mapped"""
         try:
-            # Make sure window is visible and mapped
+            # Make sure window is visible and mapped before positioning
             if not self.get_visible() or not self.get_mapped():
+                # If not ready yet, try again in a short while
+                from gi.repository import GLib
+                GLib.timeout_add(10, self._delayed_focus_and_position)
                 return False
+
+            # Position window consistently every time it's shown (only after window is mapped)
+            try:
+                success = self.positioner.position_window()
+                if not success:
+                    logger.warning("Window positioning failed, using fallback")
+                    # Fallback to GTK center positioning
+                    self.set_position(Gtk.WindowPosition.CENTER)
+            except Exception as e:
+                logger.error(f"Error positioning window: {e}")
+                # Fallback to GTK center positioning
+                try:
+                    self.set_position(Gtk.WindowPosition.CENTER)
+                except Exception as e2:
+                    logger.error(f"Fallback positioning also failed: {e2}")
 
             # Make sure window is at the front
             if self.get_window():
@@ -1724,7 +1912,7 @@ class LauncherWindow(Gtk.Window):
             self.activate_focus()
 
         except Exception as e:
-            logger.debug(f"Error in delayed focus: {e}")
+            logger.debug(f"Error in delayed focus and positioning: {e}")
 
         return False  # Remove from idle queue
 
@@ -1837,6 +2025,18 @@ class LauncherWindow(Gtk.Window):
 
         # Resize the window to match the full config
         self.resize(self.window_width, self.window_height)
+
+        # Update the positioner with the full config
+        self.positioner = WindowPositioner(self, config)
+
+        # Re-position the window with the updated config if it's visible
+        if self.get_visible():
+            try:
+                success = self.positioner.position_window()
+                if success:
+                    logger.info("Updated window position with full config")
+            except Exception as e:
+                logger.debug(f"Could not update position with full config: {e}")
 
         # Connect the entry's "changed" signal now that we have plugin_manager and history_manager
         if self.entry_changed_handler_id is None:
