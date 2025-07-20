@@ -373,32 +373,10 @@ class LauncherWindow(Gtk.Window):
         self.window_height = general_config.get("window_height")
         self.window_height_results = general_config.get("window_height_results")
 
-        self.saved_x = None
-        self.saved_y = None
-
         self.set_decorated(False)
-        self.connect("configure-event", self.on_configure_event)
 
         # Use GTK's built-in centering for better Wayland compatibility
         self.set_position(Gtk.WindowPosition.CENTER)
-        
-        # Try to get monitor info for saved position (fallback for X11)
-        try:
-            display = Gdk.Display.get_default()
-            monitor = display.get_primary_monitor()
-            geometry = monitor.get_geometry()
-            scale_factor = monitor.get_scale_factor()
-            monitor_width = geometry.width // scale_factor
-            monitor_height = geometry.height // scale_factor
-            x = geometry.x + (monitor_width - self.window_width) // 2
-            y = geometry.y + (monitor_height - self.window_height) // 4
-            self.saved_x = x
-            self.saved_y = y
-            logger.debug(f"Calculated fallback position: ({x}, {y})")
-        except Exception as e:
-            logger.debug(f"Could not calculate monitor position (normal on Wayland): {e}")
-            self.saved_x = None
-            self.saved_y = None
 
         self.set_default_size(self.window_width, self.window_height)
         self.set_keep_above(True)
@@ -1619,70 +1597,41 @@ class LauncherWindow(Gtk.Window):
                 f"Skipped storage for partial match without arguments: {user_input}"
             )
 
-    def on_configure_event(self, widget, event):
-        """Track window position changes"""
-        # Only track position if window is visible and we're not in the middle of showing
-        if self.get_visible() and self.get_mapped():
-            # Add a small delay to avoid tracking intermediate positions during window showing
-            from gi.repository import GLib
-
-            GLib.timeout_add(100, self._save_position, event.x, event.y)
-        return False
-
-    def _save_position(self, x, y):
-        """Save position after a small delay to ensure it's the final position"""
-        if self.get_visible():
-            self.saved_x = x
-            self.saved_y = y
-            logger.debug(f"Saved window position: ({x}, {y})")
-        return False  # Remove from timeout
-
     def _is_wayland_session(self):
         """Detect if we're running on Wayland"""
         import os
-        
+
         # Check environment variables
-        if os.environ.get('WAYLAND_DISPLAY'):
+        if os.environ.get("WAYLAND_DISPLAY"):
             return True
-        if os.environ.get('XDG_SESSION_TYPE') == 'wayland':
+        if os.environ.get("XDG_SESSION_TYPE") == "wayland":
             return True
-        
+
         # Check GDK backend
         try:
             display = Gdk.Display.get_default()
-            if hasattr(display, 'get_name'):
+            if hasattr(display, "get_name"):
                 display_name = display.get_name().lower()
-                if 'wayland' in display_name:
+                if "wayland" in display_name:
                     return True
-            
+
             # Check display type
-            if hasattr(Gdk, 'WaylandDisplay') and isinstance(display, Gdk.WaylandDisplay):
+            if hasattr(Gdk, "WaylandDisplay") and isinstance(
+                display, Gdk.WaylandDisplay
+            ):
                 return True
         except Exception as e:
             logger.debug(f"Error checking display type: {e}")
-        
+
         return False
 
     def show_and_focus(self):
         """Show window at saved position and grab focus"""
-        # Only try to restore saved position on X11, not on Wayland
-        if self.saved_x is not None and self.saved_y is not None:
-            try:
-                # Check if we're running on Wayland by checking environment or display type
-                is_wayland = self._is_wayland_session()
-                if not is_wayland:
-                    # Only move window on X11
-                    self.move(self.saved_x, self.saved_y)
-                    logger.debug(f"Restored window position: ({self.saved_x}, {self.saved_y})")
-                else:
-                    logger.debug("Wayland session detected, using GTK centering instead of manual positioning")
-            except Exception as e:
-                logger.debug(f"Could not restore window position: {e}")
 
         # Ensure window is centered before showing (especially important on Wayland)
         if self._is_wayland_session():
             self.set_position(Gtk.WindowPosition.CENTER)
-        
+
         # Show the window
         self.show_all()
 
