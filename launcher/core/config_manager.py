@@ -27,6 +27,9 @@ class ConfigManager:
         "history_file": str(xdg_state_home() / "launcher/history.json"),
         "css_file": str(xdg_config_home() / "launcher/launcher.css"),
         "cache_dir": str(xdg_cache_home() / "launcher"),
+        "window_position_vertical_percent": 25,
+        "window_position_force_center": True,
+        "window_position_debug": False,
     }
 
     def __init__(self):
