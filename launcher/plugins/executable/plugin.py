@@ -138,7 +138,7 @@ class ExecutablePlugin(Plugin):
         return "Executables"
 
     def get_description(self) -> str:
-        return "Search for executable files in custom directories"
+        return "Search for executable files in custom directories with support for custom icons (file paths, URLs, or theme names)"
 
     def get_config_defaults(self) -> Dict[str, Any]:
         """Get default configuration for this plugin"""
@@ -299,7 +299,8 @@ class ExecutablePlugin(Plugin):
         from launcher.utils.icon_utils import load_custom_icon
 
         cache = self.icon_cache if self.cache_icons else None
-        loaded_icon = load_custom_icon(icon_spec, self.icon_size, cache)
+        cache_dir = os.path.join(self.config_manager.get_cache_dir(), "url_icons")
+        loaded_icon = load_custom_icon(icon_spec, self.icon_size, cache, cache_dir)
 
         return loaded_icon or self.default_icon
 
