@@ -199,3 +199,17 @@ class Plugin(ABC):
         This method is called when the plugin is being unloaded.
         Override this method to release any resources used by the plugin.
         """
+
+    def clean_invalid_history_entries(self, history_manager) -> int:
+        """
+        Clean invalid history entries for this plugin.
+
+        Args:
+            history_manager: The history manager instance
+
+        Returns:
+            Number of entries removed
+        """
+        # Default implementation does nothing
+        # Plugins that need history cleanup should override this
+        return 0
