@@ -907,3 +907,67 @@ class HistoryManager:
             f"No existing history entry found for {plugin_id}:{item_id}"
             + (f" with user_input='{user_input}'" if user_input else "")
         )
+
+    def validate_and_clean_history(self, plugin_manager=None) -> int:
+        """
+        Validate all history entries and remove structurally invalid ones.
+        This only performs basic validation - plugins should handle their own content validation.
+
+        Args:
+            plugin_manager: Optional plugin manager to validate against current plugins
+
+        Returns:
+            Number of entries removed
+        """
+        if not isinstance(self.user_input_history, list):
+            logger.warning("History data is corrupted - resetting to empty list")
+            original_count = (
+                len(self.user_input_history)
+                if hasattr(self.user_input_history, "__len__")
+                else 0
+            )
+            self.user_input_history = []
+            return original_count
+
+        original_count = len(self.user_input_history)
+        valid_entries = []
+        removed_count = 0
+
+        logger.info(
+            f"Validating {original_count} history entries (basic structure only)..."
+        )
+
+        for entry in self.user_input_history:
+            if self._is_valid_history_entry(entry, plugin_manager):
+                valid_entries.append(entry)
+            else:
+                removed_count += 1
+                logger.debug(
+                    f"Removing structurally invalid history entry: {entry.get('user_input', 'unknown')}"
+                )
+
+        self.user_input_history = valid_entries
+
+        if removed_count > 0:
+            logger.info(f"Cleaned {removed_count} structurally invalid history entries")
+            self.save_history()
+        else:
+            logger.info("All history entries are structurally valid")
+
+        return removed_count
+
+    def _is_valid_history_entry(
+        self, entry: Dict[str, Any], plugin_manager=None
+    ) -> bool:
+        """
+        Check if a history entry is valid (basic structure validation only).
+
+        Args:
+            entry: History entry to validate
+            plugin_manager: Optional plugin manager to check if plugins still exist
+
+        Returns:
+            True if entry is valid, False otherwise
+        """
+        from launcher.plugins.base import Plugin
+        return Plugin.is_structurally_valid(entry, plugin_manager)

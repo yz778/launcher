@@ -375,7 +375,101 @@ class DesktopFilePlugin(Plugin):
     def rescan(self) -> None:
         """Rescan desktop files (for intelligent rescanning)"""
         logger.info("Rescanning desktop files...")
-        threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
+        threading.Thread(target=self._rescan_with_cleanup, daemon=True).start()
+
+    def _rescan_with_cleanup(self) -> None:
+        """Perform rescan and cleanup invalid history entries"""
+        # First do the normal rescan
+        self._scan_and_update_matcher()
+
+        # Then clean up invalid history entries
+        try:
+            from launcher.launcher import get_history_manager
+
+            history_manager = get_history_manager()
+            if history_manager:
+                removed_count = self.clean_invalid_history_entries(history_manager)
+                if removed_count > 0:
+                    logger.info(
+                        f"Desktop file rescan removed {removed_count} invalid history entries"
+                    )
+        except Exception as e:
+            logger.error(f"Error cleaning history during desktop file rescan: {e}")
+
+    def clean_invalid_history_entries(self, history_manager) -> int:
+        """
+        Clean invalid history entries for desktop files that no longer exist.
+
+        Args:
+            history_manager: The history manager instance
+
+        Returns:
+            Number of entries removed
+        """
+        if not history_manager or not hasattr(history_manager, "user_input_history"):
+            return 0
+
+        logger.info(f"Cleaning desktop file history entries...")
+
+        invalid_entries = []
+        for entry in history_manager.user_input_history:
+            if entry.get("plugin_id") == self.get_id():
+                if not self._is_valid_desktop_file_entry(entry):
+                    invalid_entries.append(entry)
+                    logger.debug(
+                        f"Marking invalid desktop file entry for removal: {entry.get('user_input', 'unknown')}"
+                    )
+
+        if not invalid_entries:
+            return 0
+
+        removed_count = history_manager.remove_history_entries_by_ids(invalid_entries)
+        if removed_count > 0:
+            logger.info(
+                f"Desktop file plugin cleaned {removed_count} invalid history entries"
+            )
+
+        return removed_count
+
+    def _is_valid_desktop_file_entry(self, entry) -> bool:
+        """
+        Check if a desktop file history entry is still valid.
+
+        Args:
+            entry: History entry to validate
+
+        Returns:
+            True if entry is valid, False otherwise
+        """
+        try:
+            # Only validate entries for this plugin
+            if not isinstance(entry, dict) or entry.get("plugin_id") != self.get_id():
+                return True  # Let other plugins handle their own entries
+
+            # Use common structural validation
+            if not self.is_structurally_valid(entry):
+                return False
+
+            # Check if the desktop file still exists
+            if not os.path.isfile(item_id):
+                logger.debug(f"Desktop file no longer exists: {item_id}")
+                return False
+
+            # Check if the desktop file is still valid
+            try:
+                desktop_file = DesktopFile(item_id)
+                if not desktop_file.is_visible():
+                    logger.debug(f"Desktop file no longer visible: {item_id}")
+                    return False
+            except Exception as e:
+                logger.debug(f"Error validating desktop file {item_id}: {e}")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.debug(f"Error validating desktop file entry: {e}")
+            return False
 
     def get_scan_directories(self) -> List[str]:
         """Get directories that should be watched for changes"""

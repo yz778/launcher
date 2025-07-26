@@ -278,7 +278,108 @@ class ExecutablePlugin(Plugin):
     def rescan(self) -> None:
         """Rescan executable files (for intelligent rescanning)"""
         logger.info("Rescanning executable files...")
-        threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
+        threading.Thread(target=self._rescan_with_cleanup, daemon=True).start()
+
+    def _rescan_with_cleanup(self) -> None:
+        """Perform rescan and cleanup invalid history entries"""
+        # First do the normal rescan
+        self._scan_and_update_matcher()
+
+        # Then clean up invalid history entries
+        try:
+            from launcher.launcher import get_history_manager
+
+            history_manager = get_history_manager()
+            if history_manager:
+                removed_count = self.clean_invalid_history_entries(history_manager)
+                if removed_count > 0:
+                    logger.info(
+                        f"Executable rescan removed {removed_count} invalid history entries"
+                    )
+        except Exception as e:
+            logger.error(f"Error cleaning history during executable rescan: {e}")
+
+    def clean_invalid_history_entries(self, history_manager) -> int:
+        """
+        Clean invalid history entries for executable files that no longer exist or are no longer executable.
+
+        Args:
+            history_manager: The history manager instance
+
+        Returns:
+            Number of entries removed
+        """
+        if not history_manager or not hasattr(history_manager, "user_input_history"):
+            return 0
+
+        original_count = len(history_manager.user_input_history)
+        valid_entries = []
+        removed_count = 0
+
+        logger.info(f"Cleaning executable file history entries...")
+
+        for entry in history_manager.user_input_history:
+            if self._is_valid_executable_entry(entry):
+                valid_entries.append(entry)
+            else:
+                if entry.get("plugin_id") == self.get_id():
+                    removed_count += 1
+                    logger.debug(
+                        f"Removing invalid executable entry: {entry.get('user_input', 'unknown')}"
+                    )
+                else:
+                    # Keep entries from other plugins
+                    valid_entries.append(entry)
+
+        history_manager.user_input_history = valid_entries
+
+        if removed_count > 0:
+            logger.info(
+                f"Executable plugin cleaned {removed_count} invalid history entries"
+            )
+            history_manager.save_history()
+
+        return removed_count
+
+    def _is_valid_executable_entry(self, entry) -> bool:
+        """
+        Check if an executable history entry is still valid.
+
+        Args:
+            entry: History entry to validate
+
+        Returns:
+            True if entry is valid, False otherwise
+        """
+        try:
+            # Only validate entries for this plugin
+            if not isinstance(entry, dict) or entry.get("plugin_id") != self.get_id():
+                return True  # Let other plugins handle their own entries
+
+            # Use common structural validation
+            if not self.is_structurally_valid(entry):
+                return False
+
+            # Check if the executable file still exists
+            if not os.path.isfile(item_id):
+                logger.debug(f"Executable file no longer exists: {item_id}")
+                return False
+
+            # Check if the file is still executable
+            try:
+                st = os.stat(item_id)
+                if not (st.st_mode & stat.S_IXUSR):
+                    logger.debug(f"File no longer executable: {item_id}")
+                    return False
+            except Exception as e:
+                logger.debug(f"Cannot check executable status for {item_id}: {e}")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.debug(f"Error validating executable entry: {e}")
+            return False
 
     def get_scan_directories(self) -> List[str]:
         """Get directories that should be watched for changes"""

@@ -6,15 +6,15 @@ import sys
 import os
 
 # Add launcher directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Mock GTK before importing
-sys.modules['gi'] = Mock()
-sys.modules['gi.repository'] = Mock()
-sys.modules['gi.repository.Gtk'] = Mock()
-sys.modules['gi.repository.Gdk'] = Mock()
-sys.modules['gi.repository.Pango'] = Mock()
-sys.modules['gi.repository.GLib'] = Mock()
+sys.modules["gi"] = Mock()
+sys.modules["gi.repository"] = Mock()
+sys.modules["gi.repository.Gtk"] = Mock()
+sys.modules["gi.repository.Gdk"] = Mock()
+sys.modules["gi.repository.Pango"] = Mock()
+sys.modules["gi.repository.GLib"] = Mock()
 
 from launcher.ui.launcher_window import WindowPositioner
 
@@ -29,7 +29,7 @@ class TestWindowPositioner(unittest.TestCase):
             "general": {
                 "window_position_vertical_percent": 25,
                 "window_position_force_center": True,
-                "window_position_debug": False
+                "window_position_debug": False,
             }
         }
         self.positioner = WindowPositioner(self.mock_window, self.config)
@@ -49,26 +49,28 @@ class TestWindowPositioner(unittest.TestCase):
 
     def test_detect_display_system_wayland_display(self):
         """Test display system detection with WAYLAND_DISPLAY env var"""
-        with patch.dict(os.environ, {'WAYLAND_DISPLAY': 'wayland-0'}):
+        with patch.dict(os.environ, {"WAYLAND_DISPLAY": "wayland-0"}):
             result = self.positioner.detect_display_system()
             self.assertEqual(result, "wayland")
 
     def test_detect_display_system_xdg_session_type(self):
         """Test display system detection with XDG_SESSION_TYPE env var"""
-        with patch.dict(os.environ, {'XDG_SESSION_TYPE': 'wayland'}, clear=True):
+        with patch.dict(os.environ, {"XDG_SESSION_TYPE": "wayland"}, clear=True):
             result = self.positioner.detect_display_system()
             self.assertEqual(result, "wayland")
 
     def test_detect_display_system_display_env(self):
         """Test display system detection with DISPLAY env var"""
-        with patch.dict(os.environ, {'DISPLAY': ':0'}, clear=True):
+        with patch.dict(os.environ, {"DISPLAY": ":0"}, clear=True):
             result = self.positioner.detect_display_system()
             self.assertEqual(result, "x11")
 
     def test_detect_display_system_unknown(self):
         """Test display system detection when unknown"""
         with patch.dict(os.environ, {}, clear=True):
-            with patch('launcher.ui.launcher_window.Gdk.Display.get_default') as mock_display:
+            with patch(
+                "launcher.ui.launcher_window.Gdk.Display.get_default"
+            ) as mock_display:
                 mock_display.side_effect = Exception("No display")
                 result = self.positioner.detect_display_system()
                 self.assertEqual(result, "unknown")
@@ -76,15 +78,17 @@ class TestWindowPositioner(unittest.TestCase):
     def test_calculate_position_center_horizontal(self):
         """Test position calculation for center horizontal positioning"""
         display_info = {
-            'width': 1920,
-            'height': 1080,
-            'x': 0,
-            'y': 0,
-            'scale_factor': 1
+            "width": 1920,
+            "height": 1080,
+            "x": 0,
+            "y": 0,
+            "scale_factor": 1,
         }
         window_size = (600, 70)
 
-        target_x, target_y = self.positioner.calculate_position(display_info, window_size)
+        target_x, target_y = self.positioner.calculate_position(
+            display_info, window_size
+        )
 
         # Should be centered horizontally: (1920 - 600) / 2 = 660
         self.assertEqual(target_x, 660)
@@ -94,15 +98,17 @@ class TestWindowPositioner(unittest.TestCase):
     def test_calculate_position_with_offset(self):
         """Test position calculation with display offset (multi-monitor)"""
         display_info = {
-            'width': 1920,
-            'height': 1080,
-            'x': 1920,  # Second monitor
-            'y': 0,
-            'scale_factor': 1
+            "width": 1920,
+            "height": 1080,
+            "x": 1920,  # Second monitor
+            "y": 0,
+            "scale_factor": 1,
         }
         window_size = (600, 70)
 
-        target_x, target_y = self.positioner.calculate_position(display_info, window_size)
+        target_x, target_y = self.positioner.calculate_position(
+            display_info, window_size
+        )
 
         # Should be centered on second monitor: 1920 + (1920 - 600) / 2 = 2580
         self.assertEqual(target_x, 2580)
@@ -111,16 +117,12 @@ class TestWindowPositioner(unittest.TestCase):
 
     def test_calculate_position_bounds_checking(self):
         """Test position calculation with bounds checking"""
-        display_info = {
-            'width': 800,
-            'height': 600,
-            'x': 0,
-            'y': 0,
-            'scale_factor': 1
-        }
+        display_info = {"width": 800, "height": 600, "x": 0, "y": 0, "scale_factor": 1}
         window_size = (900, 700)  # Window larger than display
 
-        target_x, target_y = self.positioner.calculate_position(display_info, window_size)
+        target_x, target_y = self.positioner.calculate_position(
+            display_info, window_size
+        )
 
         # Should be constrained to display bounds
         self.assertEqual(target_x, 0)  # Can't go negative
@@ -136,11 +138,11 @@ class TestWindowPositioner(unittest.TestCase):
         positioner = WindowPositioner(self.mock_window, config)
 
         display_info = {
-            'width': 1920,
-            'height': 1080,
-            'x': 0,
-            'y': 0,
-            'scale_factor': 1
+            "width": 1920,
+            "height": 1080,
+            "x": 0,
+            "y": 0,
+            "scale_factor": 1,
         }
         window_size = (600, 70)
 
@@ -185,7 +187,9 @@ class TestWindowPositioner(unittest.TestCase):
 
     def test_fallback_positioning(self):
         """Test fallback positioning when all else fails"""
-        with patch('launcher.ui.launcher_window.Gtk.WindowPosition.CENTER') as mock_center:
+        with patch(
+            "launcher.ui.launcher_window.Gtk.WindowPosition.CENTER"
+        ) as mock_center:
             result = self.positioner._position_window_fallback()
 
             self.assertTrue(result)
@@ -199,12 +203,14 @@ class TestWindowPositioner(unittest.TestCase):
 
         self.assertFalse(result)
 
-    @patch('launcher.ui.launcher_window.WindowPositioner.get_main_display_info')
-    @patch('launcher.ui.launcher_window.WindowPositioner.calculate_position')
-    @patch('launcher.ui.launcher_window.WindowPositioner.apply_position')
-    def test_position_window_success(self, mock_apply, mock_calculate, mock_display_info):
+    @patch("launcher.ui.launcher_window.WindowPositioner.get_main_display_info")
+    @patch("launcher.ui.launcher_window.WindowPositioner.calculate_position")
+    @patch("launcher.ui.launcher_window.WindowPositioner.apply_position")
+    def test_position_window_success(
+        self, mock_apply, mock_calculate, mock_display_info
+    ):
         """Test successful window positioning"""
-        mock_display_info.return_value = {'width': 1920, 'height': 1080, 'x': 0, 'y': 0}
+        mock_display_info.return_value = {"width": 1920, "height": 1080, "x": 0, "y": 0}
         mock_calculate.return_value = (660, 270)
         mock_apply.return_value = True
         self.mock_window.get_size.return_value = (600, 70)
@@ -216,8 +222,8 @@ class TestWindowPositioner(unittest.TestCase):
         mock_calculate.assert_called_once()
         mock_apply.assert_called_once_with(660, 270)
 
-    @patch('launcher.ui.launcher_window.WindowPositioner.get_main_display_info')
-    @patch('launcher.ui.launcher_window.WindowPositioner._position_window_fallback')
+    @patch("launcher.ui.launcher_window.WindowPositioner.get_main_display_info")
+    @patch("launcher.ui.launcher_window.WindowPositioner._position_window_fallback")
     def test_position_window_no_display_info(self, mock_fallback, mock_display_info):
         """Test window positioning when display info is unavailable"""
         mock_display_info.return_value = None
@@ -228,8 +234,8 @@ class TestWindowPositioner(unittest.TestCase):
         self.assertTrue(result)
         mock_fallback.assert_called_once()
 
-    @patch('launcher.ui.launcher_window.WindowPositioner.get_main_display_info')
-    @patch('launcher.ui.launcher_window.WindowPositioner._position_window_fallback')
+    @patch("launcher.ui.launcher_window.WindowPositioner.get_main_display_info")
+    @patch("launcher.ui.launcher_window.WindowPositioner._position_window_fallback")
     def test_position_window_exception_handling(self, mock_fallback, mock_display_info):
         """Test window positioning exception handling"""
         mock_display_info.side_effect = Exception("Display error")
@@ -249,7 +255,7 @@ class TestDisplayInfoMethods(unittest.TestCase):
         self.mock_window = Mock()
         self.positioner = WindowPositioner(self.mock_window, {})
 
-    @patch('launcher.ui.launcher_window.Gdk.Display.get_default')
+    @patch("launcher.ui.launcher_window.Gdk.Display.get_default")
     def test_get_display_info_fallback_success(self, mock_get_default):
         """Test fallback display info gathering success"""
         mock_display = Mock()
@@ -267,16 +273,10 @@ class TestDisplayInfoMethods(unittest.TestCase):
 
         result = self.positioner.get_display_info_fallback()
 
-        expected = {
-            'width': 1920,
-            'height': 1080,
-            'x': 0,
-            'y': 0,
-            'scale_factor': 1
-        }
+        expected = {"width": 1920, "height": 1080, "x": 0, "y": 0, "scale_factor": 1}
         self.assertEqual(result, expected)
 
-    @patch('launcher.ui.launcher_window.Gdk.Display.get_default')
+    @patch("launcher.ui.launcher_window.Gdk.Display.get_default")
     def test_get_display_info_fallback_no_primary_monitor(self, mock_get_default):
         """Test fallback display info when no primary monitor"""
         mock_display = Mock()
@@ -296,18 +296,14 @@ class TestDisplayInfoMethods(unittest.TestCase):
 
         result = self.positioner.get_display_info_fallback()
 
-        expected = {
-            'width': 1920,
-            'height': 1080,
-            'x': 0,
-            'y': 0,
-            'scale_factor': 1
-        }
+        expected = {"width": 1920, "height": 1080, "x": 0, "y": 0, "scale_factor": 1}
         self.assertEqual(result, expected)
 
-    @patch('launcher.ui.launcher_window.Gdk.Display.get_default')
-    @patch('launcher.ui.launcher_window.Gdk.Screen.get_default')
-    def test_get_display_info_fallback_screen_fallback(self, mock_screen_default, mock_display_default):
+    @patch("launcher.ui.launcher_window.Gdk.Display.get_default")
+    @patch("launcher.ui.launcher_window.Gdk.Screen.get_default")
+    def test_get_display_info_fallback_screen_fallback(
+        self, mock_screen_default, mock_display_default
+    ):
         """Test fallback to screen when display methods fail"""
         mock_display_default.side_effect = Exception("Display failed")
 
@@ -318,18 +314,14 @@ class TestDisplayInfoMethods(unittest.TestCase):
 
         result = self.positioner.get_display_info_fallback()
 
-        expected = {
-            'width': 1920,
-            'height': 1080,
-            'x': 0,
-            'y': 0,
-            'scale_factor': 1
-        }
+        expected = {"width": 1920, "height": 1080, "x": 0, "y": 0, "scale_factor": 1}
         self.assertEqual(result, expected)
 
-    @patch('launcher.ui.launcher_window.Gdk.Display.get_default')
-    @patch('launcher.ui.launcher_window.Gdk.Screen.get_default')
-    def test_get_display_info_fallback_complete_failure(self, mock_screen_default, mock_display_default):
+    @patch("launcher.ui.launcher_window.Gdk.Display.get_default")
+    @patch("launcher.ui.launcher_window.Gdk.Screen.get_default")
+    def test_get_display_info_fallback_complete_failure(
+        self, mock_screen_default, mock_display_default
+    ):
         """Test complete failure of display info gathering"""
         mock_display_default.side_effect = Exception("Display failed")
         mock_screen_default.side_effect = Exception("Screen failed")
@@ -339,5 +331,5 @@ class TestDisplayInfoMethods(unittest.TestCase):
         self.assertIsNone(result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
