@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class SearchResult:
@@ -146,6 +149,68 @@ class Plugin(ABC):
             Icon size in pixels (default: 48)
         """
         return self.get_general_config("icon_size", 48)
+
+    @staticmethod
+    def is_structurally_valid(entry: Dict[str, Any], plugin_manager: Optional[Any] = None) -> bool:
+        """
+        Check if a history entry has valid structure and types.
+        
+        This function performs basic structural and type validation that is common
+        across all plugins and the history manager.
+        
+        Args:
+            entry: History entry to validate
+            plugin_manager: Optional plugin manager to check if plugins still exist
+            
+        Returns:
+            True if entry has valid structure and types, False otherwise
+        """
+        try:
+            # Basic structure validation
+            if not isinstance(entry, dict):
+                logger.debug(f"Entry is not a dict: {type(entry)}")
+                return False
+
+            # Required fields validation
+            required_fields = ["user_input", "plugin_id", "item_id", "timestamp"]
+            for field in required_fields:
+                if field not in entry:
+                    logger.debug(f"Entry missing required field '{field}': {entry}")
+                    return False
+
+            # Type validation
+            user_input = entry.get("user_input")
+            plugin_id = entry.get("plugin_id")
+            item_id = entry.get("item_id")
+            timestamp = entry.get("timestamp")
+
+            if not isinstance(user_input, str) or not user_input.strip():
+                logger.debug(f"Invalid user_input: {user_input}")
+                return False
+
+            if not isinstance(plugin_id, str) or not plugin_id.strip():
+                logger.debug(f"Invalid plugin_id: {plugin_id}")
+                return False
+
+            if not isinstance(item_id, str) or not item_id.strip():
+                logger.debug(f"Invalid item_id: {item_id}")
+                return False
+
+            if not isinstance(timestamp, (int, float)) or timestamp <= 0:
+                logger.debug(f"Invalid timestamp: {timestamp}")
+                return False
+
+            # Plugin existence validation (if plugin_manager provided)
+            if plugin_manager and hasattr(plugin_manager, "plugins"):
+                if plugin_id not in plugin_manager.plugins:
+                    logger.debug(f"Plugin no longer exists: {plugin_id}")
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.debug(f"Error validating history entry structure: {e}")
+            return False
 
     def get_terminal_command(self) -> str:
         """

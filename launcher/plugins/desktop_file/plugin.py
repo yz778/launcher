@@ -409,32 +409,25 @@ class DesktopFilePlugin(Plugin):
         if not history_manager or not hasattr(history_manager, "user_input_history"):
             return 0
 
-        original_count = len(history_manager.user_input_history)
-        valid_entries = []
-        removed_count = 0
-
         logger.info(f"Cleaning desktop file history entries...")
 
+        invalid_entries = []
         for entry in history_manager.user_input_history:
-            if self._is_valid_desktop_file_entry(entry):
-                valid_entries.append(entry)
-            else:
-                if entry.get("plugin_id") == self.get_id():
-                    removed_count += 1
+            if entry.get("plugin_id") == self.get_id():
+                if not self._is_valid_desktop_file_entry(entry):
+                    invalid_entries.append(entry)
                     logger.debug(
-                        f"Removing invalid desktop file entry: {entry.get('user_input', 'unknown')}"
+                        f"Marking invalid desktop file entry for removal: {entry.get('user_input', 'unknown')}"
                     )
-                else:
-                    # Keep entries from other plugins
-                    valid_entries.append(entry)
 
-        history_manager.user_input_history = valid_entries
+        if not invalid_entries:
+            return 0
 
+        removed_count = history_manager.remove_history_entries_by_ids(invalid_entries)
         if removed_count > 0:
             logger.info(
                 f"Desktop file plugin cleaned {removed_count} invalid history entries"
             )
-            history_manager.save_history()
 
         return removed_count
 
@@ -453,30 +446,8 @@ class DesktopFilePlugin(Plugin):
             if not isinstance(entry, dict) or entry.get("plugin_id") != self.get_id():
                 return True  # Let other plugins handle their own entries
 
-            # Basic structure validation
-            required_fields = ["user_input", "plugin_id", "item_id", "timestamp"]
-            for field in required_fields:
-                if field not in entry:
-                    logger.debug(
-                        f"Desktop file entry missing required field '{field}': {entry}"
-                    )
-                    return False
-
-            # Type validation
-            user_input = entry.get("user_input")
-            item_id = entry.get("item_id")
-            timestamp = entry.get("timestamp")
-
-            if not isinstance(user_input, str) or not user_input.strip():
-                logger.debug(f"Invalid user_input in desktop file entry: {user_input}")
-                return False
-
-            if not isinstance(item_id, str) or not item_id.strip():
-                logger.debug(f"Invalid item_id in desktop file entry: {item_id}")
-                return False
-
-            if not isinstance(timestamp, (int, float)) or timestamp <= 0:
-                logger.debug(f"Invalid timestamp in desktop file entry: {timestamp}")
+            # Use common structural validation
+            if not self.is_structurally_valid(entry):
                 return False
 
             # Check if the desktop file still exists

@@ -356,30 +356,8 @@ class ExecutablePlugin(Plugin):
             if not isinstance(entry, dict) or entry.get("plugin_id") != self.get_id():
                 return True  # Let other plugins handle their own entries
 
-            # Basic structure validation
-            required_fields = ["user_input", "plugin_id", "item_id", "timestamp"]
-            for field in required_fields:
-                if field not in entry:
-                    logger.debug(
-                        f"Executable entry missing required field '{field}': {entry}"
-                    )
-                    return False
-
-            # Type validation
-            user_input = entry.get("user_input")
-            item_id = entry.get("item_id")
-            timestamp = entry.get("timestamp")
-
-            if not isinstance(user_input, str) or not user_input.strip():
-                logger.debug(f"Invalid user_input in executable entry: {user_input}")
-                return False
-
-            if not isinstance(item_id, str) or not item_id.strip():
-                logger.debug(f"Invalid item_id in executable entry: {item_id}")
-                return False
-
-            if not isinstance(timestamp, (int, float)) or timestamp <= 0:
-                logger.debug(f"Invalid timestamp in executable entry: {timestamp}")
+            # Use common structural validation
+            if not self.is_structurally_valid(entry):
                 return False
 
             # Check if the executable file still exists
