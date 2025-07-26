@@ -26,7 +26,9 @@ class WindowPositioner:
 
         # Configuration options
         general_config = self.config.get("general", {})
-        self.vertical_percent = general_config.get("window_position_vertical_percent", 25)
+        self.vertical_percent = general_config.get(
+            "window_position_vertical_percent", 25
+        )
         self.force_center = general_config.get("window_position_force_center", True)
         self.debug_mode = general_config.get("window_position_debug", False)
 
@@ -52,10 +54,14 @@ class WindowPositioner:
             window_width, window_height = self.window.get_size()
 
             # Calculate target position
-            target_x, target_y = self.calculate_position(display_info, (window_width, window_height))
+            target_x, target_y = self.calculate_position(
+                display_info, (window_width, window_height)
+            )
 
             if self.debug_mode:
-                self.logger.info(f"Positioning window at ({target_x}, {target_y}) on display {display_info}")
+                self.logger.info(
+                    f"Positioning window at ({target_x}, {target_y}) on display {display_info}"
+                )
 
             # Apply position
             return self.apply_position(target_x, target_y)
@@ -106,7 +112,9 @@ class WindowPositioner:
                     return "x11"
 
             # Check display type
-            if hasattr(Gdk, "WaylandDisplay") and isinstance(display, Gdk.WaylandDisplay):
+            if hasattr(Gdk, "WaylandDisplay") and isinstance(
+                display, Gdk.WaylandDisplay
+            ):
                 return "wayland"
             if hasattr(Gdk, "X11Display") and isinstance(display, Gdk.X11Display):
                 return "x11"
@@ -128,11 +136,11 @@ class WindowPositioner:
             scale_factor = monitor.get_scale_factor()
 
             return {
-                'width': geometry.width,
-                'height': geometry.height,
-                'x': geometry.x,
-                'y': geometry.y,
-                'scale_factor': scale_factor
+                "width": geometry.width,
+                "height": geometry.height,
+                "x": geometry.x,
+                "y": geometry.y,
+                "scale_factor": scale_factor,
             }
 
         except Exception as e:
@@ -162,14 +170,18 @@ class WindowPositioner:
                     raise Exception("No monitors found")
 
             geometry = monitor.get_geometry()
-            scale_factor = monitor.get_scale_factor() if hasattr(monitor, 'get_scale_factor') else 1
+            scale_factor = (
+                monitor.get_scale_factor()
+                if hasattr(monitor, "get_scale_factor")
+                else 1
+            )
 
             return {
-                'width': geometry.width,
-                'height': geometry.height,
-                'x': geometry.x,
-                'y': geometry.y,
-                'scale_factor': scale_factor
+                "width": geometry.width,
+                "height": geometry.height,
+                "x": geometry.x,
+                "y": geometry.y,
+                "scale_factor": scale_factor,
             }
 
         except Exception as e:
@@ -178,30 +190,38 @@ class WindowPositioner:
             try:
                 screen = Gdk.Screen.get_default()
                 return {
-                    'width': screen.get_width(),
-                    'height': screen.get_height(),
-                    'x': 0,
-                    'y': 0,
-                    'scale_factor': 1
+                    "width": screen.get_width(),
+                    "height": screen.get_height(),
+                    "x": 0,
+                    "y": 0,
+                    "scale_factor": 1,
                 }
             except Exception as e2:
                 self.logger.error(f"Screen fallback failed: {e2}")
                 return None
 
-    def calculate_position(self, display_info: Dict[str, int], window_size: tuple) -> tuple:
+    def calculate_position(
+        self, display_info: Dict[str, int], window_size: tuple
+    ) -> tuple:
         """Calculate target window position for center horizontal and configured vertical percentage"""
         window_width, window_height = window_size
 
         # Calculate center horizontal position
-        target_x = display_info['x'] + (display_info['width'] - window_width) // 2
+        target_x = display_info["x"] + (display_info["width"] - window_width) // 2
 
         # Calculate vertical position at configured percentage (default 25% for eye level)
-        vertical_offset = int(display_info['height'] * (self.vertical_percent / 100.0))
-        target_y = display_info['y'] + vertical_offset
+        vertical_offset = int(display_info["height"] * (self.vertical_percent / 100.0))
+        target_y = display_info["y"] + vertical_offset
 
         # Ensure window stays within screen bounds
-        target_x = max(display_info['x'], min(target_x, display_info['x'] + display_info['width'] - window_width))
-        target_y = max(display_info['y'], min(target_y, display_info['y'] + display_info['height'] - window_height))
+        target_x = max(
+            display_info["x"],
+            min(target_x, display_info["x"] + display_info["width"] - window_width),
+        )
+        target_y = max(
+            display_info["y"],
+            min(target_y, display_info["y"] + display_info["height"] - window_height),
+        )
 
         return target_x, target_y
 
@@ -219,18 +239,24 @@ class WindowPositioner:
             actual_width, actual_height = self.window.get_size()
 
             # Recalculate position with actual window size if it's different
-            if hasattr(self, '_last_display_info') and self._last_display_info:
-                recalc_x, recalc_y = self.calculate_position(self._last_display_info, (actual_width, actual_height))
+            if hasattr(self, "_last_display_info") and self._last_display_info:
+                recalc_x, recalc_y = self.calculate_position(
+                    self._last_display_info, (actual_width, actual_height)
+                )
                 if recalc_x != x or recalc_y != y:
                     if self.debug_mode:
-                        self.logger.info(f"Recalculating position with actual window size {actual_width}x{actual_height}")
+                        self.logger.info(
+                            f"Recalculating position with actual window size {actual_width}x{actual_height}"
+                        )
                     x, y = recalc_x, recalc_y
 
             # Move window to calculated position
             self.window.move(x, y)
 
             if self.debug_mode:
-                self.logger.info(f"Window positioned at ({x}, {y}) with size {actual_width}x{actual_height}")
+                self.logger.info(
+                    f"Window positioned at ({x}, {y}) with size {actual_width}x{actual_height}"
+                )
 
             return True
 
@@ -1849,7 +1875,6 @@ class LauncherWindow(Gtk.Window):
                 f"Skipped storage for partial match without arguments: {user_input}"
             )
 
-
     def show_and_focus(self):
         """Show window at consistent position and grab focus"""
 
@@ -1879,6 +1904,7 @@ class LauncherWindow(Gtk.Window):
             if not self.get_visible() or not self.get_mapped():
                 # If not ready yet, try again in a short while
                 from gi.repository import GLib
+
                 GLib.timeout_add(10, self._delayed_focus_and_position)
                 return False
 
