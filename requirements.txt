@@ -1,5 +1,6 @@
 PyGObject>=3.40.0     # Gtk
 pyperclip>=1.8.0      # For cross-platform clipboard support
+pytz>=2023.3          # For timezone conversions
 pyxdg>=0.28           # For desktop file parsing
 PyYAML>=6.0           # Yaml
 sympy>=1.10.1         # For calculator plugin
