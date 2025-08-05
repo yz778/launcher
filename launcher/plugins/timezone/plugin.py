@@ -21,6 +21,23 @@ logger = logging.getLogger(__name__)
 class TimezonePlugin(Plugin):
     """Plugin for converting times between timezones"""
 
+    # Compiled regex patterns for performance
+    _TIME_PATTERNS = [
+        re.compile(r'\d{1,2}:\d{2}'),      # HH:MM format
+        re.compile(r'\d{1,2}am'),          # 5am format
+        re.compile(r'\d{1,2}pm'),          # 5pm format
+        re.compile(r'\d{3,4}'),            # 1300, 0800 format
+        re.compile(r'\d{1,2}\s+[a-z]+'),   # 5 pst format
+        re.compile(r'now'),                # now keyword
+    ]
+
+    _PARSE_PATTERNS = [
+        re.compile(r'(\d{1,2}:\d{2})\s*([a-z]+)', re.IGNORECASE),     # 5:30 PDT
+        re.compile(r'(\d{1,2})(am|pm)\s*([a-z]+)', re.IGNORECASE),    # 5am PDT
+        re.compile(r'(\d{3,4})\s*([a-z]+)', re.IGNORECASE),           # 1300 JST
+        re.compile(r'(\d{1,2})\s+([a-z]+)', re.IGNORECASE),           # 5 pst
+    ]
+
     def __init__(self):
         super().__init__()
         self.icon_size = None
@@ -172,16 +189,7 @@ class TimezonePlugin(Plugin):
             return False
 
         # Should have time-like patterns or "now"
-        time_patterns = [
-            r'\d{1,2}:\d{2}',  # HH:MM format
-            r'\d{1,2}am',      # 5am format
-            r'\d{1,2}pm',      # 5pm format
-            r'\d{3,4}',        # 1300, 0800 format
-            r'\d{1,2}\s+[a-z]+',  # 5 pst format
-            r'now',            # now keyword
-        ]
-
-        has_time = any(re.search(pattern, query_lower) for pattern in time_patterns)
+        has_time = any(pattern.search(query_lower) for pattern in self._TIME_PATTERNS)
         return has_time
 
     def _parse_timezone_query(self, query: str) -> Optional[Dict[str, Any]]:
@@ -225,16 +233,9 @@ class TimezonePlugin(Plugin):
         if text == "now":
             return "now", "local"
 
-        # Pattern for time formats
-        patterns = [
-            r'(\d{1,2}:\d{2})\s*([a-z]+)',     # 5:30 PDT
-            r'(\d{1,2})(am|pm)\s*([a-z]+)',    # 5am PDT
-            r'(\d{3,4})\s*([a-z]+)',           # 1300 JST
-            r'(\d{1,2})\s+([a-z]+)',           # 5 pst
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
+        # Use compiled patterns for time formats
+        for pattern in self._PARSE_PATTERNS:
+            match = pattern.search(text)
             if match:
                 if len(match.groups()) == 2:  # Format like "1300 JST" or "5 pst"
                     time_str, tz_str = match.groups()
@@ -266,22 +267,35 @@ class TimezonePlugin(Plugin):
     def _convert_time(self, time_str: str, source_tz_name: str, target_tz_name: str) -> Optional[str]:
         """Convert time from source timezone to target timezone"""
         try:
-            target_tz = pytz.timezone(target_tz_name)
+            # Validate target timezone
+            try:
+                target_tz = pytz.timezone(target_tz_name)
+            except pytz.UnknownTimeZoneError:
+                logger.debug(f"Unknown target timezone: {target_tz_name}")
+                return None
 
             # Handle "now" keyword
             if time_str == "now":
                 if source_tz_name == "local":
-                    # Use local time
-                    source_dt = datetime.now()
+                    # Use local time - safely get timezone-aware datetime
+                    source_dt = datetime.now().astimezone()
                     # Convert to target timezone
                     target_dt = source_dt.astimezone(target_tz)
                 else:
                     # Get current time in source timezone
-                    source_tz = pytz.timezone(source_tz_name)
+                    try:
+                        source_tz = pytz.timezone(source_tz_name)
+                    except pytz.UnknownTimeZoneError:
+                        logger.debug(f"Unknown source timezone: {source_tz_name}")
+                        return None
                     source_dt = datetime.now(source_tz)
                     target_dt = source_dt.astimezone(target_tz)
             else:
-                source_tz = pytz.timezone(source_tz_name)
+                try:
+                    source_tz = pytz.timezone(source_tz_name)
+                except pytz.UnknownTimeZoneError:
+                    logger.debug(f"Unknown source timezone: {source_tz_name}")
+                    return None
                 now = datetime.now()
 
                 # Handle different time formats
@@ -348,13 +362,21 @@ class TimezonePlugin(Plugin):
             return []
 
         # Get timezone names for display
-        target_tz_obj = pytz.timezone(parsed['target_tz'])
+        try:
+            target_tz_obj = pytz.timezone(parsed['target_tz'])
+        except pytz.UnknownTimeZoneError:
+            logger.debug(f"Unknown target timezone for display: {parsed['target_tz']}")
+            return []
 
         if parsed['source_tz'] == "local":
             source_tz_display = "Local"
         else:
-            source_tz_obj = pytz.timezone(parsed['source_tz'])
-            source_tz_display = source_tz_obj.zone
+            try:
+                source_tz_obj = pytz.timezone(parsed['source_tz'])
+                source_tz_display = source_tz_obj.zone
+            except pytz.UnknownTimeZoneError:
+                logger.debug(f"Unknown source timezone for display: {parsed['source_tz']}")
+                return []
 
         description = f"{result} in {target_tz_obj.zone}"
 
