@@ -2,4 +2,4 @@
 
 from .plugin import TimezonePlugin
 
-__all__ = ['TimezonePlugin']
+__all__ = ["TimezonePlugin"]

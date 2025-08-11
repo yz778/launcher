@@ -970,4 +970,5 @@ class HistoryManager:
             True if entry is valid, False otherwise
         """
         from launcher.plugins.base import Plugin
+
         return Plugin.is_structurally_valid(entry, plugin_manager)
