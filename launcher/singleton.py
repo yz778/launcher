@@ -198,20 +198,23 @@ class SingletonManager:
         """Stop the singleton server"""
         self._running = False
 
+        # Force socket to close immediately to unblock accept()
         if self.server_socket:
             try:
+                self.server_socket.shutdown(socket.SHUT_RDWR)
                 self.server_socket.close()
             except Exception:
                 pass
             self.server_socket = None
+
+        # Join thread with shorter timeout since socket is already closed
+        if self.server_thread and self.server_thread.is_alive():
+            self.server_thread.join(timeout=0.1)
 
         # Clean up socket file
         try:
             os.unlink(self.socket_path)
         except OSError:
             pass
-
-        if self.server_thread and self.server_thread.is_alive():
-            self.server_thread.join(timeout=1.0)
 
         logger.info("Singleton server stopped")

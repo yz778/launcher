@@ -151,17 +151,19 @@ class Plugin(ABC):
         return self.get_general_config("icon_size", 48)
 
     @staticmethod
-    def is_structurally_valid(entry: Dict[str, Any], plugin_manager: Optional[Any] = None) -> bool:
+    def is_structurally_valid(
+        entry: Dict[str, Any], plugin_manager: Optional[Any] = None
+    ) -> bool:
         """
         Check if a history entry has valid structure and types.
-        
+
         This function performs basic structural and type validation that is common
         across all plugins and the history manager.
-        
+
         Args:
             entry: History entry to validate
             plugin_manager: Optional plugin manager to check if plugins still exist
-            
+
         Returns:
             True if entry has valid structure and types, False otherwise
         """

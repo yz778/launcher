@@ -23,19 +23,19 @@ class TimezonePlugin(Plugin):
 
     # Compiled regex patterns for performance
     _TIME_PATTERNS = [
-        re.compile(r'\d{1,2}:\d{2}'),      # HH:MM format
-        re.compile(r'\d{1,2}am'),          # 5am format
-        re.compile(r'\d{1,2}pm'),          # 5pm format
-        re.compile(r'\d{3,4}'),            # 1300, 0800 format
-        re.compile(r'\d{1,2}\s+[a-z]+'),   # 5 pst format
-        re.compile(r'now'),                # now keyword
+        re.compile(r"\d{1,2}:\d{2}"),  # HH:MM format
+        re.compile(r"\d{1,2}am"),  # 5am format
+        re.compile(r"\d{1,2}pm"),  # 5pm format
+        re.compile(r"\d{3,4}"),  # 1300, 0800 format
+        re.compile(r"\d{1,2}\s+[a-z]+"),  # 5 pst format
+        re.compile(r"now"),  # now keyword
     ]
 
     _PARSE_PATTERNS = [
-        re.compile(r'(\d{1,2}:\d{2})\s*([a-z]+)', re.IGNORECASE),     # 5:30 PDT
-        re.compile(r'(\d{1,2})(am|pm)\s*([a-z]+)', re.IGNORECASE),    # 5am PDT
-        re.compile(r'(\d{3,4})\s*([a-z]+)', re.IGNORECASE),           # 1300 JST
-        re.compile(r'(\d{1,2})\s+([a-z]+)', re.IGNORECASE),           # 5 pst
+        re.compile(r"(\d{1,2}:\d{2})\s*([a-z]+)", re.IGNORECASE),  # 5:30 PDT
+        re.compile(r"(\d{1,2})(am|pm)\s*([a-z]+)", re.IGNORECASE),  # 5am PDT
+        re.compile(r"(\d{3,4})\s*([a-z]+)", re.IGNORECASE),  # 1300 JST
+        re.compile(r"(\d{1,2})\s+([a-z]+)", re.IGNORECASE),  # 5 pst
     ]
 
     def __init__(self):
@@ -96,53 +96,50 @@ class TimezonePlugin(Plugin):
         """Build a mapping of common timezone abbreviations to pytz timezone names"""
         return {
             # US/Canada
-            'pdt': 'US/Pacific',
-            'pst': 'US/Pacific',
-            'mdt': 'US/Mountain',
-            'mst': 'US/Mountain',
-            'cdt': 'US/Central',
-            'cst': 'US/Central',
-            'edt': 'US/Eastern',
-            'est': 'US/Eastern',
-
+            "pdt": "US/Pacific",
+            "pst": "US/Pacific",
+            "mdt": "US/Mountain",
+            "mst": "US/Mountain",
+            "cdt": "US/Central",
+            "cst": "US/Central",
+            "edt": "US/Eastern",
+            "est": "US/Eastern",
             # Major cities/regions
-            'vancouver': 'America/Vancouver',
-            'seattle': 'America/Los_Angeles',
-            'portland': 'America/Los_Angeles',
-            'sf': 'America/Los_Angeles',
-            'la': 'America/Los_Angeles',
-            'denver': 'America/Denver',
-            'chicago': 'America/Chicago',
-            'nyc': 'America/New_York',
-            'ny': 'America/New_York',
-            'toronto': 'America/Toronto',
-            'montreal': 'America/Montreal',
-
+            "vancouver": "America/Vancouver",
+            "seattle": "America/Los_Angeles",
+            "portland": "America/Los_Angeles",
+            "sf": "America/Los_Angeles",
+            "la": "America/Los_Angeles",
+            "denver": "America/Denver",
+            "chicago": "America/Chicago",
+            "nyc": "America/New_York",
+            "ny": "America/New_York",
+            "toronto": "America/Toronto",
+            "montreal": "America/Montreal",
             # International
-            'utc': 'UTC',
-            'gmt': 'GMT',
-            'london': 'Europe/London',
-            'paris': 'Europe/Paris',
-            'berlin': 'Europe/Berlin',
-            'tokyo': 'Asia/Tokyo',
-            'japan': 'Asia/Tokyo',
-            'jst': 'Asia/Tokyo',
-            'beijing': 'Asia/Shanghai',
-            'shanghai': 'Asia/Shanghai',
-            'hkt': 'Asia/Hong_Kong',
-            'hongkong': 'Asia/Hong_Kong',
-            'singapore': 'Asia/Singapore',
-            'sydney': 'Australia/Sydney',
-            'melbourne': 'Australia/Melbourne',
-            'aest': 'Australia/Sydney',
-            'aedt': 'Australia/Sydney',
-
+            "utc": "UTC",
+            "gmt": "GMT",
+            "london": "Europe/London",
+            "paris": "Europe/Paris",
+            "berlin": "Europe/Berlin",
+            "tokyo": "Asia/Tokyo",
+            "japan": "Asia/Tokyo",
+            "jst": "Asia/Tokyo",
+            "beijing": "Asia/Shanghai",
+            "shanghai": "Asia/Shanghai",
+            "hkt": "Asia/Hong_Kong",
+            "hongkong": "Asia/Hong_Kong",
+            "singapore": "Asia/Singapore",
+            "sydney": "Australia/Sydney",
+            "melbourne": "Australia/Melbourne",
+            "aest": "Australia/Sydney",
+            "aedt": "Australia/Sydney",
             # India
-            'ist': 'Asia/Kolkata',
-            'india': 'Asia/Kolkata',
-            'mumbai': 'Asia/Kolkata',
-            'delhi': 'Asia/Kolkata',
-            'bangalore': 'Asia/Kolkata',
+            "ist": "Asia/Kolkata",
+            "india": "Asia/Kolkata",
+            "mumbai": "Asia/Kolkata",
+            "delhi": "Asia/Kolkata",
+            "bangalore": "Asia/Kolkata",
         }
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
@@ -160,10 +157,9 @@ class TimezonePlugin(Plugin):
         """Load the timezone icon"""
         try:
             from launcher.utils.icon_utils import load_theme_icon
+
             # Try multiple clock-related icons as fallbacks
-            icon_names = [
-                "appointment-soon"
-            ]
+            icon_names = ["appointment-soon"]
 
             for icon_name in icon_names:
                 self.icon = load_theme_icon(icon_name, self.icon_size)
@@ -215,17 +211,19 @@ class TimezonePlugin(Plugin):
                 return None
 
             return {
-                'source_time': source_time,
-                'source_tz': source_tz,
-                'target_tz': target_tz,
-                'original_query': query
+                "source_time": source_time,
+                "source_tz": source_tz,
+                "target_tz": target_tz,
+                "original_query": query,
             }
 
         except Exception as e:
             logger.debug(f"Error parsing timezone query: {e}")
             return None
 
-    def _parse_time_and_timezone(self, text: str) -> tuple[Optional[str], Optional[str]]:
+    def _parse_time_and_timezone(
+        self, text: str
+    ) -> tuple[Optional[str], Optional[str]]:
         """Parse time and timezone from text like '5AM PDT', '1300 JST', '5 pst', or 'now'"""
         text = text.strip().lower()
 
@@ -240,8 +238,12 @@ class TimezonePlugin(Plugin):
                 if len(match.groups()) == 2:  # Format like "1300 JST" or "5 pst"
                     time_str, tz_str = match.groups()
                 else:  # Format like "5am PDT"
-                    time_str = match.group(1) + (match.group(2) if len(match.groups()) > 2 else "")
-                    tz_str = match.group(3) if len(match.groups()) > 2 else match.group(2)
+                    time_str = match.group(1) + (
+                        match.group(2) if len(match.groups()) > 2 else ""
+                    )
+                    tz_str = (
+                        match.group(3) if len(match.groups()) > 2 else match.group(2)
+                    )
 
                 tz = self._parse_timezone(tz_str)
                 if tz:
@@ -264,7 +266,9 @@ class TimezonePlugin(Plugin):
 
         return None
 
-    def _convert_time(self, time_str: str, source_tz_name: str, target_tz_name: str) -> Optional[str]:
+    def _convert_time(
+        self, time_str: str, source_tz_name: str, target_tz_name: str
+    ) -> Optional[str]:
         """Convert time from source timezone to target timezone"""
         try:
             # Validate target timezone
@@ -299,19 +303,20 @@ class TimezonePlugin(Plugin):
                 now = datetime.now()
 
                 # Handle different time formats
-                if ':' in time_str:
+                if ":" in time_str:
                     # HH:MM format
-                    time_obj = datetime.strptime(time_str, '%H:%M').time()
-                elif time_str.lower().endswith('am') or time_str.lower().endswith('pm'):
+                    time_obj = datetime.strptime(time_str, "%H:%M").time()
+                elif time_str.lower().endswith("am") or time_str.lower().endswith("pm"):
                     # 12-hour format
-                    time_obj = datetime.strptime(time_str.upper(), '%I%p').time()
+                    time_obj = datetime.strptime(time_str.upper(), "%I%p").time()
                 elif len(time_str) in [3, 4] and time_str.isdigit():
                     # Military time format (e.g., 1300, 800)
                     if len(time_str) == 3:
-                        time_str = '0' + time_str
+                        time_str = "0" + time_str
                     hour = int(time_str[:2])
                     minute = int(time_str[2:])
                     from datetime import time
+
                     time_obj = time(hour, minute)
                 elif time_str.isdigit() and 1 <= int(time_str) <= 24:
                     # Simple hour format (e.g., "5" means 5:00)
@@ -319,6 +324,7 @@ class TimezonePlugin(Plugin):
                     if hour == 24:
                         hour = 0
                     from datetime import time
+
                     time_obj = time(hour, 0)
                 else:
                     return None
@@ -333,9 +339,9 @@ class TimezonePlugin(Plugin):
                 target_dt = source_dt.astimezone(target_tz)
 
             # Format the result
-            target_time_12h = target_dt.strftime('%I:%M %p').lstrip('0')
-            target_time_24h = target_dt.strftime('%H:%M')
-            target_tz_abbr = target_dt.strftime('%Z')
+            target_time_12h = target_dt.strftime("%I:%M %p").lstrip("0")
+            target_time_24h = target_dt.strftime("%H:%M")
+            target_tz_abbr = target_dt.strftime("%Z")
 
             return f"{target_time_12h} ({target_time_24h}) {target_tz_abbr}"
 
@@ -353,9 +359,7 @@ class TimezonePlugin(Plugin):
             return []
 
         result = self._convert_time(
-            parsed['source_time'],
-            parsed['source_tz'],
-            parsed['target_tz']
+            parsed["source_time"], parsed["source_tz"], parsed["target_tz"]
         )
 
         if not result:
@@ -363,19 +367,21 @@ class TimezonePlugin(Plugin):
 
         # Get timezone names for display
         try:
-            target_tz_obj = pytz.timezone(parsed['target_tz'])
+            target_tz_obj = pytz.timezone(parsed["target_tz"])
         except pytz.UnknownTimeZoneError:
             logger.debug(f"Unknown target timezone for display: {parsed['target_tz']}")
             return []
 
-        if parsed['source_tz'] == "local":
+        if parsed["source_tz"] == "local":
             source_tz_display = "Local"
         else:
             try:
-                source_tz_obj = pytz.timezone(parsed['source_tz'])
+                source_tz_obj = pytz.timezone(parsed["source_tz"])
                 source_tz_display = source_tz_obj.zone
             except pytz.UnknownTimeZoneError:
-                logger.debug(f"Unknown source timezone for display: {parsed['source_tz']}")
+                logger.debug(
+                    f"Unknown source timezone for display: {parsed['source_tz']}"
+                )
                 return []
 
         description = f"{result} in {target_tz_obj.zone}"
@@ -417,7 +423,9 @@ class TimezonePlugin(Plugin):
 
         try:
             pyperclip.copy(conversion_result)
-            logger.info(f"Copied timezone conversion result to clipboard: {conversion_result}")
+            logger.info(
+                f"Copied timezone conversion result to clipboard: {conversion_result}"
+            )
             return True
         except Exception as e:
             logger.error(f"Error copying to clipboard: {e}")
