@@ -12,23 +12,23 @@ Previously, different plugins used inconsistent scoring where history descriptio
 
 ### Base Scores
 - **Name matches**: 100 points base
-- **Description matches**: 50 points base  
+- **Description matches**: 50 points base
 - **History boost**: +20 points
 
 ### Match Quality Bonuses
 Within each category (name or description):
-- Exact match: +30 points
+- Exact match: +100 points
 - Prefix match: +20 points + quality bonus
 - Substring match: +10 points + position bonus
-- Fuzzy match: +5 points
+- Fuzzy match: quality * 5 points
 
 ### Key Principles
 1. **Fresh exact matches beat history fuzzy matches**:
-   - Fresh name exact: 100 + 30 = 130
-   - History name fuzzy: 100 + 5 + 20 = 125
+   - Fresh name exact: 100 + 100 = 200
+   - History name fuzzy: 100 + (quality * 5) + 20 = 125 (assuming average quality)
 2. **Any name match beats any description match**:
    - Worst name match: 100 (fuzzy)
-   - Best description match: 50 + 30 + 20 = 100 (exact + history)
+   - Best description match: 50 + 100 + 20 = 170 (exact + history)
 
 ## Example Scores
 
@@ -36,13 +36,13 @@ Within each category (name or description):
 
 | Match | Type | Base | Bonus | History | Total |
 |-------|------|------|-------|---------|-------|
-| Name exact | Fresh | 100 | +30 | - | 130 |
-| Name exact | History | 100 | +30 | +20 | 150 |
-| Name fuzzy | History | 100 | +5 | +20 | 125 |
-| Description exact | Fresh | 50 | +30 | - | 80 |
-| Description exact | History | 50 | +30 | +20 | 100 |
+| Name exact | Fresh | 100 | +100 | - | 200 |
+| Name exact | History | 100 | +100 | +20 | 220 |
+| Name fuzzy | History | 100 | + (quality*5) | +20 | ~125 |
+| Description exact | Fresh | 50 | +100 | - | 150 |
+| Description exact | History | 50 | +100 | +20 | 170 |
 
-Result: History name exact (150) > Fresh name exact (130) > History name fuzzy (125) > History description (100) > Fresh description (80)
+Result: History name exact (220) > Fresh name exact (200) > History description (170) > Fresh description (150) > History name fuzzy (125)
 
 ## Implementation
 
