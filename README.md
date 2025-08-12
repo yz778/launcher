@@ -11,6 +11,7 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
   - **Executable Plugin**: Launch executables from custom directories
   - **QCalculate Plugin**: Advanced calculator with Qalculate! engine
   - **Terminal Plugin**: Execute shell commands directly
+  - **Timezone Plugin**: Convert time between different timezones
 - **Intelligent Search**: Multiple matching strategies (exact, prefix, word boundary, fuzzy)
 - **Smart Highlighting**: Visual feedback with different styles for different match types
 - **History Tracking**: Learns from usage patterns to prioritize frequently used items

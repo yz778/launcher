@@ -494,7 +494,7 @@ class ExecutablePlugin(Plugin):
             return False
 
         cmd_parts = shlex.split(command) + result.metadata.get("args")
-        use_terminal = result.metadata.get("shift_pressed", False)
+        use_terminal = not result.metadata.get("shift_pressed", False)
 
         try:
             import subprocess
