@@ -468,11 +468,6 @@ class LauncherWindow(Gtk.Window):
 
         self.entry.grab_focus()
 
-    def _position_and_show_initial(self):
-        """Show and activate the window"""
-        self.show_all()
-        self.present()
-
     def _clear_list_box_and_hide(self):
         """Clears all items from the list box and hides the results area."""
         # Properly destroy child widgets to prevent memory leaks
@@ -1601,9 +1596,6 @@ class LauncherWindow(Gtk.Window):
     def show_and_focus(self):
         """Show window at consistent position and grab focus"""
 
-        # Show the window first
-        self.show_all()
-
         # Clear entry and reset state
         self.entry.set_text("")
         self._clear_list_box_and_hide()
@@ -1613,6 +1605,7 @@ class LauncherWindow(Gtk.Window):
             self._show_recent_history()
 
         # Present window and grab focus
+        self.show_all()
         self.present()
 
         # Use GLib.idle_add to ensure positioning and focus happen after window is mapped
@@ -1658,8 +1651,8 @@ class LauncherWindow(Gtk.Window):
         logger.info("Manual rescan triggered")
 
         # Show a brief notification
-        self.entry.set_text("🔄 Rescanning...")
         self.entry.set_editable(False)
+        self.entry.set_text("⚙️ Rescanning ...")
 
         # Schedule the actual rescan and UI reset
         from gi.repository import GLib
