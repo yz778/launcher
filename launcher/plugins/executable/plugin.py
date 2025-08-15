@@ -73,6 +73,7 @@ class ExecutableFile:
 
         try:
             with open(self.path, "r", encoding="utf-8", errors="ignore") as f:
+                found_shebang = False
                 for i, line in enumerate(f):
                     if i >= 10:
                         break
@@ -81,7 +82,7 @@ class ExecutableFile:
                         found_shebang = True
                         continue
 
-                    if not found_shebang:
+                    elif not found_shebang:
                         continue
 
                     elif line.startswith("#icon "):
