@@ -98,6 +98,9 @@ def main() -> None:
     """Run the launcher application"""
     global singleton_manager, launcher_window
 
+    # Change to home directory at startup
+    os.chdir(os.path.expanduser("~"))
+
     # Parse arguments first to check for foreground mode
     args = arg_parser()
 
@@ -204,15 +207,8 @@ def main() -> None:
         launcher_window = LauncherWindow(
             None, None, config, foreground_mode=args.foreground
         )
-        # Don't show immediately - let the window position itself first
-        launcher_window.scrolled.hide()
-        launcher_window.resize(
-            config["general"]["window_width"],
-            config["general"]["window_height"],
-        )
 
-        # Position and show the window
-        launcher_window._position_and_show_initial()
+        launcher_window.show_and_focus()
 
         while Gtk.events_pending():
             Gtk.main_iteration()
