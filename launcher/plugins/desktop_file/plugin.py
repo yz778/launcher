@@ -384,7 +384,7 @@ class DesktopFilePlugin(Plugin):
 
         # Then clean up invalid history entries
         try:
-            from launcher.launcher import get_history_manager
+            from launcher import get_history_manager
 
             history_manager = get_history_manager()
             if history_manager:

@@ -24,15 +24,16 @@ logger = logging.getLogger(__name__)
 class ExecutableFile:
     """Class representing an executable file"""
 
-    __slots__ = ("path", "name", "is_executable", "custom_icon")
+    __slots__ = ("path", "name", "is_executable", "custom_icon", "use_terminal")
 
     def __init__(self, path: str):
         self.path = path
         self.name = os.path.basename(path)
         self.is_executable = False
         self.custom_icon = None
+        self.use_terminal = True
         self._check_executable()
-        self._parse_icon_directive()
+        self._parse_directives()
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert ExecutableFile object to a dictionary for JSON serialization"""
@@ -41,6 +42,7 @@ class ExecutableFile:
             "name": self.name,
             "is_executable": self.is_executable,
             "custom_icon": self.custom_icon,
+            "use_terminal": self.use_terminal,
         }
 
     @classmethod
@@ -51,6 +53,7 @@ class ExecutableFile:
         instance.name = data.get("name", "")
         instance.is_executable = data.get("is_executable", False)
         instance.custom_icon = data.get("custom_icon")
+        instance.use_terminal = data.get("use_terminal", True)
         return instance
 
     def _check_executable(self) -> None:
@@ -63,37 +66,35 @@ class ExecutableFile:
             logger.error(f"Error checking executable {self.path}: {e}")
             self.is_executable = False
 
-    def _parse_icon_directive(self) -> None:
-        """Parse the #icon directive from the file"""
+    def _parse_directives(self) -> None:
+        """Parse special directives from the file"""
         if not self.is_executable:
             return
 
         try:
             with open(self.path, "r", encoding="utf-8", errors="ignore") as f:
-                lines = []
                 for i, line in enumerate(f):
                     if i >= 10:
                         break
-                    lines.append(line.strip())
 
-                found_shebang = False
-                for line in lines:
                     if line.startswith("#!"):
                         found_shebang = True
                         continue
-                    elif found_shebang and line.startswith("#icon "):
+
+                    if not found_shebang:
+                        continue
+
+                    elif line.startswith("#icon "):
                         icon_spec = line[6:].strip()
                         if icon_spec:
                             self.custom_icon = icon_spec
-                            logger.debug(
-                                f"Found custom icon '{icon_spec}' for {self.path}"
-                            )
-                        break
-                    elif line and not line.startswith("#"):
-                        break
+                            logger.debug(f"Found #icon '{icon_spec}' for {self.path}")
+                    elif line.strip() == "#noterm":
+                        self.use_terminal = False
+                        logger.debug(f"Found #noterm '{icon_spec}' for {self.path}")
 
         except Exception as e:
-            logger.debug(f"Could not parse icon directive from {self.path}: {e}")
+            logger.debug(f"Could not parse directives from {self.path}: {e}")
 
     def get_command(self) -> str:
         """Get the command to execute the file"""
@@ -287,7 +288,7 @@ class ExecutablePlugin(Plugin):
 
         # Then clean up invalid history entries
         try:
-            from launcher.launcher import get_history_manager
+            from launcher import get_history_manager
 
             history_manager = get_history_manager()
             if history_manager:
@@ -476,7 +477,7 @@ class ExecutablePlugin(Plugin):
                 metadata={
                     "command": executable.get_command(),
                     "args": args,
-                    "custom_icon": executable.custom_icon,  # Store for debugging
+                    "executable": executable,
                     "track_history": self.should_track_history(),
                 },
             )
@@ -489,12 +490,15 @@ class ExecutablePlugin(Plugin):
         if result.plugin_id != self.get_id():
             return False
 
-        command = result.metadata.get("command")
+        executable: ExecutableFile = result.metadata.get("executable")
+        command: str = result.metadata.get("command")
         if not command:
             return False
 
         cmd_parts = shlex.split(command) + result.metadata.get("args")
-        use_terminal = not result.metadata.get("shift_pressed", False)
+        use_terminal = executable.use_terminal and not result.metadata.get(
+            "shift_pressed", False
+        )
 
         try:
             import subprocess

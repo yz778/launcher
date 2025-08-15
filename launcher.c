@@ -144,7 +144,7 @@ int main(int argc, char *argv[]) {
 
     args[0] = venv_python;
     args[1] = "-m";
-    args[2] = "launcher.launcher";
+    args[2] = "launcher";
 
     // Copy original arguments (skip argv[0] which is the program name)
     for (int i = 1; i < argc; i++) {
