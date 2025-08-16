@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 class HistoryPlugin(Plugin):
+    """Plugin for searching through command history"""
+
     def register_with_launcher(self, launcher_window=None):
         """Register the history handler for empty input globally."""
         self.__class__.register_global_empty_input_handler(
@@ -55,8 +57,6 @@ class HistoryPlugin(Plugin):
             f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}"
         )
         launcher_window._setup_results_display(all_history, count_text)
-
-    """Plugin for searching through command history"""
 
     def __init__(self):
         super().__init__()

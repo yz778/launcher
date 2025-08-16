@@ -492,7 +492,7 @@ class LauncherWindow(Gtk.Window):
             try:
                 handler(self)
             except Exception as e:
-                logger.error(f"Error in empty input handler: {e}")
+                logger.error(f"Error in empty input handler: {handler._name_} {e}")
         # Call global plugin handlers
         from plugins.base import Plugin
 

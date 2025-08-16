@@ -294,4 +294,6 @@ class Plugin(ABC):
             try:
                 handler(launcher_window)
             except Exception as e:
-                logger.error(f"Error in global empty input handler: {e}")
+                logger.error(
+                    f"Error in global empty input handler: {handler.__name__} {e}"
+                )
