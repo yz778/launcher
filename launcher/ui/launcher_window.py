@@ -219,7 +219,6 @@ class TextHighlighter:
                 attrs.append(f'style="{style}"')
 
             return " ".join(attrs)
-
         except Exception as e:
             logger.debug(f"Could not extract CSS styles for {css_class}: {e}")
             # Fallback to default highlighting
@@ -707,285 +706,64 @@ class LauncherWindow(Gtk.Window):
             logger.debug("No results to deduplicate")
             return
 
-        try:
-            # Performance optimization: use efficient data structures for large result sets
-            start_time = None
-            if logger.isEnabledFor(logging.DEBUG):
-                import time
+        # Performance optimization: use efficient data structures for large result sets
+        start_time = None
+        if logger.isEnabledFor(logging.DEBUG):
+            import time
 
-                start_time = time.time()
-                logger.debug(
-                    f"Starting deduplication for {len(self.current_results)} results"
-                )
-
-            # Group results by plugin type using list comprehensions for better performance
-            history_results = []
-            other_results = []
-
-            for result in self.current_results:
-                try:
-                    # Enhanced validation of result structure
-                    if not hasattr(result, "plugin_id"):
-                        logger.warning(
-                            f"Result missing plugin_id attribute: {getattr(result, 'name', 'unknown')}"
-                        )
-                        continue
-
-                    if result.plugin_id == "history":
-                        history_results.append(result)
-                    else:
-                        other_results.append(result)
-
-                except Exception as e:
-                    logger.error(f"Error categorizing result: {e}")
-                    # Preserve result in other_results as fallback to avoid data loss
+            start_time = time.time()
+            logger.debug(
+                f"Starting deduplication for {len(self.current_results)} results"
+            )
+        if not self.current_results:
+            logger.debug("No results to deduplicate")
+            return
+        history_results = []
+        other_results = []
+        for result in self.current_results:
+            if hasattr(result, "plugin_id"):
+                if result.plugin_id == "history":
+                    history_results.append(result)
+                else:
                     other_results.append(result)
-                    continue
-
-            logger.debug(
-                f"Found {len(history_results)} history results and {len(other_results)} other results"
-            )
-
-            if not history_results or not other_results:
-                logger.debug(
-                    "No deduplication needed - missing history or other results"
-                )
-                return  # No deduplication needed
-
-            # Performance optimization: create efficient lookup structures
-            # Use dict for O(1) lookups with enhanced error handling
-            other_result_keys = {}  # (plugin_id, item_id) -> result for debugging
-            invalid_results_count = 0
-
-            for result in other_results:
-                try:
-                    # Enhanced validation that result has required attributes
-                    if not hasattr(result, "plugin_id") or not hasattr(
-                        result, "item_id"
-                    ):
-                        logger.warning(
-                            f"Result missing required attributes (plugin_id/item_id): {getattr(result, 'name', 'unknown')}"
-                        )
-                        invalid_results_count += 1
-                        continue
-
-                    # Validate that plugin_id and item_id are not None or empty
-                    if not result.plugin_id or not result.item_id:
-                        logger.debug(
-                            f"Result has empty plugin_id or item_id: {getattr(result, 'name', 'unknown')}"
-                        )
-                        invalid_results_count += 1
-                        continue
-
-                    key = (result.plugin_id, result.item_id)
-                    other_result_keys[key] = result
-
-                except AttributeError as e:
-                    logger.warning(
-                        f"AttributeError processing result {getattr(result, 'name', 'unknown')}: {e}"
+        if not history_results or not other_results:
+            logger.debug("No deduplication needed - missing history or other results")
+            return
+        other_result_keys = {
+            (r.plugin_id, r.item_id): r for r in other_results if hasattr(r, "item_id")
+        }
+        filtered_history_results = []
+        for history_result in history_results:
+            if not hasattr(history_result, "metadata") or not isinstance(
+                history_result.metadata, dict
+            ):
+                filtered_history_results.append(history_result)
+                continue
+            original_plugin_id = history_result.metadata.get("original_plugin_id")
+            original_item_id = history_result.metadata.get("original_item_id")
+            if not original_plugin_id or not original_item_id:
+                filtered_history_results.append(history_result)
+                continue
+            match_key = (original_plugin_id, original_item_id)
+            matching_result = other_result_keys.get(match_key)
+            if matching_result is None:
+                filtered_history_results.append(history_result)
+            else:
+                history_name = getattr(history_result, "name", "")
+                current_name = getattr(matching_result, "name", "")
+                if history_name.strip().lower() == current_name.strip().lower():
+                    logger.debug(
+                        f"Deduplicating history result '{history_name}' - too similar to current result '{current_name}' ({original_plugin_id}:{original_item_id})"
                     )
-                    invalid_results_count += 1
-                    continue
-                except Exception as e:
-                    logger.error(
-                        f"Unexpected error processing result {getattr(result, 'name', 'unknown')}: {e}"
-                    )
-                    invalid_results_count += 1
-                    continue
-
-            logger.debug(
-                f"Created lookup table with {len(other_result_keys)} entries ({invalid_results_count} invalid results skipped)"
-            )
-
-            # Filter out history results that have exact matches in other plugins
-            filtered_history_results = []
-            deduplicated_count = 0
-            preserved_count = 0
-            missing_metadata_count = 0
-            error_count = 0
-
-            for history_result in history_results:
-                try:
-                    # Enhanced validation of history result structure
-                    if not hasattr(history_result, "metadata"):
-                        logger.warning(
-                            f"History result missing metadata attribute: {getattr(history_result, 'name', 'unknown')}"
-                        )
-                        filtered_history_results.append(history_result)
-                        preserved_count += 1
-                        missing_metadata_count += 1
-                        continue
-
-                    if not isinstance(history_result.metadata, dict):
-                        logger.warning(
-                            f"History result has invalid metadata type ({type(history_result.metadata)}): {getattr(history_result, 'name', 'unknown')}"
-                        )
-                        filtered_history_results.append(history_result)
-                        preserved_count += 1
-                        missing_metadata_count += 1
-                        continue
-
-                    # Get original plugin info from history metadata with enhanced validation
-                    try:
-                        original_plugin_id = history_result.metadata.get(
-                            "original_plugin_id"
-                        )
-                        original_item_id = history_result.metadata.get(
-                            "original_item_id"
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            f"Error accessing metadata for history result '{getattr(history_result, 'name', 'unknown')}': {e}"
-                        )
-                        filtered_history_results.append(history_result)
-                        preserved_count += 1
-                        missing_metadata_count += 1
-                        continue
-
-                    # Validate metadata exists and is not empty with type checking
-                    if not original_plugin_id or not original_item_id:
-                        logger.debug(
-                            f"History result '{getattr(history_result, 'name', 'unknown')}' missing original plugin metadata - preserving"
-                        )
-                        filtered_history_results.append(history_result)
-                        preserved_count += 1
-                        missing_metadata_count += 1
-                        continue
-
-                    # Ensure metadata values are strings
-                    if not isinstance(original_plugin_id, str) or not isinstance(
-                        original_item_id, str
-                    ):
-                        logger.warning(
-                            f"History result '{getattr(history_result, 'name', 'unknown')}' has non-string metadata values - preserving"
-                        )
-                        filtered_history_results.append(history_result)
-                        preserved_count += 1
-                        missing_metadata_count += 1
-                        continue
-
-                    # Check if this history item has an exact match in current results
-                    match_key = (original_plugin_id, original_item_id)
-                    matching_result = other_result_keys.get(match_key)
-
-                    if matching_result is None:
-                        # No exact match found, keep this history result
-                        filtered_history_results.append(history_result)
-                        preserved_count += 1
-                        logger.debug(
-                            f"Preserving history result '{getattr(history_result, 'name', 'unknown')}' - no current match for {original_plugin_id}:{original_item_id}"
-                        )
-                    else:
-                        # Found a matching result, but only deduplicate if the history entry
-                        # represents the same user intent (similar input)
-                        history_name = getattr(history_result, "name", "")
-                        current_name = getattr(matching_result, "name", "")
-
-                        # Only deduplicate if the history entry name is very similar to the current result
-                        # This prevents removing "brave gmail.com" when "brave" app is found
-                        if self._should_deduplicate_history_entry(
-                            history_name, current_name
-                        ):
-                            deduplicated_count += 1
-                            logger.debug(
-                                f"Deduplicating history result '{history_name}' - too similar to current result '{current_name}' ({original_plugin_id}:{original_item_id})"
-                            )
-                        else:
-                            filtered_history_results.append(history_result)
-                            preserved_count += 1
-                            logger.debug(
-                                f"Preserving history result '{history_name}' - different intent from current result '{current_name}' ({original_plugin_id}:{original_item_id})"
-                            )
-
-                except AttributeError as e:
-                    # Graceful error handling for missing attributes
-                    logger.warning(f"AttributeError processing history result: {e}")
+                else:
                     filtered_history_results.append(history_result)
-                    preserved_count += 1
-                    error_count += 1
-                    continue
-                except KeyError as e:
-                    # Graceful error handling for missing dictionary keys
-                    logger.warning(f"KeyError processing history result metadata: {e}")
-                    filtered_history_results.append(history_result)
-                    preserved_count += 1
-                    error_count += 1
-                    continue
-                except Exception as e:
-                    # Graceful error handling - preserve result if processing fails
-                    logger.error(
-                        f"Unexpected error processing history result '{getattr(history_result, 'name', 'unknown')}': {e}"
-                    )
-                    filtered_history_results.append(history_result)
-                    preserved_count += 1
-                    error_count += 1
-                    continue
-
-            # Update current_results with deduplicated list
-            # Maintain original order: other results first, then filtered history results
-            original_count = len(self.current_results)
-            self.current_results = other_results + filtered_history_results
-            final_count = len(self.current_results)
-
-            # Comprehensive logging summary with error reporting
-            logger.debug(
-                f"Deduplication complete: {original_count} -> {final_count} results"
-            )
-            logger.debug(f"  - Deduplicated: {deduplicated_count} history results")
-            logger.debug(f"  - Preserved: {preserved_count} history results")
-            logger.debug(
-                f"  - Missing metadata: {missing_metadata_count} history results"
-            )
-
-            if error_count > 0:
-                logger.warning(
-                    f"  - Errors encountered: {error_count} results had processing errors"
-                )
-
-            if invalid_results_count > 0:
-                logger.warning(
-                    f"  - Invalid results: {invalid_results_count} results skipped due to missing attributes"
-                )
-
-            if start_time and logger.isEnabledFor(logging.DEBUG):
-                elapsed_time = time.time() - start_time
-                logger.debug(f"Deduplication took {elapsed_time:.3f}s")
-
-                # Performance warning for slow deduplication
-                if elapsed_time > 0.1:  # More than 100ms
-                    logger.warning(
-                        f"Deduplication took longer than expected: {elapsed_time:.3f}s for {original_count} results"
-                    )
-
-        except MemoryError as e:
-            # Handle memory errors specifically
-            logger.error(
-                f"Memory error during deduplication with {len(self.current_results)} results: {e}"
-            )
-            logger.warning("Skipping deduplication due to memory constraints")
-            # current_results remains unchanged
-        except Exception as e:
-            # Graceful error handling - log error but don't break search functionality
-            logger.error(f"Critical error during deduplication: {e}")
-            logger.debug("Continuing with original results due to deduplication error")
-            # current_results remains unchanged, ensuring search continues to work
-
-            # Log additional context for debugging
-            try:
-                logger.debug(
-                    f"Error context: {len(self.current_results)} total results"
-                )
-                history_count = sum(
-                    1
-                    for r in self.current_results
-                    if hasattr(r, "plugin_id") and r.plugin_id == "history"
-                )
-                logger.debug(f"Error context: {history_count} history results")
-            except Exception as context_error:
-                logger.debug(f"Could not gather error context: {context_error}")
+        self.current_results = other_results + filtered_history_results
+        if start_time and logger.isEnabledFor(logging.DEBUG):
+            elapsed_time = time.time() - start_time
+            logger.debug(f"Deduplication took {elapsed_time:.3f}s")
 
     def on_entry_key_press(self, widget, event) -> bool:
-        """Handle key presses in the entry field"""
+        # Handle key presses in the entry field
         keyval = event.keyval
         state = event.state
 
@@ -1005,13 +783,13 @@ class LauncherWindow(Gtk.Window):
                 # Handle history item selection - execute directly from history
                 selected_row = self.list_box.get_selected_row()
                 if selected_row and hasattr(selected_row, "history_entry"):
-                    self._execute_history_item(selected_row.history_entry)
+                    self.execute_result(selected_row.history_entry, event)
                     return True
                 elif self.list_box.get_children():
                     # No selection but have history items, use first one
                     first_row = self.list_box.get_row_at_index(0)
                     if first_row and hasattr(first_row, "history_entry"):
-                        self._execute_history_item(first_row.history_entry)
+                        self.execute_result(first_row.history_entry, event)
                         return True
             elif self.scrolled.get_visible() and self.plugin_manager is not None:
                 selected_row = self.list_box.get_selected_row()
@@ -1019,11 +797,11 @@ class LauncherWindow(Gtk.Window):
                     self.execute_result(selected_row.result, event)
                     return True
                 elif self.current_results:
-                    # No selection but have results, execute first result
                     self.execute_result(self.current_results[0], event)
                     return True
-
             return True
+
+        # ...existing code for other key handling...
 
         if self.scrolled.get_visible():
             # Handle Down arrow
@@ -1072,49 +850,26 @@ class LauncherWindow(Gtk.Window):
                 return True
 
             # Handle Up arrow
-            elif keyval == Gdk.KEY_Up:
-                self.user_navigating = True
-                selected_row = (
-                    self.list_box.get_selected_row()
-                )  # Get the currently focused row
-                target_row = None
-
-                if selected_row:
-                    index = selected_row.get_index()
-                    if index > 0:
-                        target_row = self.list_box.get_row_at_index(index - 1)
-                else:
-                    # No current selection, select the last item
-                    children = self.list_box.get_children()
-                    if children:
-                        target_row = self.list_box.get_row_at_index(
-                            len(children) - 1
-                        )  # Select the last item if no selection
-
-                if target_row:
-                    if not (state & Gdk.ModifierType.SHIFT_MASK):
-                        # If Shift is NOT pressed, ensure only the target_row is selected
-                        for row in self.list_box.get_selected_rows():
-                            if row != target_row:
-                                self.list_box.unselect_row(row)
-                    self.list_box.select_row(target_row)  # Select the target row
-
-                    adjustment = self.scrolled.get_vadjustment()
-                    if adjustment:
-                        row_alloc = target_row.get_allocation()
-                        adjustment.clamp_page(
-                            row_alloc.y, row_alloc.y + row_alloc.height
-                        )
-
-                    if self.showing_history and hasattr(target_row, "user_input"):
-                        # Temporarily block the "changed" signal
-                        if self.entry_changed_handler_id is not None:
-                            self.entry.handler_block(self.entry_changed_handler_id)
-                        self.entry.set_text(target_row.user_input)
-                        self.entry.set_position(-1)
-                        # Unblock the "changed" signal
-                        if self.entry_changed_handler_id is not None:
-                            self.entry.handler_unblock(self.entry_changed_handler_id)
+            if keyval == Gdk.KEY_Return:
+                if self.showing_history:
+                    selected_row = self.list_box.get_selected_row()
+                    if selected_row and hasattr(selected_row, "history_entry"):
+                        self.execute_result(selected_row.history_entry, event)
+                        return True
+                    elif self.list_box.get_children():
+                        first_row = self.list_box.get_row_at_index(0)
+                        if first_row and hasattr(first_row, "history_entry"):
+                            self.execute_result(first_row.history_entry, event)
+                            return True
+                elif self.scrolled.get_visible() and self.plugin_manager is not None:
+                    selected_row = self.list_box.get_selected_row()
+                    if selected_row:
+                        self.execute_result(selected_row.result, event)
+                        return True
+                    elif self.current_results:
+                        self.execute_result(self.current_results[0], event)
+                        return True
+                return True
                 return True
 
             # Handle Tab for non-autocomplete (select item name)
@@ -1494,5 +1249,6 @@ class LauncherWindow(Gtk.Window):
         """
         self.entry.set_text("")
         self._clear_list_box_and_hide()
-        self._show_recent_history()
+        # Use empty input handlers to repopulate the history view
+        self._call_empty_input_handlers()
         self.entry.grab_focus()
