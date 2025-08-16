@@ -155,23 +155,11 @@ class TimezonePlugin(Plugin):
 
     def _load_icon(self) -> None:
         """Load the timezone icon"""
-        try:
-            from launcher.utils.icon_utils import load_theme_icon
+        from launcher.utils.icon_utils import load_theme_icon
 
-            # Try multiple clock-related icons as fallbacks
-            icon_names = ["appointment-soon"]
-
-            for icon_name in icon_names:
-                self.icon = load_theme_icon(icon_name, self.icon_size)
-                if self.icon:
-                    logger.debug(f"Loaded timezone icon: {icon_name}")
-                    break
-
-            if not self.icon:
-                logger.warning("Could not load any timezone icon")
-        except ImportError as e:
-            logger.error(f"Could not import icon_utils: {e}")
-            self.icon = None
+        self.icon = load_theme_icon("appointment-soon", self.icon_size)
+        if not self.icon:
+            logger.warning("Could not load any timezone icon")
 
     def _is_timezone_query(self, query: str) -> bool:
         """Check if the query looks like a timezone conversion"""

@@ -78,17 +78,13 @@ class TerminalPlugin(Plugin):
         return True
 
     def start(self) -> bool:
-        GLib.idle_add(self._load_default_icon)
-        logger.info("TerminalPlugin started.")
+        GLib.idle_add(self._load_icon)
         return True
 
-    def _load_default_icon(self) -> bool:
-        """Load the default terminal icon from the icon theme"""
+    def _load_icon(self) -> bool:
         from launcher.utils.icon_utils import load_theme_icon
 
         self.default_icon = load_theme_icon("utilities-terminal", self.icon_size)
-
-        # Return False to ensure this function is only called once by idle_add
         return False
 
     def search(self, query: str) -> List[SearchResult]:

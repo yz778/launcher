@@ -92,19 +92,13 @@ class QalculatePlugin(Plugin):
         return True
 
     def start(self) -> bool:
-        """
-        Start the plugin and perform any necessary setup work
-
-        This loads the calculator icon.
-        """
         GLib.idle_add(self._load_icon)
         return True
 
     def _load_icon(self) -> bool:
-        """Load the calculator icon"""
         from launcher.utils.icon_utils import load_theme_icon
 
-        self.icon = load_theme_icon("qalculate", self.icon_size)
+        self.icon = load_theme_icon("accessories-calculator", self.icon_size)
         return False
 
     def _is_calculation(self, query: str) -> bool:

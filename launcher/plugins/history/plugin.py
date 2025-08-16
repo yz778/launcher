@@ -600,3 +600,85 @@ class HistoryPlugin(Plugin):
     def cleanup(self) -> None:
         """Clean up resources"""
         self.history_manager = None
+
+    def get_recent_history_as_results(self, max_items: int = 100) -> List[SearchResult]:
+        """Get recent history entries as SearchResults for display in launcher window"""
+        if not self.history_manager:
+            return []
+
+        all_history = self.history_manager.get_recent_history(max_items)
+        if not all_history:
+            return []
+
+        results = []
+        for history_entry in all_history:
+            if not history_entry.get("user_input"):
+                continue
+
+            try:
+                result = self._create_history_search_result(history_entry)
+                if result:
+                    results.append(result)
+            except Exception as e:
+                logger.debug(f"Error creating history result: {e}")
+                continue
+
+        return results
+
+    def _create_history_search_result(
+        self, history_entry: Dict[str, Any]
+    ) -> SearchResult:
+        """Create a SearchResult from a history entry"""
+        user_input = history_entry.get("user_input", "")
+        plugin_id = history_entry.get("plugin_id", "")
+        item_id = history_entry.get("item_id", "")
+        description = history_entry.get("description", user_input)
+
+        # Get the appropriate icon
+        display_icon = self._get_history_icon_for_entry(
+            plugin_id, item_id, history_entry
+        )
+
+        # Create SearchResult
+        result = SearchResult(
+            plugin_id="history",  # Mark as coming from history plugin
+            item_id=f"history_{plugin_id}_{item_id}",  # Unique ID for history item
+            name=user_input,
+            description=description,
+            icon=display_icon,
+            score=0,
+        )
+
+        # Store original metadata for execution
+        result.metadata = {
+            "original_plugin_id": plugin_id,
+            "original_item_id": item_id,
+            "user_input": user_input,
+            "usage_count": history_entry.get("usage_count", 0),
+            "history_entry": history_entry,
+        }
+
+        return result
+
+    def _get_history_icon_for_entry(
+        self, plugin_id: str, item_id: str, history_entry: Dict[str, Any]
+    ):
+        """Get the appropriate icon for a history entry"""
+        if not self.history_manager:
+            return self._get_fallback_icon()
+
+        actual_result = self.history_manager.get_result_for_history_entry(
+            plugin_id, item_id, history_entry, self.plugin_manager, self.icon_size
+        )
+
+        if actual_result and actual_result.icon:
+            return actual_result.icon
+
+        return self._get_fallback_icon()
+
+    def _get_fallback_icon(self):
+        """Get fallback icon for history items"""
+        from launcher.utils.icon_utils import load_theme_icon
+
+        fallback_names = ["document-open-recent"]
+        return load_theme_icon("accessories-history", self.icon_size, fallback_names)
