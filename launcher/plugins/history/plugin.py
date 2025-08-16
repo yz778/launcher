@@ -16,6 +16,46 @@ logger = logging.getLogger(__name__)
 
 
 class HistoryPlugin(Plugin):
+    def register_with_launcher(self, launcher_window=None):
+        """Register the history handler for empty input globally."""
+        self.__class__.register_global_empty_input_handler(
+            self._populate_recent_history
+        )
+
+    def _populate_recent_history(self, launcher_window):
+        """Populate the launcher window with recent history items when input is empty."""
+        if not self.history_manager:
+            return
+        all_history = self.history_manager.get_recent_history(100)
+        if not all_history:
+            return
+        # Clear the list box (should already be done by launcher, but safe)
+        launcher_window._clear_list_box()
+        for history_entry in all_history:
+            if not history_entry.get("user_input"):
+                continue
+            result = self._create_history_result(history_entry, 0, "")
+            if result:
+                from ui.launcher_window import AppListItem
+
+                list_item = AppListItem(
+                    result,
+                    icon_size=launcher_window.icon_size or 48,
+                    launch_count=history_entry.get("usage_count", 0),
+                    query="",
+                )
+                list_item.set_name("history-item")
+                list_item.user_input = history_entry.get("user_input", "")
+                list_item.history_entry = history_entry
+                launcher_window.list_box.add(list_item)
+        launcher_window.list_box.show_all()
+        launcher_window.scrolled.show()
+        launcher_window.showing_history = True
+        count_text = (
+            f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}"
+        )
+        launcher_window._setup_results_display(all_history, count_text)
+
     """Plugin for searching through command history"""
 
     def __init__(self):
