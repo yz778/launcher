@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 
-import logging
-from typing import Dict, Any, List
-
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, Gdk, Pango, GLib
-
-from plugins.base import SearchResult
-from core.plugin_manager import PluginManager
 from core.history_manager import HistoryManager
+from core.plugin_manager import PluginManager
+from gi.repository import Gtk, Gdk, Pango, GLib
+from plugins.base import SearchResult
+from typing import Dict, Any, List
 from ui.css_manager import CssManager
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -515,13 +510,17 @@ class LauncherWindow(Gtk.Window):
             plugin_id = history_entry.get("plugin_id", "")
             item_id = history_entry.get("item_id", "")
             description = history_entry.get("description", user_input)
-            
+
             # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
             display_name = self._build_hybrid_display_name(user_input, result_name)
-            
+
             # Build description that includes result_name if different (and not already used in display_name)
             display_description = description
-            if result_name and result_name != user_input and result_name not in display_name:
+            if (
+                result_name
+                and result_name != user_input
+                and result_name not in display_name
+            ):
                 if display_description and display_description != result_name:
                     display_description = f"{result_name} - {display_description}"
                 else:
@@ -562,7 +561,7 @@ class LauncherWindow(Gtk.Window):
         try:
             if not user_input:
                 return "Unknown Command"
-            
+
             # If we have a canonical result name, use it
             if result_name and result_name != user_input:
                 # Check if user input has arguments (contains spaces)
@@ -577,9 +576,11 @@ class LauncherWindow(Gtk.Window):
             else:
                 # No result_name available, use original input
                 return user_input
-                
+
         except Exception as e:
-            logger.warning(f"Error building hybrid display name: {e} - using user_input")
+            logger.warning(
+                f"Error building hybrid display name: {e} - using user_input"
+            )
             return user_input if user_input else "Unknown Command"
 
     def _clear_list_box(self):
@@ -1073,7 +1074,7 @@ class LauncherWindow(Gtk.Window):
         actual_command = result.metadata.get("actual_executed_command")
         if actual_command:
             return actual_command
-        
+
         # Fallback: try to reconstruct what would be executed
         # For executable plugin, this would be the file path + args
         command = result.metadata.get("command")
@@ -1082,7 +1083,7 @@ class LauncherWindow(Gtk.Window):
             if args:
                 return command + " " + " ".join(args)
             return command
-        
+
         # Final fallback: use result name + args (old behavior)
         base_command = result.name
         args = result.metadata.get("args", [])

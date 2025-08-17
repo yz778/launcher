@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 
-import logging
-import math
-import time
-from typing import List, Dict, Any
-
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
-
 from ..base import Plugin, SearchResult
+from gi.repository import Gtk
+from typing import List, Dict, Any
+import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -168,13 +162,19 @@ class HistoryPlugin(Plugin):
         )
 
         result_name_score = 0
-        if entry_data["result_name"] and entry_data["result_name"] != entry_data["user_input"]:
+        if (
+            entry_data["result_name"]
+            and entry_data["result_name"] != entry_data["user_input"]
+        ):
             result_name_score = calculate_match_score(
                 query, entry_data["result_name"], is_name=True, is_history=True
             )
 
         actual_command_score = 0
-        if entry_data["actual_command"] and entry_data["actual_command"] != entry_data["user_input"]:
+        if (
+            entry_data["actual_command"]
+            and entry_data["actual_command"] != entry_data["user_input"]
+        ):
             actual_command_score = calculate_match_score(
                 query, entry_data["actual_command"], is_name=True, is_history=True
             )
@@ -186,8 +186,10 @@ class HistoryPlugin(Plugin):
                 query, entry_data["description"], is_name=False, is_history=True
             )
 
-        best_score = max(user_input_score, result_name_score, actual_command_score, description_score)
-        
+        best_score = max(
+            user_input_score, result_name_score, actual_command_score, description_score
+        )
+
         # Apply argument mismatch penalty
         return self._apply_argument_mismatch_penalty(query, entry_data, best_score)
 
@@ -319,9 +321,7 @@ class HistoryPlugin(Plugin):
         try:
             user_input = self._get_string_field(entry, "user_input", "")
             result_name = self._get_string_field(entry, "result_name", "")
-            actual_command = self._get_string_field(
-                entry, "actual_command", user_input
-            )
+            actual_command = self._get_string_field(entry, "actual_command", user_input)
             description = self._get_string_field(entry, "description", "")
             usage_count = self._get_numeric_field(entry, "usage_count", 1)
 
@@ -386,18 +386,26 @@ class HistoryPlugin(Plugin):
             return default
 
     def _build_display_description(
-        self, actual_command: str, description: str, user_input: str, result_name: str = None
+        self,
+        actual_command: str,
+        description: str,
+        user_input: str,
+        result_name: str = None,
     ) -> str:
         """Build display description from entry data"""
         try:
             display_parts = []
-            
+
             # Show result_name if it's different from user_input (preserves title-cased names)
             if result_name and result_name != user_input:
                 display_parts.append(result_name)
-            
+
             # Add actual_command if it's different from user_input and result_name
-            if actual_command and actual_command != user_input and actual_command != result_name:
+            if (
+                actual_command
+                and actual_command != user_input
+                and actual_command != result_name
+            ):
                 display_parts.append(actual_command)
 
             # Add description if it's different from other fields
@@ -425,7 +433,7 @@ class HistoryPlugin(Plugin):
         try:
             if not user_input:
                 return "Unknown Command"
-            
+
             # If we have a canonical result name, use it
             if result_name and result_name != user_input:
                 # Check if user input has arguments (contains spaces)
@@ -440,12 +448,16 @@ class HistoryPlugin(Plugin):
             else:
                 # No result_name available, use original input
                 return user_input
-                
+
         except Exception as e:
-            logger.warning(f"Error building hybrid display name: {e} - using user_input")
+            logger.warning(
+                f"Error building hybrid display name: {e} - using user_input"
+            )
             return user_input if user_input else "Unknown Command"
 
-    def _apply_argument_mismatch_penalty(self, query: str, entry_data: Dict[str, str], base_score: float) -> float:
+    def _apply_argument_mismatch_penalty(
+        self, query: str, entry_data: Dict[str, str], base_score: float
+    ) -> float:
         """
         Apply penalty when query and history entry have mismatched argument patterns.
         - If query has no args but history entry has args: penalize
@@ -455,33 +467,37 @@ class HistoryPlugin(Plugin):
         try:
             if base_score <= 0:
                 return base_score
-            
+
             query_parts = query.strip().split()
             user_input_parts = entry_data["user_input"].strip().split()
-            
+
             query_has_args = len(query_parts) > 1
             entry_has_args = len(user_input_parts) > 1
-            
+
             # No penalty if both have same argument pattern
             if query_has_args == entry_has_args:
                 return base_score
-            
+
             # Moderate penalty if query has no args but entry has args
             # (user wants simple command, but history has complex command with args)
             if not query_has_args and entry_has_args:
                 penalty_factor = 0.8  # Reduce score to 80%
-                logger.debug(f"Applying argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'")
+                logger.debug(
+                    f"Applying argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'"
+                )
                 return base_score * penalty_factor
-            
+
             # Light penalty if query has args but entry has no args
             # (user wants complex command, but history has simple command)
             elif query_has_args and not entry_has_args:
                 penalty_factor = 0.9  # Reduce score to 90%
-                logger.debug(f"Applying light argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'")
+                logger.debug(
+                    f"Applying light argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'"
+                )
                 return base_score * penalty_factor
-            
+
             return base_score
-            
+
         except Exception as e:
             logger.warning(f"Error applying argument mismatch penalty: {e}")
             return base_score
@@ -723,7 +739,7 @@ class HistoryPlugin(Plugin):
         plugin_id = history_entry.get("plugin_id", "")
         item_id = history_entry.get("item_id", "")
         description = history_entry.get("description", user_input)
-        
+
         # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
         display_name = self._build_hybrid_display_name(user_input, result_name)
 

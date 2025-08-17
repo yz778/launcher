@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
 
-import logging
-import re
-from typing import Dict, List, Any, Optional
-from datetime import datetime
-import pytz
-
-import pyperclip
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
-
 from ..base import Plugin, SearchResult
+from datetime import datetime
 from launcher.utils.scoring_system import calculate_match_score
+from typing import Dict, List, Any, Optional
+import logging
+import pytz
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -401,20 +394,4 @@ class TimezonePlugin(Plugin):
         return [search_result]
 
     def execute(self, result: SearchResult) -> bool:
-        """Execute the timezone conversion result - copy to clipboard"""
-        if result.plugin_id != self.get_id():
-            return False
-
-        conversion_result = result.metadata.get("result")
-        if not conversion_result:
-            return False
-
-        try:
-            pyperclip.copy(conversion_result)
-            logger.info(
-                f"Copied timezone conversion result to clipboard: {conversion_result}"
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Error copying to clipboard: {e}")
-            return False
+        return False

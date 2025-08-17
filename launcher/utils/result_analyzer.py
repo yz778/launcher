@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
+from launcher.plugins.base import SearchResult
+import logging
 import re
 import shlex
-import logging
-from typing import List
-from launcher.plugins.base import SearchResult
 
 logger = logging.getLogger(__name__)
 

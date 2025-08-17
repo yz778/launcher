@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 
+from .singleton import SingletonManager
+from .utils.config_utils import arg_parser
+import logging
 import os
+import signal
 import sys
 
+# add current dir to path to load modules
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
-
-# Only import absolutely essential modules at startup
-import logging
-import signal
-from .singleton import SingletonManager
-from .utils.config_utils import arg_parser
 
 logging.basicConfig(
     level=logging.INFO,
@@ -137,29 +136,15 @@ def main() -> None:
     # Skip singleton behavior if running in foreground mode
     if not args.foreground:
         logger.info("Running in singleton mode")
-
-        # Initialize singleton manager
         singleton_manager = SingletonManager("launcher")
 
         # Handle rescan commands
         if args.rescan or args.rescan_plugin:
             if singleton_manager.is_running():
-                if args.rescan:
-                    logger.info("Sending rescan command to running instance...")
-                    if singleton_manager.send_rescan_command():
-                        logger.info("Successfully triggered rescan")
-                        return
-                elif args.rescan_plugin:
-                    logger.info(
-                        f"Sending rescan command for {args.rescan_plugin} to running instance..."
-                    )
-                    if singleton_manager.send_rescan_command(args.rescan_plugin):
-                        logger.info(
-                            f"Successfully triggered rescan for {args.rescan_plugin}"
-                        )
-                        return
-                logger.error("Failed to send rescan command")
-                return 1
+                logger.info("Sending rescan command to running instance...")
+                if not singleton_manager.send_rescan_command(args.rescan_plugin):
+                    logger.error("Failed to send rescan command")
+                    return 1
             else:
                 logger.error("No running instance found to rescan")
                 return 1
@@ -168,7 +153,6 @@ def main() -> None:
         if singleton_manager.is_running():
             logger.info("Another instance is already running, sending show command...")
             if singleton_manager.send_show_command():
-                logger.info("Successfully showed existing instance")
                 return  # Fast exit path - no heavy imports needed!
             else:
                 logger.warning(
@@ -188,12 +172,10 @@ def main() -> None:
             return 1
 
     # Only import heavy modules when we actually need to start the GUI
-    logger.debug("Loading GUI modules...")
     import gi
 
     gi.require_version("Gtk", "3.0")
     from gi.repository import Gtk, GLib
-
     from .core.config_manager import ConfigManager
     from .ui.launcher_window import LauncherWindow
 
@@ -250,13 +232,8 @@ def complete_initialization(
     from .core.plugin_manager import PluginManager
     from .core.history_manager import HistoryManager
 
-    # Load the full configuration
     config = config_manager.get_config(args.config)
-
-    # Initialize plugin manager and load plugins
     plugin_manager = PluginManager(config_manager)
-
-    # Initialize history manager
     history_manager = HistoryManager(config)
 
     # Set global references for plugins to access
@@ -275,9 +252,6 @@ def complete_initialization(
 
     # Update the window with the full configuration and managers
     win.update_with_full_config(plugin_manager, history_manager, config)
-
-    # Start plugins in the background
-    from gi.repository import GLib
 
     GLib.idle_add(lambda: start_plugins(plugin_manager))
 

@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 
-import os
-import yaml
-import logging
-import time
-import base64
-import math
-from typing import Dict, Any, List, Optional
-
-import gi
-
-gi.require_version("Gtk", "3.0")
 from gi.repository import GdkPixbuf
-
-from launcher.utils.result_analyzer import ResultAnalyzer
 from launcher.plugins.base import SearchResult
+from launcher.utils.result_analyzer import ResultAnalyzer
+from typing import Dict, Any, List, Optional
+import base64
+import logging
+import math
+import os
+import time
+import yaml
 
 logger = logging.getLogger(__name__)
 

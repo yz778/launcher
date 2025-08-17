@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 
-import os
-import logging
-import hashlib
-import urllib.request
-import urllib.parse
-from typing import Optional, List, Dict, Any
 
-import gi
-
-gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GdkPixbuf
+from typing import Optional, List, Dict
+import hashlib
+import logging
+import os
+import urllib.parse
+import urllib.request
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-import gi
+from ..base import Plugin, SearchResult
+from gi.repository import GLib
+from launcher.utils.string_matcher import StringMatcher
+from typing import Dict, List, Any
 import json
 import logging
 import os
@@ -8,15 +11,6 @@ import re
 import shlex
 import stat
 import threading
-from typing import Dict, List, Any
-
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib  # Import GLib at the module level
-
-from ..base import Plugin, SearchResult
-from launcher.core.config_manager import ConfigManager
-from launcher.utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
 

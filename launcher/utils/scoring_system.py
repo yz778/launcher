@@ -35,7 +35,9 @@ DESCRIPTION_MATCH_BASE = 50
 DESCRIPTION_EXACT_BONUS = 30
 
 
-def calculate_match_score(query: str, text: str, is_name: bool = True, is_history: bool = False) -> float:
+def calculate_match_score(
+    query: str, text: str, is_name: bool = True, is_history: bool = False
+) -> float:
     """
     Calculate match score between query and text using prioritized scoring.
 
@@ -76,80 +78,80 @@ def calculate_match_score(query: str, text: str, is_name: bool = True, is_histor
 def _calculate_history_score(query: str, text: str, is_name: bool) -> float:
     """Calculate score for history items (Priority 3: 500-599 points)"""
     base_score = HISTORY_MATCH_BASE
-    
+
     # Exact match gets highest history score
     if query == text:
         return base_score + 50
-    
+
     # Prefix match
     if text.startswith(query):
         quality = len(query) / len(text)
         return base_score + 30 + (quality * 20)
-    
+
     # Substring match
     if query in text:
         quality = len(query) / len(text)
         position = text.find(query) / len(text)
         position_bonus = (1.0 - position) * 10
         return base_score + 20 + (quality * 10) + position_bonus
-    
+
     # Fuzzy match
     if _is_fuzzy_match(query, text):
         quality = len(query) / len(text)
         return base_score + (quality * 10)
-    
+
     return 0.0
 
 
 def _calculate_fuzzy_name_score(query: str, text: str) -> float:
     """Calculate score for fuzzy name matches (Priority 2: 600-999 points)"""
     base_score = FUZZY_NAME_MATCH_BASE
-    
+
     # Prefix match
     if text.startswith(query):
         quality = len(query) / len(text)
         return base_score + 100 + (quality * 50)
-    
+
     # Substring match
     if query in text:
         quality = len(query) / len(text)
         position = text.find(query) / len(text)
         position_bonus = (1.0 - position) * 20
         return base_score + 50 + (quality * 30) + position_bonus
-    
+
     # Fuzzy match
     if _is_fuzzy_match(query, text):
         quality = len(query) / len(text)
         return base_score + (quality * 30)
-    
+
     return 0.0
 
 
 def _calculate_description_score(query: str, text: str) -> float:
     """Calculate score for description matches (Priority 4: 1-99 points)"""
     base_score = DESCRIPTION_MATCH_BASE
-    
+
     # Exact match
     if query == text:
         return base_score + DESCRIPTION_EXACT_BONUS
-    
+
     # Prefix match
     if text.startswith(query):
         quality = len(query) / len(text)
         return base_score + 20 + (quality * 10)
-    
+
     # Substring match
     if query in text:
         quality = len(query) / len(text)
         position = text.find(query) / len(text)
         position_bonus = (1.0 - position) * 5
         return base_score + 10 + (quality * 5) + position_bonus
-    
+
     # Fuzzy match
     if _is_fuzzy_match(query, text):
         quality = len(query) / len(text)
         return base_score + (quality * 5)
-    
+
     return 0.0
 
 
@@ -187,13 +189,13 @@ def calculate_exact_name_match_score(query: str, text: str) -> float:
     """Calculate score for exact name matches (Priority 1: highest)"""
     if not text or not query:
         return 0.0
-    
+
     query = query.lower().strip()
     text = text.lower().strip()
-    
+
     if query == text:
         return EXACT_NAME_MATCH_BASE + EXACT_NAME_MATCH_BONUS
-    
+
     return 0.0
 
 

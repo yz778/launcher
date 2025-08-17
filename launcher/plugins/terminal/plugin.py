@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 
+from ..base import Plugin, SearchResult
+from gi.repository import GLib
+from launcher.utils.scoring_system import calculate_match_score
+from typing import Dict, Any, List
 import logging
 import shlex
-from typing import Dict, Any, List
-
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib  # GLib might not be strictly needed if no idle_add
-
-from ..base import Plugin, SearchResult
-from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 

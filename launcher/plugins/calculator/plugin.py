@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 
-import logging
-from typing import Dict, List, Any, Optional
-import pyperclip
-
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
-
 from ..base import Plugin, SearchResult
+from gi.repository import GLib
 from launcher.utils.scoring_system import calculate_match_score
+from typing import Dict, List, Any, Optional
+import logging
+import pyperclip
 
 logger = logging.getLogger(__name__)
 

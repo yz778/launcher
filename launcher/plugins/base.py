@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-import logging
 from abc import ABC, abstractmethod
 from typing import List, Any, Dict, Optional
+import logging
 
 logger = logging.getLogger(__name__)
 
