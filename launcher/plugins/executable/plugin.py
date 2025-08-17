@@ -314,7 +314,6 @@ class ExecutablePlugin(Plugin):
         if not history_manager or not hasattr(history_manager, "user_input_history"):
             return 0
 
-        original_count = len(history_manager.user_input_history)
         valid_entries = []
         removed_count = 0
 
@@ -471,7 +470,7 @@ class ExecutablePlugin(Plugin):
             result = SearchResult(
                 plugin_id=self.get_id(),
                 item_id=executable.path,
-                name=executable.name,
+                name=executable.name.title(),
                 description=executable.path,
                 icon=icon,
                 score=score,

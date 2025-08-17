@@ -17,7 +17,7 @@ class ConfigManager:
     DEFAULT_CONFIG = {
         "max_results": 15,
         "icon_size": 48,
-        "terminal_command": "term",
+        "terminal_command": "footclient",
         "window_width": 600,
         "window_height": 70,
         "window_height_results": 300,
