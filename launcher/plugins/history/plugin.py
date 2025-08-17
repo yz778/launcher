@@ -158,34 +158,38 @@ class HistoryPlugin(Plugin):
     def _calculate_best_match_score(
         self, query: str, entry_data: Dict[str, str]
     ) -> float:
-        """Calculate the best match score from all searchable fields using unified scoring"""
+        """Calculate the best match score from all searchable fields using prioritized scoring"""
         from launcher.utils.scoring_system import calculate_match_score
 
+        # History items get priority 2 scoring (500-999 points)
         # Name matches (user input, result name, and actual command)
         user_input_score = calculate_match_score(
-            query, entry_data["user_input"], is_name=True
+            query, entry_data["user_input"], is_name=True, is_history=True
         )
 
         result_name_score = 0
         if entry_data["result_name"] and entry_data["result_name"] != entry_data["user_input"]:
             result_name_score = calculate_match_score(
-                query, entry_data["result_name"], is_name=True
+                query, entry_data["result_name"], is_name=True, is_history=True
             )
 
         actual_command_score = 0
         if entry_data["actual_command"] and entry_data["actual_command"] != entry_data["user_input"]:
             actual_command_score = calculate_match_score(
-                query, entry_data["actual_command"], is_name=True
+                query, entry_data["actual_command"], is_name=True, is_history=True
             )
 
-        # Description match (gets lower scoring automatically)
+        # Description match (still gets lower scoring within history tier)
         description_score = 0
         if entry_data["description"]:
             description_score = calculate_match_score(
-                query, entry_data["description"], is_name=False
+                query, entry_data["description"], is_name=False, is_history=True
             )
 
-        return max(user_input_score, result_name_score, actual_command_score, description_score)
+        best_score = max(user_input_score, result_name_score, actual_command_score, description_score)
+        
+        # Apply argument mismatch penalty
+        return self._apply_argument_mismatch_penalty(query, entry_data, best_score)
 
     def _sort_and_limit_results(
         self, results: List[SearchResult]
@@ -440,6 +444,47 @@ class HistoryPlugin(Plugin):
         except Exception as e:
             logger.warning(f"Error building hybrid display name: {e} - using user_input")
             return user_input if user_input else "Unknown Command"
+
+    def _apply_argument_mismatch_penalty(self, query: str, entry_data: Dict[str, str], base_score: float) -> float:
+        """
+        Apply penalty when query and history entry have mismatched argument patterns.
+        - If query has no args but history entry has args: penalize
+        - If query has args but history entry has no args: penalize less
+        - If both have args or both have no args: no penalty
+        """
+        try:
+            if base_score <= 0:
+                return base_score
+            
+            query_parts = query.strip().split()
+            user_input_parts = entry_data["user_input"].strip().split()
+            
+            query_has_args = len(query_parts) > 1
+            entry_has_args = len(user_input_parts) > 1
+            
+            # No penalty if both have same argument pattern
+            if query_has_args == entry_has_args:
+                return base_score
+            
+            # Moderate penalty if query has no args but entry has args
+            # (user wants simple command, but history has complex command with args)
+            if not query_has_args and entry_has_args:
+                penalty_factor = 0.8  # Reduce score to 80%
+                logger.debug(f"Applying argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'")
+                return base_score * penalty_factor
+            
+            # Light penalty if query has args but entry has no args
+            # (user wants complex command, but history has simple command)
+            elif query_has_args and not entry_has_args:
+                penalty_factor = 0.9  # Reduce score to 90%
+                logger.debug(f"Applying light argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'")
+                return base_score * penalty_factor
+            
+            return base_score
+            
+        except Exception as e:
+            logger.warning(f"Error applying argument mismatch penalty: {e}")
+            return base_score
 
     def _build_result_metadata(
         self, entry: Dict[str, Any], entry_data: Dict[str, Any]
