@@ -355,7 +355,7 @@ class LauncherWindow(Gtk.Window):
     ):
         super().__init__(title="Launcher")
 
-        CssManager._load_css_from_string(CssManager.DEFAULT_CSS)
+        CssManager.load_default_css()
 
         self.plugin_manager = plugin_manager
         self.history_manager = history_manager

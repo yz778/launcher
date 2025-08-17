@@ -35,39 +35,6 @@ class QalculatePlugin(Plugin):
             "track_history": True,  # Track calculator results in history
         }
 
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Qalculate Plugin CSS */
-.qalculate-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
-}
-
-.qalculate-result #app-list-item:hover {
-    background-color: rgba(130, 90, 70, 0.4);
-}
-
-.qalculate-result #app-list-item:selected {
-    background-color: rgba(150, 110, 90, 0.6);
-}
-
-.qalculate-result #app-name {
-    color: #f0e0d0;
-    font-size: 18px;
-    font-weight: bold;
-    font-family: monospace;
-}
-
-.qalculate-result #app-description {
-    color: #c0b0a0;
-    font-size: 14px;
-    font-family: monospace;
-}
-"""
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)

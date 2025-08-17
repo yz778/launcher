@@ -37,33 +37,6 @@ class TerminalPlugin(Plugin):
             "track_history": True,  # Track terminal commands in history
         }
 
-    def get_default_css(self) -> str:
-        return """
-        /* Terminal Plugin CSS */
-        .terminal-result #app-list-item {
-            padding: 8px;
-            border-radius: 8px;
-            transition: background-color 0.2s ease;
-            min-height: 50px;
-        }
-        .terminal-result #app-list-item:hover {
-            background-color: rgba(70, 90, 110, 0.4);
-        }
-        .terminal-result #app-list-item:selected {
-            background-color: rgba(90, 110, 130, 0.6);
-        }
-        .terminal-result #app-name {
-            color: #d0e0f0;
-            font-size: 16px;
-            font-weight: bold;
-        }
-        .terminal-result #app-description {
-            color: #a0b0c0;
-            font-size: 12px;
-            font-family: monospace;
-        }
-        """
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         super().initialize(config, config_manager)
 

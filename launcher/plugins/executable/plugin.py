@@ -155,38 +155,6 @@ class ExecutablePlugin(Plugin):
             "track_history": True,  # Track executable commands in history
         }
 
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Executable Plugin CSS */
-.executable-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
-}
-
-.executable-result #app-list-item:hover {
-    background-color: rgba(60, 100, 80, 0.4);
-}
-
-.executable-result #app-list-item:selected {
-    background-color: rgba(80, 120, 100, 0.6);
-}
-
-.executable-result #app-name {
-    color: #e0f0e0;
-    font-size: 16px;
-    font-weight: bold;
-}
-
-.executable-result #app-description {
-    color: #a0c0a0;
-    font-size: 12px;
-    font-family: monospace;
-}
-"""
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)

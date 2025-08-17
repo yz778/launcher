@@ -259,38 +259,6 @@ class DesktopFilePlugin(Plugin):
             "track_history": True,  # Track desktop applications in history
         }
 
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Desktop File Plugin CSS */
-.desktop-file-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
-}
-
-.desktop-file-result #app-list-item:hover {
-    background-color: rgba(70, 90, 130, 0.4);
-}
-
-.desktop-file-result #app-list-item:selected {
-    background-color: rgba(90, 110, 150, 0.6);
-}
-
-.desktop-file-result #app-name {
-    color: #f0f0f0;
-    font-size: 16px;
-    font-weight: bold;
-}
-
-.desktop-file-result #app-description {
-    color: #b0b0b0;
-    font-size: 12px;
-    font-style: italic;
-}
-"""
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)

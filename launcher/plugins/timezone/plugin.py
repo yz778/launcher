@@ -52,39 +52,6 @@ class TimezonePlugin(Plugin):
             "track_history": True,
         }
 
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Timezone Plugin CSS */
-.timezone-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px;
-}
-
-.timezone-result #app-list-item:hover {
-    background-color: rgba(70, 130, 180, 0.4);
-}
-
-.timezone-result #app-list-item:selected {
-    background-color: rgba(90, 150, 200, 0.6);
-}
-
-.timezone-result #app-name {
-    color: #e0f0ff;
-    font-size: 18px;
-    font-weight: bold;
-    font-family: monospace;
-}
-
-.timezone-result #app-description {
-    color: #b0d0f0;
-    font-size: 14px;
-    font-family: monospace;
-}
-"""
-
     def _build_timezone_aliases(self) -> Dict[str, str]:
         """Build a mapping of common timezone abbreviations to pytz timezone names"""
         return {
