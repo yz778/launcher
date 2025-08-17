@@ -252,9 +252,7 @@ def complete_initialization(
 
     # Update the window with the full configuration and managers
     win.update_with_full_config(plugin_manager, history_manager, config)
-
-    GLib.idle_add(lambda: start_plugins(plugin_manager))
-
+    start_plugins(plugin_manager)
     logger.info("Background initialization completed")
     return False  # Remove from idle queue
 

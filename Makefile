@@ -25,6 +25,10 @@ setup:
 	uv venv
 	uv pip install -e .
 
+# Update Python Packages
+update:
+	uv pip compile requirements.txt -o requirements.txt
+
 # Run the launcher for development
 run: all
 	./$(EXECUTABLE)
@@ -40,4 +44,4 @@ clean:
 compile:
 	$(VENV_PYTHON) -m compileall .
 
-.PHONY: all setup run clean compile
+.PHONY: all setup update run clean compile

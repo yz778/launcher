@@ -123,12 +123,12 @@ class SingletonManager:
             pass
 
         try:
+            self._running = True
             self.server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.server_socket.bind(self.socket_path)
             self.server_socket.listen(1)
             self.server_thread = threading.Thread(target=self._server_loop, daemon=True)
             self.server_thread.start()
-            self._running = True
 
             logger.info(f"Singleton server started on {self.socket_path}")
             return True
