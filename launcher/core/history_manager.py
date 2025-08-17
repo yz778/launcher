@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-import json
+import yaml
 import logging
 import time
 import base64
@@ -32,9 +32,7 @@ class HistoryManager:
 
         if config:
             general_config = config.get("general", {})
-            history_file = general_config.get(
-                "history_file", "~/.local/share/launcher/history.json"
-            )
+            history_file = general_config.get("history_file")
             self.load_history(history_file)
 
     def load_history(self, history_file_path: str) -> None:
@@ -51,7 +49,8 @@ class HistoryManager:
         if os.path.isfile(self.history_file):
             try:
                 with open(self.history_file, "r") as f:
-                    self.user_input_history = json.load(f)
+                    data = yaml.safe_load(f)
+                    self.user_input_history = data if data is not None else []
 
                 logger.info(f"Loaded history from {self.history_file}")
             except Exception as e:
@@ -74,7 +73,12 @@ class HistoryManager:
 
         try:
             with open(self.history_file, "w") as f:
-                json.dump(self.user_input_history, f, indent=2)
+                yaml.dump(
+                    self.user_input_history,
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                )
             logger.info(f"Saved history to {self.history_file}")
             return True
         except Exception as e:
@@ -135,8 +139,9 @@ class HistoryManager:
         self,
         plugin_id: str,
         item_id: str,
-        executed_command: str,
+        actual_command: str,
         original_user_input: str,
+        result_name: str = None,
         description: str = None,
         icon_pixbuf=None,
     ) -> None:
@@ -146,7 +151,9 @@ class HistoryManager:
         Args:
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
-            user_input: The exact text that the user typed before submitting
+            actual_command: The actual command that was executed (subprocess command)
+            original_user_input: The exact text that the user typed before submitting
+            result_name: The display name of the executed result (e.g., title-cased executable name)
             description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
@@ -158,7 +165,8 @@ class HistoryManager:
             plugin_id,
             item_id,
             current_time,
-            executed_command,
+            actual_command,
+            result_name,
             description,
             icon_pixbuf,
         )
@@ -189,7 +197,8 @@ class HistoryManager:
         plugin_id: str,
         item_id: str,
         timestamp: float = None,
-        executed_command_string: str = None,
+        actual_command_string: str = None,
+        result_name: str = None,
         description: str = None,
         icon_pixbuf=None,
     ) -> None:
@@ -202,7 +211,8 @@ class HistoryManager:
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
             timestamp: Timestamp when executed (defaults to current time)
-            executed_command_string: The actual command string that was executed.
+            actual_command_string: The actual command string that was executed (subprocess command)
+            result_name: The display name of the executed result (e.g., title-cased executable name)
             description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
@@ -210,7 +220,7 @@ class HistoryManager:
             timestamp = time.time()
 
         current_usage_count = self._process_existing_entries(
-            user_input, plugin_id, executed_command_string
+            user_input, plugin_id, actual_command_string
         )
 
         entry = self._create_history_entry(
@@ -218,7 +228,8 @@ class HistoryManager:
             plugin_id,
             item_id,
             timestamp,
-            executed_command_string,
+            actual_command_string,
+            result_name,
             description,
             current_usage_count + 1,
             icon_pixbuf,
@@ -227,16 +238,16 @@ class HistoryManager:
         self._add_and_limit_history(entry)
 
     def _process_existing_entries(
-        self, user_input: str, plugin_id: str, executed_command_string: str
+        self, user_input: str, plugin_id: str, actual_command_string: str
     ) -> int:
         """Process existing entries for duplicates and merging"""
         current_usage_count = 0
         entries_to_remove = []
 
         normalized_new_command = None
-        if plugin_id in ["executable", "desktop_file"] and executed_command_string:
+        if plugin_id in ["executable", "desktop_file"] and actual_command_string:
             normalized_new_command = self._normalize_command_for_comparison(
-                executed_command_string
+                actual_command_string
             )
 
         for entry in self.user_input_history:
@@ -249,7 +260,7 @@ class HistoryManager:
                 current_usage_count += entry.get("usage_count", 0)
                 entries_to_remove.append(entry)
                 logger.debug(
-                    f"Merging history entry for command '{executed_command_string}' with existing entry: {entry.get('user_input')}"
+                    f"Merging history entry for command '{actual_command_string}' with existing entry: {entry.get('user_input')}"
                 )
 
         self._remove_entries(entries_to_remove)
@@ -261,11 +272,11 @@ class HistoryManager:
 
     def _should_merge_commands(self, entry: dict, normalized_new_command: str) -> bool:
         """Check if entry should be merged based on normalized command"""
-        if not normalized_new_command or not entry.get("executed_command"):
+        if not normalized_new_command or not entry.get("actual_command"):
             return False
 
         normalized_existing_command = self._normalize_command_for_comparison(
-            entry["executed_command"]
+            entry["actual_command"]
         )
         return normalized_new_command == normalized_existing_command
 
@@ -281,7 +292,8 @@ class HistoryManager:
         plugin_id: str,
         item_id: str,
         timestamp: float,
-        executed_command_string: str,
+        actual_command_string: str,
+        result_name: str,
         description: str,
         usage_count: int,
         icon_pixbuf,
@@ -292,9 +304,10 @@ class HistoryManager:
             "plugin_id": plugin_id,
             "item_id": item_id,
             "timestamp": timestamp,
+            "result_name": result_name,
             "description": description,
             "usage_count": usage_count,
-            "executed_command": executed_command_string,
+            "actual_command": actual_command_string,
         }
 
         if icon_pixbuf:

@@ -147,7 +147,8 @@ class HistoryPlugin(Plugin):
         try:
             return {
                 "user_input": entry.get("user_input", ""),
-                "executed_command": entry.get("executed_command", ""),
+                "actual_command": entry.get("actual_command", ""),
+                "result_name": entry.get("result_name", ""),
                 "description": entry.get("description", ""),
             }
         except Exception as e:
@@ -160,15 +161,21 @@ class HistoryPlugin(Plugin):
         """Calculate the best match score from all searchable fields using unified scoring"""
         from launcher.utils.scoring_system import calculate_match_score
 
-        # Name matches (user input and executed command)
+        # Name matches (user input, result name, and actual command)
         user_input_score = calculate_match_score(
             query, entry_data["user_input"], is_name=True
         )
 
-        executed_command_score = 0
-        if entry_data["executed_command"] != entry_data["user_input"]:
-            executed_command_score = calculate_match_score(
-                query, entry_data["executed_command"], is_name=True
+        result_name_score = 0
+        if entry_data["result_name"] and entry_data["result_name"] != entry_data["user_input"]:
+            result_name_score = calculate_match_score(
+                query, entry_data["result_name"], is_name=True
+            )
+
+        actual_command_score = 0
+        if entry_data["actual_command"] and entry_data["actual_command"] != entry_data["user_input"]:
+            actual_command_score = calculate_match_score(
+                query, entry_data["actual_command"], is_name=True
             )
 
         # Description match (gets lower scoring automatically)
@@ -178,7 +185,7 @@ class HistoryPlugin(Plugin):
                 query, entry_data["description"], is_name=False
             )
 
-        return max(user_input_score, executed_command_score, description_score)
+        return max(user_input_score, result_name_score, actual_command_score, description_score)
 
     def _sort_and_limit_results(
         self, results: List[SearchResult]
@@ -307,8 +314,9 @@ class HistoryPlugin(Plugin):
         """Safely extract and validate entry data"""
         try:
             user_input = self._get_string_field(entry, "user_input", "")
-            executed_command = self._get_string_field(
-                entry, "executed_command", user_input
+            result_name = self._get_string_field(entry, "result_name", "")
+            actual_command = self._get_string_field(
+                entry, "actual_command", user_input
             )
             description = self._get_string_field(entry, "description", "")
             usage_count = self._get_numeric_field(entry, "usage_count", 1)
@@ -316,14 +324,16 @@ class HistoryPlugin(Plugin):
             original_plugin_id = self._validate_original_plugin_id(entry)
             original_item_id = self._validate_original_item_id(entry)
 
-            display_name = user_input if user_input else "Unknown Command"
+            # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
+            display_name = self._build_hybrid_display_name(user_input, result_name)
             display_description = self._build_display_description(
-                executed_command, description, user_input
+                actual_command, description, user_input, result_name
             )
 
             return {
                 "user_input": user_input,
-                "executed_command": executed_command,
+                "result_name": result_name,
+                "actual_command": actual_command,
                 "description": description,
                 "usage_count": usage_count,
                 "original_plugin_id": original_plugin_id,
@@ -372,30 +382,64 @@ class HistoryPlugin(Plugin):
             return default
 
     def _build_display_description(
-        self, executed_command: str, description: str, user_input: str
+        self, actual_command: str, description: str, user_input: str, result_name: str = None
     ) -> str:
         """Build display description from entry data"""
         try:
-            display_description = ""
-            if executed_command and executed_command != user_input:
-                display_description = executed_command
+            display_parts = []
+            
+            # Show result_name if it's different from user_input (preserves title-cased names)
+            if result_name and result_name != user_input:
+                display_parts.append(result_name)
+            
+            # Add actual_command if it's different from user_input and result_name
+            if actual_command and actual_command != user_input and actual_command != result_name:
+                display_parts.append(actual_command)
 
+            # Add description if it's different from other fields
             if (
                 description
-                and description != executed_command
+                and description != actual_command
                 and description != user_input
+                and description != result_name
             ):
-                if display_description:
-                    display_description += f" - {description}"
-                else:
-                    display_description = description
+                display_parts.append(description)
 
-            return display_description
+            return " - ".join(display_parts)
         except Exception as desc_error:
             logger.warning(
                 f"Error building display description: {desc_error} - using empty string"
             )
             return ""
+
+    def _build_hybrid_display_name(self, user_input: str, result_name: str) -> str:
+        """
+        Build hybrid display name:
+        - If result_name available: use canonical name + any args (e.g., "Firefox" or "Firefox --new-window")
+        - If no result_name: use original input (e.g., "fire")
+        """
+        try:
+            if not user_input:
+                return "Unknown Command"
+            
+            # If we have a canonical result name, use it
+            if result_name and result_name != user_input:
+                # Check if user input has arguments (contains spaces)
+                user_parts = user_input.split()
+                if len(user_parts) > 1:
+                    # User input has arguments, use canonical name + args
+                    args = " ".join(user_parts[1:])
+                    return f"{result_name} {args}"
+                else:
+                    # No arguments, just use canonical name
+                    return result_name
+            else:
+                # No result_name available, use original input
+                return user_input
+                
+        except Exception as e:
+            logger.warning(f"Error building hybrid display name: {e} - using user_input")
+            return user_input if user_input else "Unknown Command"
 
     def _build_result_metadata(
         self, entry: Dict[str, Any], entry_data: Dict[str, Any]
@@ -630,9 +674,13 @@ class HistoryPlugin(Plugin):
     ) -> SearchResult:
         """Create a SearchResult from a history entry"""
         user_input = history_entry.get("user_input", "")
+        result_name = history_entry.get("result_name", "")
         plugin_id = history_entry.get("plugin_id", "")
         item_id = history_entry.get("item_id", "")
         description = history_entry.get("description", user_input)
+        
+        # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
+        display_name = self._build_hybrid_display_name(user_input, result_name)
 
         # Get the appropriate icon
         display_icon = self._get_history_icon_for_entry(
@@ -643,7 +691,7 @@ class HistoryPlugin(Plugin):
         result = SearchResult(
             plugin_id="history",  # Mark as coming from history plugin
             item_id=f"history_{plugin_id}_{item_id}",  # Unique ID for history item
-            name=user_input,
+            name=display_name,
             description=description,
             icon=display_icon,
             score=0,

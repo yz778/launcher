@@ -511,9 +511,21 @@ class LauncherWindow(Gtk.Window):
                 continue
 
             user_input = history_entry.get("user_input", "")
+            result_name = history_entry.get("result_name", "")
             plugin_id = history_entry.get("plugin_id", "")
             item_id = history_entry.get("item_id", "")
             description = history_entry.get("description", user_input)
+            
+            # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
+            display_name = self._build_hybrid_display_name(user_input, result_name)
+            
+            # Build description that includes result_name if different (and not already used in display_name)
+            display_description = description
+            if result_name and result_name != user_input and result_name not in display_name:
+                if display_description and display_description != result_name:
+                    display_description = f"{result_name} - {display_description}"
+                else:
+                    display_description = result_name
 
             # Get fallback icon
             display_icon = self.history_manager.get_fallback_history_icon(
@@ -523,8 +535,8 @@ class LauncherWindow(Gtk.Window):
             result = SearchResult(
                 plugin_id="history",
                 item_id=f"history_{plugin_id}_{item_id}",
-                name=user_input,
-                description=description,
+                name=display_name,
+                description=display_description,
                 icon=display_icon,
                 score=0,
             )
@@ -540,6 +552,35 @@ class LauncherWindow(Gtk.Window):
             results.append(result)
 
         return results
+
+    def _build_hybrid_display_name(self, user_input: str, result_name: str) -> str:
+        """
+        Build hybrid display name:
+        - If result_name available: use canonical name + any args (e.g., "Firefox" or "Firefox --new-window")
+        - If no result_name: use original input (e.g., "fire")
+        """
+        try:
+            if not user_input:
+                return "Unknown Command"
+            
+            # If we have a canonical result name, use it
+            if result_name and result_name != user_input:
+                # Check if user input has arguments (contains spaces)
+                user_parts = user_input.split()
+                if len(user_parts) > 1:
+                    # User input has arguments, use canonical name + args
+                    args = " ".join(user_parts[1:])
+                    return f"{result_name} {args}"
+                else:
+                    # No arguments, just use canonical name
+                    return result_name
+            else:
+                # No result_name available, use original input
+                return user_input
+                
+        except Exception as e:
+            logger.warning(f"Error building hybrid display name: {e} - using user_input")
+            return user_input if user_input else "Unknown Command"
 
     def _clear_list_box(self):
         """Clear all items from the list box"""
@@ -1020,22 +1061,33 @@ class LauncherWindow(Gtk.Window):
     def _build_executed_command(self, result: SearchResult) -> str:
         """
         Build the complete command that represents what was actually executed.
-        This ensures history shows the matched command name, not the partial user input.
+        This should be the actual command that was passed to subprocess, not a display name.
 
         Args:
             result: The SearchResult that was executed
 
         Returns:
-            Complete command string for history storage
+            Actual command string that was executed (or would be executed)
         """
-        # Use the result name (matched command) as the base
+        # Try to get the actual executed command from metadata if available
+        actual_command = result.metadata.get("actual_executed_command")
+        if actual_command:
+            return actual_command
+        
+        # Fallback: try to reconstruct what would be executed
+        # For executable plugin, this would be the file path + args
+        command = result.metadata.get("command")
+        if command:
+            args = result.metadata.get("args", [])
+            if args:
+                return command + " " + " ".join(args)
+            return command
+        
+        # Final fallback: use result name + args (old behavior)
         base_command = result.name
-
-        # Add any arguments if present in metadata
         args = result.metadata.get("args", [])
         if args:
             base_command = base_command + " " + " ".join(args)
-
         return base_command
 
     def execute_result(self, result: SearchResult, event=None) -> None:
@@ -1103,6 +1155,7 @@ class LauncherWindow(Gtk.Window):
             result.item_id,
             executed_command,
             user_input,
+            result.name,
             result.description,
             icon_pixbuf,
         )

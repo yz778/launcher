@@ -495,7 +495,7 @@ class ExecutablePlugin(Plugin):
         if not command:
             return False
 
-        cmd_parts = shlex.split(command) + result.metadata.get("args")
+        cmd_parts = shlex.split(command) + result.metadata.get("args", [])
         use_terminal = executable.use_terminal and not result.metadata.get(
             "shift_pressed", False
         )
@@ -507,7 +507,11 @@ class ExecutablePlugin(Plugin):
                 terminal_command = self.get_terminal_command()
                 cmd_parts = terminal_command.split() + cmd_parts
 
-            logger.info(f"Executing command: {' '.join(cmd_parts)}")
+            # Store the actual executed command in metadata for history tracking
+            actual_executed_command = " ".join(cmd_parts)
+            result.metadata["actual_executed_command"] = actual_executed_command
+
+            logger.info(f"Executing command: {actual_executed_command}")
             subprocess.Popen(cmd_parts)
 
             return True
