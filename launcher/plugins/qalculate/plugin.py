@@ -94,20 +94,27 @@ class QalculatePlugin(Plugin):
         Calculate the result of the expression using qalc CLI
 
         Returns None if calculation fails
+        Kills qalc if it runs longer than 5 seconds.
         """
         # Strip leading = if present
         if expression.startswith("="):
             expression = expression[1:].strip()
 
         try:
-            # Use qalc for calculation
-            # The -t option provides a terse output (just the result)
+            # Use qalc for calculation with a timeout
             process = subprocess.run(
-                ["qalc", "-t", expression], capture_output=True, text=True, check=True
+                ["qalc", "-t", expression],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=5,
             )
             result = process.stdout.strip()
             return result
 
+        except subprocess.TimeoutExpired:
+            logger.warning("qalc process timed out and was killed after 5 seconds")
+            return None
         except FileNotFoundError:
             logger.debug("qalc command not found during calculation")
             return None

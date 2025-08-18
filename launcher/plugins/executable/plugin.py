@@ -18,11 +18,19 @@ logger = logging.getLogger(__name__)
 class ExecutableFile:
     """Class representing an executable file"""
 
-    __slots__ = ("path", "name", "is_executable", "custom_icon", "use_terminal")
+    __slots__ = (
+        "path",
+        "name",
+        "description",
+        "is_executable",
+        "custom_icon",
+        "use_terminal",
+    )
 
     def __init__(self, path: str):
         self.path = path
         self.name = os.path.basename(path)
+        self.description = self.path
         self.is_executable = False
         self.custom_icon = None
         self.use_terminal = True
@@ -34,6 +42,7 @@ class ExecutableFile:
         return {
             "path": self.path,
             "name": self.name,
+            "description": self.description,
             "is_executable": self.is_executable,
             "custom_icon": self.custom_icon,
             "use_terminal": self.use_terminal,
@@ -45,6 +54,7 @@ class ExecutableFile:
         instance = object.__new__(cls)
         instance.path = data.get("path", "")
         instance.name = data.get("name", "")
+        instance.description = data.get("description", "")
         instance.is_executable = data.get("is_executable", False)
         instance.custom_icon = data.get("custom_icon")
         instance.use_terminal = data.get("use_terminal", True)
@@ -80,13 +90,24 @@ class ExecutableFile:
                         continue
 
                     elif line.startswith("#icon "):
-                        icon_spec = line[6:].strip()
-                        if icon_spec:
-                            self.custom_icon = icon_spec
-                            logger.debug(f"Found #icon '{icon_spec}' for {self.path}")
-                    elif line.strip() == "#noterm":
+                        value = line[6:].strip()
+                        if value:
+                            self.custom_icon = value
+                            logger.debug(f"Found #icon '{value}' for {self.path}")
+
+                    elif line.startswith("#name "):
+                        value = line[6:].strip()
+                        self.name = value
+                        logger.debug(f"Found #name '{value}' for {self.path}")
+
+                    elif line.startswith("#desc "):
+                        value = line[6:].strip()
+                        self.description = value
+                        logger.debug(f"Found #desc '{value}' for {self.path}")
+
+                    elif line.startswith("#noterm "):
                         self.use_terminal = False
-                        logger.debug(f"Found #noterm '{icon_spec}' for {self.path}")
+                        logger.debug(f"Found #noterm for {self.path}")
 
         except Exception as e:
             logger.debug(f"Could not parse directives from {self.path}: {e}")
@@ -432,8 +453,8 @@ class ExecutablePlugin(Plugin):
             result = SearchResult(
                 plugin_id=self.get_id(),
                 item_id=executable.path,
-                name=executable.name.title(),
-                description=executable.path,
+                name=executable.name,
+                description=executable.description,
                 icon=icon,
                 score=score,
                 metadata={
