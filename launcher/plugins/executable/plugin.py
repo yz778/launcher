@@ -89,25 +89,30 @@ class ExecutableFile:
                     elif not found_shebang:
                         continue
 
-                    elif line.startswith("#icon "):
-                        value = line[6:].strip()
-                        if value:
-                            self.custom_icon = value
-                            logger.debug(f"Found #icon '{value}' for {self.path}")
+                    elif line.startswith("#"):
+                        stripped_line = line.lstrip("#").strip()
 
-                    elif line.startswith("#name "):
-                        value = line[6:].strip()
-                        self.name = value
-                        logger.debug(f"Found #name '{value}' for {self.path}")
+                        if stripped_line.startswith("icon "):
+                            value = stripped_line[5:].strip()
+                            if value:
+                                self.custom_icon = value
+                                logger.debug(f"Found #icon '{value}' for {self.path}")
 
-                    elif line.startswith("#desc "):
-                        value = line[6:].strip()
-                        self.description = value
-                        logger.debug(f"Found #desc '{value}' for {self.path}")
+                        elif stripped_line.startswith("name "):
+                            value = stripped_line[5:].strip()
+                            if value:
+                                self.name = value
+                                logger.debug(f"Found #name '{value}' for {self.path}")
 
-                    elif line.startswith("#noterm "):
-                        self.use_terminal = False
-                        logger.debug(f"Found #noterm for {self.path}")
+                        elif stripped_line.startswith("desc "):
+                            value = stripped_line[5:].strip()
+                            if value:
+                                self.description = value
+                                logger.debug(f"Found #desc '{value}' for {self.path}")
+
+                        elif stripped_line.startswith("noterm"):
+                            self.use_terminal = False
+                            logger.debug(f"Found #noterm for {self.path}")
 
         except Exception as e:
             logger.debug(f"Could not parse directives from {self.path}: {e}")

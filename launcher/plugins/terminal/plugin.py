@@ -50,9 +50,11 @@ class TerminalPlugin(Plugin):
         return True
 
     def _load_icon(self) -> bool:
-        from launcher.utils.icon_utils import load_theme_icon
+        from launcher.utils.icon_utils import load_custom_icon
 
-        self.default_icon = load_theme_icon("utilities-terminal", self.icon_size)
+        icon_url = "https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png"
+        icon_size = self.icon_size or 48  # Fallback to 48 if icon_size is None
+        self.default_icon = load_custom_icon(icon_url, icon_size)
         return False
 
     def search(self, query: str) -> List[SearchResult]:
