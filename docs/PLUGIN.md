@@ -48,19 +48,19 @@ from typing import Dict, Any, List
 class MyPlugin(Plugin):
     def get_id(self) -> str:
         """Return unique plugin identifier"""
-        
+
     def get_name(self) -> str:
         """Return human-readable plugin name"""
-        
+
     def get_description(self) -> str:
         """Return plugin description"""
-        
+
     def get_config_defaults(self) -> Dict[str, Any]:
         """Return default configuration values"""
-        
+
     def search(self, query: str) -> List[SearchResult]:
         """Search for items matching the query"""
-        
+
     def execute(self, result: SearchResult) -> bool:
         """Execute the given search result"""
 ```
@@ -112,7 +112,7 @@ The UI automatically highlights search matches in result names and descriptions.
 
 Available highlight classes:
 - `.highlight-exact` - Exact substring matches
-- `.highlight-prefix` - Prefix matches  
+- `.highlight-prefix` - Prefix matches
 - `.highlight-word` - Word boundary matches
 - `.highlight-fuzzy` - Fuzzy character matches
 
@@ -120,9 +120,15 @@ Available highlight classes:
 
 ### Plugin-Specific Styling
 
-Each plugin can provide default CSS through `get_default_css()`:
+
+Each plugin can provide default CSS through `get_default_css()`. By default, this method will automatically load the contents of a file named `default.css` from the plugin's directory if it exists. You can override this method to return a CSS string directly if you prefer.
 
 ```python
+def get_default_css(self) -> str:
+    # By default, this loads 'default.css' from the plugin's directory if present
+    return super().get_default_css()
+
+# Or override to return a CSS string directly:
 def get_default_css(self) -> str:
     return """
     .my-plugin-result #app-list-item {
@@ -192,36 +198,36 @@ from typing import Dict, Any, List
 class MyPlugin(Plugin):
     def get_id(self) -> str:
         return "my_plugin"
-    
+
     def get_name(self) -> str:
         return "My Plugin"
-    
+
     def get_description(self) -> str:
         return "Description of what this plugin does"
-    
+
     def get_config_defaults(self) -> Dict[str, Any]:
         return {
             "enabled": True,
             "setting": "default_value"
         }
-    
+
     def get_default_css(self) -> str:
         return """
-        .my-plugin-result #app-name { 
-            color: #50fa7b; 
+        .my-plugin-result #app-name {
+            color: #50fa7b;
             font-weight: bold;
         }
         """
-    
+
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         super().initialize(config, config_manager)
         # Setup logic here
         return True
-    
+
     def start(self) -> bool:
         # Heavy initialization here
         return True
-    
+
     def search(self, query: str) -> List[SearchResult]:
         # Search logic - return SearchResult objects
         results = []
@@ -234,7 +240,7 @@ class MyPlugin(Plugin):
                 score=90.0
             ))
         return results
-    
+
     def execute(self, result: SearchResult) -> bool:
         # Execution logic
         print(f"Executing: {result.name}")

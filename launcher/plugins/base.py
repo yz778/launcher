@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
-import logging
 from abc import ABC, abstractmethod
 from typing import List, Any, Dict, Optional
+import logging
+import os
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -100,13 +102,19 @@ class Plugin(ABC):
         """
 
     def get_default_css(self) -> str:
-        """
-        Get the default CSS for this plugin
-
-        Returns:
-            String containing default CSS for this plugin
-        """
-        return ""  # Default implementation returns empty string
+        """Return the contents of 'default.css' from the plugin's directory, or an empty string if not found."""
+        module = sys.modules[self.__class__.__module__]
+        subclass_file = getattr(module, "__file__", None)
+        if not subclass_file:
+            return ""
+        file_path = os.path.join(
+            os.path.dirname(os.path.abspath(subclass_file)), "default.css"
+        )
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except (OSError, IOError):
+            return ""
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """

@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
-import gi
+from ..base import Plugin, SearchResult
+from gi.repository import GLib
+from launcher.utils.string_matcher import StringMatcher
+from typing import Dict, List, Any
 import json
 import logging
 import os
@@ -8,15 +11,6 @@ import re
 import shlex
 import stat
 import threading
-from typing import Dict, List, Any
-
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib  # Import GLib at the module level
-
-from ..base import Plugin, SearchResult
-from launcher.core.config_manager import ConfigManager
-from launcher.utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +18,19 @@ logger = logging.getLogger(__name__)
 class ExecutableFile:
     """Class representing an executable file"""
 
-    __slots__ = ("path", "name", "is_executable", "custom_icon", "use_terminal")
+    __slots__ = (
+        "path",
+        "name",
+        "description",
+        "is_executable",
+        "custom_icon",
+        "use_terminal",
+    )
 
     def __init__(self, path: str):
         self.path = path
         self.name = os.path.basename(path)
+        self.description = self.path
         self.is_executable = False
         self.custom_icon = None
         self.use_terminal = True
@@ -40,6 +42,7 @@ class ExecutableFile:
         return {
             "path": self.path,
             "name": self.name,
+            "description": self.description,
             "is_executable": self.is_executable,
             "custom_icon": self.custom_icon,
             "use_terminal": self.use_terminal,
@@ -51,6 +54,7 @@ class ExecutableFile:
         instance = object.__new__(cls)
         instance.path = data.get("path", "")
         instance.name = data.get("name", "")
+        instance.description = data.get("description", "")
         instance.is_executable = data.get("is_executable", False)
         instance.custom_icon = data.get("custom_icon")
         instance.use_terminal = data.get("use_terminal", True)
@@ -85,14 +89,30 @@ class ExecutableFile:
                     elif not found_shebang:
                         continue
 
-                    elif line.startswith("#icon "):
-                        icon_spec = line[6:].strip()
-                        if icon_spec:
-                            self.custom_icon = icon_spec
-                            logger.debug(f"Found #icon '{icon_spec}' for {self.path}")
-                    elif line.strip() == "#noterm":
-                        self.use_terminal = False
-                        logger.debug(f"Found #noterm '{icon_spec}' for {self.path}")
+                    elif line.startswith("#"):
+                        stripped_line = line.lstrip("#").strip()
+
+                        if stripped_line.startswith("icon "):
+                            value = stripped_line[5:].strip()
+                            if value:
+                                self.custom_icon = value
+                                logger.debug(f"Found #icon '{value}' for {self.path}")
+
+                        elif stripped_line.startswith("name "):
+                            value = stripped_line[5:].strip()
+                            if value:
+                                self.name = value
+                                logger.debug(f"Found #name '{value}' for {self.path}")
+
+                        elif stripped_line.startswith("desc "):
+                            value = stripped_line[5:].strip()
+                            if value:
+                                self.description = value
+                                logger.debug(f"Found #desc '{value}' for {self.path}")
+
+                        elif stripped_line.startswith("noterm"):
+                            self.use_terminal = False
+                            logger.debug(f"Found #noterm for {self.path}")
 
         except Exception as e:
             logger.debug(f"Could not parse directives from {self.path}: {e}")
@@ -160,38 +180,6 @@ class ExecutablePlugin(Plugin):
             "cache_icons": True,  # Cache loaded icons for better performance
             "track_history": True,  # Track executable commands in history
         }
-
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Executable Plugin CSS */
-.executable-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
-}
-
-.executable-result #app-list-item:hover {
-    background-color: rgba(60, 100, 80, 0.4);
-}
-
-.executable-result #app-list-item:selected {
-    background-color: rgba(80, 120, 100, 0.6);
-}
-
-.executable-result #app-name {
-    color: #e0f0e0;
-    font-size: 16px;
-    font-weight: bold;
-}
-
-.executable-result #app-description {
-    color: #a0c0a0;
-    font-size: 12px;
-    font-family: monospace;
-}
-"""
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
@@ -314,7 +302,6 @@ class ExecutablePlugin(Plugin):
         if not history_manager or not hasattr(history_manager, "user_input_history"):
             return 0
 
-        original_count = len(history_manager.user_input_history)
         valid_entries = []
         removed_count = 0
 
@@ -472,7 +459,7 @@ class ExecutablePlugin(Plugin):
                 plugin_id=self.get_id(),
                 item_id=executable.path,
                 name=executable.name,
-                description=executable.path,
+                description=executable.description,
                 icon=icon,
                 score=score,
                 metadata={
@@ -496,7 +483,7 @@ class ExecutablePlugin(Plugin):
         if not command:
             return False
 
-        cmd_parts = shlex.split(command) + result.metadata.get("args")
+        cmd_parts = shlex.split(command) + result.metadata.get("args", [])
         use_terminal = executable.use_terminal and not result.metadata.get(
             "shift_pressed", False
         )
@@ -508,7 +495,11 @@ class ExecutablePlugin(Plugin):
                 terminal_command = self.get_terminal_command()
                 cmd_parts = terminal_command.split() + cmd_parts
 
-            logger.info(f"Executing command: {' '.join(cmd_parts)}")
+            # Store the actual executed command in metadata for history tracking
+            actual_executed_command = " ".join(cmd_parts)
+            result.metadata["actual_executed_command"] = actual_executed_command
+
+            logger.info(f"Executing command: {actual_executed_command}")
             subprocess.Popen(cmd_parts)
 
             return True

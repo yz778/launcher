@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
+from typing import Optional, Callable
+from xdg_base_dirs import xdg_runtime_dir
+import logging
 import os
 import socket
 import tempfile
 import threading
-import logging
-from typing import Optional, Callable
-from xdg_base_dirs import xdg_runtime_dir
 
 logger = logging.getLogger(__name__)
 
@@ -123,11 +123,10 @@ class SingletonManager:
             pass
 
         try:
+            self._running = True
             self.server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             self.server_socket.bind(self.socket_path)
             self.server_socket.listen(1)
-
-            self._running = True
             self.server_thread = threading.Thread(target=self._server_loop, daemon=True)
             self.server_thread.start()
 

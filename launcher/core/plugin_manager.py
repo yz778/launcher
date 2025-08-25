@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 
-import os
+from gi.repository import GLib
+from plugins.base import Plugin, SearchResult
+from typing import Dict, List, Any, Type, Callable
 import importlib
 import inspect
 import logging
+import os
 import threading
-from typing import Dict, List, Any, Type, Callable
-
-from gi.repository import GLib
-from plugins.base import Plugin, SearchResult
 
 logger = logging.getLogger(__name__)
 

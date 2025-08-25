@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 
-import gi
+from ..base import Plugin, SearchResult
+from gi.repository import Gtk, GdkPixbuf, GLib
+from launcher.utils.string_matcher import StringMatcher
+from typing import Dict, List, Any, Optional
+from xdg_base_dirs import xdg_data_home, xdg_data_dirs
+from xdg.DesktopEntry import DesktopEntry
 import glob
 import json
 import logging
@@ -8,16 +13,6 @@ import os
 import re
 import shlex
 import threading
-from typing import Dict, List, Any, Optional
-from xdg_base_dirs import xdg_data_home, xdg_data_dirs
-from xdg.DesktopEntry import DesktopEntry
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GdkPixbuf, GLib
-
-from ..base import Plugin, SearchResult
-from launcher.core.config_manager import ConfigManager
-from launcher.utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -263,38 +258,6 @@ class DesktopFilePlugin(Plugin):
             "locations": locations,
             "track_history": True,  # Track desktop applications in history
         }
-
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Desktop File Plugin CSS */
-.desktop-file-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
-}
-
-.desktop-file-result #app-list-item:hover {
-    background-color: rgba(70, 90, 130, 0.4);
-}
-
-.desktop-file-result #app-list-item:selected {
-    background-color: rgba(90, 110, 150, 0.6);
-}
-
-.desktop-file-result #app-name {
-    color: #f0f0f0;
-    font-size: 16px;
-    font-weight: bold;
-}
-
-.desktop-file-result #app-description {
-    color: #b0b0b0;
-    font-size: 12px;
-    font-style: italic;
-}
-"""
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
@@ -569,7 +532,11 @@ class DesktopFilePlugin(Plugin):
                 terminal_command = self.get_terminal_command()
                 cmd_parts = terminal_command.split() + cmd_parts
 
-            logger.info(f"Executing command: {' '.join(cmd_parts)}")
+            # Store the actual executed command in metadata for history tracking
+            actual_executed_command = " ".join(cmd_parts)
+            result.metadata["actual_executed_command"] = actual_executed_command
+
+            logger.info(f"Executing command: {actual_executed_command}")
             subprocess.Popen(cmd_parts)
 
             return True

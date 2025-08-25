@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 
-import os
-import json
-import logging
-import time
-import base64
-import math
-from typing import Dict, Any, List, Optional
-
-import gi
-
-gi.require_version("Gtk", "3.0")
 from gi.repository import GdkPixbuf
-
-from launcher.utils.result_analyzer import ResultAnalyzer
 from launcher.plugins.base import SearchResult
+from launcher.utils.result_analyzer import ResultAnalyzer
+from typing import Dict, Any, List, Optional
+import base64
+import logging
+import math
+import os
+import time
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +27,7 @@ class HistoryManager:
 
         if config:
             general_config = config.get("general", {})
-            history_file = general_config.get(
-                "history_file", "~/.local/share/launcher/history.json"
-            )
+            history_file = general_config.get("history_file")
             self.load_history(history_file)
 
     def load_history(self, history_file_path: str) -> None:
@@ -51,7 +44,8 @@ class HistoryManager:
         if os.path.isfile(self.history_file):
             try:
                 with open(self.history_file, "r") as f:
-                    self.user_input_history = json.load(f)
+                    data = yaml.safe_load(f)
+                    self.user_input_history = data if data is not None else []
 
                 logger.info(f"Loaded history from {self.history_file}")
             except Exception as e:
@@ -74,7 +68,12 @@ class HistoryManager:
 
         try:
             with open(self.history_file, "w") as f:
-                json.dump(self.user_input_history, f, indent=2)
+                yaml.dump(
+                    self.user_input_history,
+                    f,
+                    default_flow_style=False,
+                    allow_unicode=True,
+                )
             logger.info(f"Saved history to {self.history_file}")
             return True
         except Exception as e:
@@ -135,8 +134,9 @@ class HistoryManager:
         self,
         plugin_id: str,
         item_id: str,
-        executed_command: str,
+        actual_command: str,
         original_user_input: str,
+        result_name: str = None,
         description: str = None,
         icon_pixbuf=None,
     ) -> None:
@@ -146,7 +146,9 @@ class HistoryManager:
         Args:
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
-            user_input: The exact text that the user typed before submitting
+            actual_command: The actual command that was executed (subprocess command)
+            original_user_input: The exact text that the user typed before submitting
+            result_name: The display name of the executed result (e.g., title-cased executable name)
             description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
@@ -158,7 +160,8 @@ class HistoryManager:
             plugin_id,
             item_id,
             current_time,
-            executed_command,
+            actual_command,
+            result_name,
             description,
             icon_pixbuf,
         )
@@ -189,7 +192,8 @@ class HistoryManager:
         plugin_id: str,
         item_id: str,
         timestamp: float = None,
-        executed_command_string: str = None,
+        actual_command_string: str = None,
+        result_name: str = None,
         description: str = None,
         icon_pixbuf=None,
     ) -> None:
@@ -202,7 +206,8 @@ class HistoryManager:
             plugin_id: Plugin ID that was executed
             item_id: Item ID that was executed
             timestamp: Timestamp when executed (defaults to current time)
-            executed_command_string: The actual command string that was executed.
+            actual_command_string: The actual command string that was executed (subprocess command)
+            result_name: The display name of the executed result (e.g., title-cased executable name)
             description: Description of the executed item
             icon_pixbuf: The actual icon pixbuf to store for better performance
         """
@@ -210,7 +215,7 @@ class HistoryManager:
             timestamp = time.time()
 
         current_usage_count = self._process_existing_entries(
-            user_input, plugin_id, executed_command_string
+            user_input, plugin_id, actual_command_string
         )
 
         entry = self._create_history_entry(
@@ -218,7 +223,8 @@ class HistoryManager:
             plugin_id,
             item_id,
             timestamp,
-            executed_command_string,
+            actual_command_string,
+            result_name,
             description,
             current_usage_count + 1,
             icon_pixbuf,
@@ -227,16 +233,16 @@ class HistoryManager:
         self._add_and_limit_history(entry)
 
     def _process_existing_entries(
-        self, user_input: str, plugin_id: str, executed_command_string: str
+        self, user_input: str, plugin_id: str, actual_command_string: str
     ) -> int:
         """Process existing entries for duplicates and merging"""
         current_usage_count = 0
         entries_to_remove = []
 
         normalized_new_command = None
-        if plugin_id in ["executable", "desktop_file"] and executed_command_string:
+        if plugin_id in ["executable", "desktop_file"] and actual_command_string:
             normalized_new_command = self._normalize_command_for_comparison(
-                executed_command_string
+                actual_command_string
             )
 
         for entry in self.user_input_history:
@@ -249,7 +255,7 @@ class HistoryManager:
                 current_usage_count += entry.get("usage_count", 0)
                 entries_to_remove.append(entry)
                 logger.debug(
-                    f"Merging history entry for command '{executed_command_string}' with existing entry: {entry.get('user_input')}"
+                    f"Merging history entry for command '{actual_command_string}' with existing entry: {entry.get('user_input')}"
                 )
 
         self._remove_entries(entries_to_remove)
@@ -261,11 +267,11 @@ class HistoryManager:
 
     def _should_merge_commands(self, entry: dict, normalized_new_command: str) -> bool:
         """Check if entry should be merged based on normalized command"""
-        if not normalized_new_command or not entry.get("executed_command"):
+        if not normalized_new_command or not entry.get("actual_command"):
             return False
 
         normalized_existing_command = self._normalize_command_for_comparison(
-            entry["executed_command"]
+            entry["actual_command"]
         )
         return normalized_new_command == normalized_existing_command
 
@@ -281,7 +287,8 @@ class HistoryManager:
         plugin_id: str,
         item_id: str,
         timestamp: float,
-        executed_command_string: str,
+        actual_command_string: str,
+        result_name: str,
         description: str,
         usage_count: int,
         icon_pixbuf,
@@ -292,9 +299,10 @@ class HistoryManager:
             "plugin_id": plugin_id,
             "item_id": item_id,
             "timestamp": timestamp,
+            "result_name": result_name,
             "description": description,
             "usage_count": usage_count,
-            "executed_command": executed_command_string,
+            "actual_command": actual_command_string,
         }
 
         if icon_pixbuf:
@@ -972,3 +980,451 @@ class HistoryManager:
         from launcher.plugins.base import Plugin
 
         return Plugin.is_structurally_valid(entry, plugin_manager)
+
+    def get_result_for_history_entry(
+        self,
+        plugin_id: str,
+        item_id: str,
+        history_entry: Dict[str, Any] = None,
+        plugin_manager=None,
+        icon_size: int = 48,
+    ):
+        """Try to get the actual result object for a history entry to access current icon."""
+        if not plugin_manager:
+            return None
+
+        # Check for stored icon first
+        stored_result = self._get_stored_icon_result(
+            history_entry, plugin_id, item_id, icon_size
+        )
+        if stored_result:
+            return stored_result
+
+        # Try to get result from plugin
+        return self._get_plugin_result(plugin_id, item_id, plugin_manager, icon_size)
+
+    def _get_stored_icon_result(self, history_entry, plugin_id, item_id, icon_size):
+        """Get result with stored icon from history entry"""
+        if not history_entry:
+            return None
+
+        stored_icon = self.get_stored_icon(history_entry, icon_size)
+        if not stored_icon:
+            return None
+
+        return self._create_mock_result(
+            stored_icon, history_entry.get("user_input", ""), plugin_id, item_id
+        )
+
+    def _get_plugin_result(self, plugin_id, item_id, plugin_manager, icon_size):
+        """Delegate result fetching to the plugin itself."""
+        plugin = plugin_manager.plugins.get(plugin_id)
+        if not plugin:
+            return None
+        # Each plugin should implement get_result_for_history(item_id, icon_size)
+        get_result = getattr(plugin, "get_result_for_history", None)
+        if callable(get_result):
+            try:
+                return get_result(item_id, icon_size)
+            except Exception as e:
+                logger.debug(
+                    f"Could not get item {item_id} from plugin {plugin_id}: {e}"
+                )
+        return None
+
+    def _create_mock_result(self, icon, name, plugin_id, item_id):
+        """Create a mock result object with the given properties"""
+
+        class MockResult:
+            def __init__(self, icon, name, plugin_id, item_id):
+                self.icon = icon
+                self.name = name
+                self.plugin_id = plugin_id
+                self.item_id = item_id
+
+        return MockResult(icon, name, plugin_id, item_id)
+
+    def get_fallback_history_icon(self, icon_size: int = 48):
+        """Get fallback icon for history items"""
+        from launcher.utils.icon_utils import load_theme_icon
+
+        fallback_names = ["document-open-recent"]
+        return load_theme_icon("accessories-history", icon_size, fallback_names)
+
+    def execute_history_item(
+        self, history_entry: Dict[str, Any], plugin_manager
+    ) -> bool:
+        """
+        Execute an item from history by doing a targeted search and executing the first exact match.
+
+        Args:
+            history_entry: History entry containing plugin_id, item_id, user_input, etc.
+            plugin_manager: Plugin manager to use for execution
+
+        Returns:
+            True if execution was successful, False otherwise
+        """
+        plugin_id = history_entry.get("plugin_id")
+        item_id = history_entry.get("item_id")
+        user_input = history_entry.get("user_input", "")
+
+        if not plugin_id or not item_id or not plugin_manager:
+            # Return False to indicate fallback to search is needed
+            return False
+
+        # Get the specific plugin and search for the exact item
+        plugin = plugin_manager.plugins.get(plugin_id)
+        if not plugin:
+            # Plugin not available, fallback to search
+            return False
+
+        try:
+            # Use the plugin's search method to find the item
+            results = plugin.search(user_input)
+
+            # Find the exact result by item_id
+            target_result = None
+            for result in results:
+                if result.item_id == item_id:
+                    target_result = result
+                    break
+
+            if target_result:
+                # Found the exact item, execute it directly
+                return plugin_manager.execute(target_result)
+            else:
+                # Item not found, fallback to regular search
+                return False
+
+        except Exception as e:
+            logger.debug(f"Error executing history item: {e}")
+            # Fallback to regular search
+            return False
+
+    def should_deduplicate_history_entry(
+        self, history_name: str, current_name: str
+    ) -> bool:
+        """
+        Determine if a history entry should be deduplicated based on similarity to current result.
+
+        Args:
+            history_name: Name from the history entry (user input)
+            current_name: Name from the current search result
+
+        Returns:
+            True if the history entry should be removed (deduplicated), False to keep it
+        """
+        if not history_name or not current_name:
+            return False
+
+        history_lower = history_name.lower().strip()
+        current_lower = current_name.lower().strip()
+
+        # Don't deduplicate if they're exactly the same (shouldn't happen but be safe)
+        if history_lower == current_lower:
+            return True
+
+        # Don't deduplicate if the history entry is significantly longer
+        # This preserves entries like "brave gmail.com" when "brave" is found
+        if len(history_lower) > len(current_lower) * 1.5:
+            return False
+
+        # Don't deduplicate if the history entry contains additional meaningful content
+        # Check for URLs, file paths, or additional arguments
+        if any(char in history_lower for char in [".", "/", ":", "=", "&", "?"]):
+            return False
+
+        # Don't deduplicate if the history entry has multiple words and current is single word
+        history_words = history_lower.split()
+        current_words = current_lower.split()
+
+        if len(history_words) > 1 and len(current_words) == 1:
+            return False
+
+        # Only deduplicate if the history entry is very similar to current result
+        # (essentially the same thing with minor variations)
+        if (
+            history_lower.startswith(current_lower)
+            and len(history_lower) <= len(current_lower) + 3
+        ):
+            return True
+
+        return False
+
+    def deduplicate_results(self, results: List[SearchResult]) -> List[SearchResult]:
+        """
+        Remove history results if exact matches exist from other plugins.
+        Enhanced with comprehensive logging, error handling, and performance optimization.
+
+        Args:
+            results: List of search results to deduplicate
+
+        Returns:
+            List of deduplicated results
+        """
+        if not results:
+            logger.debug("No results to deduplicate")
+            return results
+
+        try:
+            # Performance optimization: use efficient data structures for large result sets
+            start_time = None
+            if logger.isEnabledFor(logging.DEBUG):
+                import time
+
+                start_time = time.time()
+                logger.debug(f"Starting deduplication for {len(results)} results")
+
+            # Group results by plugin type using list comprehensions for better performance
+            history_results = []
+            other_results = []
+
+            for result in results:
+                try:
+                    # Enhanced validation of result structure
+                    if not hasattr(result, "plugin_id"):
+                        logger.warning(
+                            f"Result missing plugin_id attribute: {getattr(result, 'name', 'unknown')}"
+                        )
+                        continue
+
+                    if result.plugin_id == "history":
+                        history_results.append(result)
+                    else:
+                        other_results.append(result)
+
+                except Exception as e:
+                    logger.error(f"Error categorizing result: {e}")
+                    # Preserve result in other_results as fallback to avoid data loss
+                    other_results.append(result)
+                    continue
+
+            logger.debug(
+                f"Found {len(history_results)} history results and {len(other_results)} other results"
+            )
+
+            if not history_results or not other_results:
+                logger.debug(
+                    "No deduplication needed - missing history or other results"
+                )
+                return results  # No deduplication needed
+
+            # Performance optimization: create efficient lookup structures
+            # Use dict for O(1) lookups with enhanced error handling
+            other_result_keys = {}  # (plugin_id, item_id) -> result for debugging
+            invalid_results_count = 0
+
+            for result in other_results:
+                try:
+                    # Enhanced validation that result has required attributes
+                    if not hasattr(result, "plugin_id") or not hasattr(
+                        result, "item_id"
+                    ):
+                        logger.warning(
+                            f"Result missing required attributes (plugin_id/item_id): {getattr(result, 'name', 'unknown')}"
+                        )
+                        invalid_results_count += 1
+                        continue
+
+                    # Validate that plugin_id and item_id are not None or empty
+                    if not result.plugin_id or not result.item_id:
+                        logger.debug(
+                            f"Result has empty plugin_id or item_id: {getattr(result, 'name', 'unknown')}"
+                        )
+                        invalid_results_count += 1
+                        continue
+
+                    key = (result.plugin_id, result.item_id)
+                    other_result_keys[key] = result
+
+                except AttributeError as e:
+                    logger.warning(
+                        f"AttributeError processing result {getattr(result, 'name', 'unknown')}: {e}"
+                    )
+                    invalid_results_count += 1
+                    continue
+                except Exception as e:
+                    logger.error(
+                        f"Unexpected error processing result {getattr(result, 'name', 'unknown')}: {e}"
+                    )
+                    invalid_results_count += 1
+                    continue
+
+            logger.debug(
+                f"Created lookup table with {len(other_result_keys)} entries ({invalid_results_count} invalid results skipped)"
+            )
+
+            # Filter out history results that have exact matches in other plugins
+            filtered_history_results = []
+            deduplicated_count = 0
+            preserved_count = 0
+            missing_metadata_count = 0
+            error_count = 0
+
+            for history_result in history_results:
+                try:
+                    # Enhanced validation of history result structure
+                    if not hasattr(history_result, "metadata"):
+                        logger.warning(
+                            f"History result missing metadata attribute: {getattr(history_result, 'name', 'unknown')}"
+                        )
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    if not isinstance(history_result.metadata, dict):
+                        logger.warning(
+                            f"History result has invalid metadata type ({type(history_result.metadata)}): {getattr(history_result, 'name', 'unknown')}"
+                        )
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    # Get original plugin info from history metadata with enhanced validation
+                    try:
+                        original_plugin_id = history_result.metadata.get(
+                            "original_plugin_id"
+                        )
+                        original_item_id = history_result.metadata.get(
+                            "original_item_id"
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Error accessing metadata for history result '{getattr(history_result, 'name', 'unknown')}': {e}"
+                        )
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    # Validate metadata exists and is not empty with type checking
+                    if not original_plugin_id or not original_item_id:
+                        logger.debug(
+                            f"History result '{getattr(history_result, 'name', 'unknown')}' missing original plugin metadata - preserving"
+                        )
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    # Ensure metadata values are strings
+                    if not isinstance(original_plugin_id, str) or not isinstance(
+                        original_item_id, str
+                    ):
+                        logger.warning(
+                            f"History result '{getattr(history_result, 'name', 'unknown')}' has non-string metadata values - preserving"
+                        )
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        missing_metadata_count += 1
+                        continue
+
+                    # Check if this history item has an exact match in current results
+                    match_key = (original_plugin_id, original_item_id)
+                    matching_result = other_result_keys.get(match_key)
+
+                    if matching_result is None:
+                        # No exact match found, keep this history result
+                        filtered_history_results.append(history_result)
+                        preserved_count += 1
+                        logger.debug(
+                            f"Preserving history result '{getattr(history_result, 'name', 'unknown')}' - no current match for {original_plugin_id}:{original_item_id}"
+                        )
+                    else:
+                        # Found a matching result, but only deduplicate if the history entry
+                        # represents the same user intent (similar input)
+                        history_name = getattr(history_result, "name", "")
+                        current_name = getattr(matching_result, "name", "")
+
+                        # Only deduplicate if the history entry name is very similar to the current result
+                        # This prevents removing "brave gmail.com" when "brave" app is found
+                        if self.should_deduplicate_history_entry(
+                            history_name, current_name
+                        ):
+                            deduplicated_count += 1
+                            logger.debug(
+                                f"Deduplicating history result '{history_name}' - too similar to current result '{current_name}' ({original_plugin_id}:{original_item_id})"
+                            )
+                        else:
+                            filtered_history_results.append(history_result)
+                            preserved_count += 1
+                            logger.debug(
+                                f"Preserving history result '{history_name}' - different intent from current result '{current_name}' ({original_plugin_id}:{original_item_id})"
+                            )
+
+                except AttributeError as e:
+                    # Graceful error handling for missing attributes
+                    logger.warning(f"AttributeError processing history result: {e}")
+                    filtered_history_results.append(history_result)
+                    preserved_count += 1
+                    error_count += 1
+                    continue
+                except KeyError as e:
+                    # Graceful error handling for missing dictionary keys
+                    logger.warning(f"KeyError processing history result metadata: {e}")
+                    filtered_history_results.append(history_result)
+                    preserved_count += 1
+                    error_count += 1
+                    continue
+                except Exception as e:
+                    # Graceful error handling - preserve result if processing fails
+                    logger.error(
+                        f"Unexpected error processing history result '{getattr(history_result, 'name', 'unknown')}': {e}"
+                    )
+                    filtered_history_results.append(history_result)
+                    preserved_count += 1
+                    error_count += 1
+                    continue
+
+            # Return deduplicated list
+            # Maintain original order: other results first, then filtered history results
+            deduplicated_results = other_results + filtered_history_results
+            original_count = len(results)
+            final_count = len(deduplicated_results)
+
+            # Comprehensive logging summary with error reporting
+            logger.debug(
+                f"Deduplication complete: {original_count} -> {final_count} results"
+            )
+            logger.debug(f"  - Deduplicated: {deduplicated_count} history results")
+            logger.debug(f"  - Preserved: {preserved_count} history results")
+            logger.debug(
+                f"  - Missing metadata: {missing_metadata_count} history results"
+            )
+
+            if error_count > 0:
+                logger.warning(
+                    f"  - Errors encountered: {error_count} results had processing errors"
+                )
+
+            if invalid_results_count > 0:
+                logger.warning(
+                    f"  - Invalid results: {invalid_results_count} results skipped due to missing attributes"
+                )
+
+            if start_time and logger.isEnabledFor(logging.DEBUG):
+                elapsed_time = time.time() - start_time
+                logger.debug(f"Deduplication took {elapsed_time:.3f}s")
+
+                # Performance warning for slow deduplication
+                if elapsed_time > 0.1:  # More than 100ms
+                    logger.warning(
+                        f"Deduplication took longer than expected: {elapsed_time:.3f}s for {original_count} results"
+                    )
+
+            return deduplicated_results
+
+        except MemoryError as e:
+            # Handle memory errors specifically
+            logger.error(
+                f"Memory error during deduplication with {len(results)} results: {e}"
+            )
+            logger.warning("Skipping deduplication due to memory constraints")
+            return results
+        except Exception as e:
+            # Graceful error handling - log error but don't break search functionality
+            logger.error(f"Critical error during deduplication: {e}")
+            logger.debug("Continuing with original results due to deduplication error")
+            return results

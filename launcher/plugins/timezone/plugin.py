@@ -1,19 +1,12 @@
 #!/usr/bin/env python3
 
-import logging
-import re
-from typing import Dict, List, Any, Optional
-from datetime import datetime
-import pytz
-
-import pyperclip
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
-
 from ..base import Plugin, SearchResult
+from datetime import datetime
 from launcher.utils.scoring_system import calculate_match_score
+from typing import Dict, List, Any, Optional
+import logging
+import pytz
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -58,39 +51,6 @@ class TimezonePlugin(Plugin):
         return {
             "track_history": True,
         }
-
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Timezone Plugin CSS */
-.timezone-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px;
-}
-
-.timezone-result #app-list-item:hover {
-    background-color: rgba(70, 130, 180, 0.4);
-}
-
-.timezone-result #app-list-item:selected {
-    background-color: rgba(90, 150, 200, 0.6);
-}
-
-.timezone-result #app-name {
-    color: #e0f0ff;
-    font-size: 18px;
-    font-weight: bold;
-    font-family: monospace;
-}
-
-.timezone-result #app-description {
-    color: #b0d0f0;
-    font-size: 14px;
-    font-family: monospace;
-}
-"""
 
     def _build_timezone_aliases(self) -> Dict[str, str]:
         """Build a mapping of common timezone abbreviations to pytz timezone names"""
@@ -155,23 +115,11 @@ class TimezonePlugin(Plugin):
 
     def _load_icon(self) -> None:
         """Load the timezone icon"""
-        try:
-            from launcher.utils.icon_utils import load_theme_icon
+        from launcher.utils.icon_utils import load_theme_icon
 
-            # Try multiple clock-related icons as fallbacks
-            icon_names = ["appointment-soon"]
-
-            for icon_name in icon_names:
-                self.icon = load_theme_icon(icon_name, self.icon_size)
-                if self.icon:
-                    logger.debug(f"Loaded timezone icon: {icon_name}")
-                    break
-
-            if not self.icon:
-                logger.warning("Could not load any timezone icon")
-        except ImportError as e:
-            logger.error(f"Could not import icon_utils: {e}")
-            self.icon = None
+        self.icon = load_theme_icon("appointment-soon", self.icon_size)
+        if not self.icon:
+            logger.warning("Could not load any timezone icon")
 
     def _is_timezone_query(self, query: str) -> bool:
         """Check if the query looks like a timezone conversion"""
@@ -413,20 +361,4 @@ class TimezonePlugin(Plugin):
         return [search_result]
 
     def execute(self, result: SearchResult) -> bool:
-        """Execute the timezone conversion result - copy to clipboard"""
-        if result.plugin_id != self.get_id():
-            return False
-
-        conversion_result = result.metadata.get("result")
-        if not conversion_result:
-            return False
-
-        try:
-            pyperclip.copy(conversion_result)
-            logger.info(
-                f"Copied timezone conversion result to clipboard: {conversion_result}"
-            )
-            return True
-        except Exception as e:
-            logger.error(f"Error copying to clipboard: {e}")
-            return False
+        return False

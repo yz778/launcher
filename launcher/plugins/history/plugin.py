@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 
-import logging
-import math
-import time
-from typing import List, Dict, Any
-
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
-
 from ..base import Plugin, SearchResult
+from gi.repository import Gtk
+from typing import List, Dict, Any
+import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +181,8 @@ class HistoryPlugin(Plugin):
         try:
             return {
                 "user_input": entry.get("user_input", ""),
-                "executed_command": entry.get("executed_command", ""),
+                "actual_command": entry.get("actual_command", ""),
+                "result_name": entry.get("result_name", ""),
                 "description": entry.get("description", ""),
             }
         except Exception as e:
@@ -197,28 +192,46 @@ class HistoryPlugin(Plugin):
     def _calculate_best_match_score(
         self, query: str, entry_data: Dict[str, str]
     ) -> float:
-        """Calculate the best match score from all searchable fields using unified scoring"""
+        """Calculate the best match score from all searchable fields using prioritized scoring"""
         from launcher.utils.scoring_system import calculate_match_score
 
-        # Name matches (user input and executed command)
+        # History items get priority 2 scoring (500-999 points)
+        # Name matches (user input, result name, and actual command)
         user_input_score = calculate_match_score(
-            query, entry_data["user_input"], is_name=True
+            query, entry_data["user_input"], is_name=True, is_history=True
         )
 
-        executed_command_score = 0
-        if entry_data["executed_command"] != entry_data["user_input"]:
-            executed_command_score = calculate_match_score(
-                query, entry_data["executed_command"], is_name=True
+        result_name_score = 0
+        if (
+            entry_data["result_name"]
+            and entry_data["result_name"] != entry_data["user_input"]
+        ):
+            result_name_score = calculate_match_score(
+                query, entry_data["result_name"], is_name=True, is_history=True
             )
 
-        # Description match (gets lower scoring automatically)
+        actual_command_score = 0
+        if (
+            entry_data["actual_command"]
+            and entry_data["actual_command"] != entry_data["user_input"]
+        ):
+            actual_command_score = calculate_match_score(
+                query, entry_data["actual_command"], is_name=True, is_history=True
+            )
+
+        # Description match (still gets lower scoring within history tier)
         description_score = 0
         if entry_data["description"]:
             description_score = calculate_match_score(
-                query, entry_data["description"], is_name=False
+                query, entry_data["description"], is_name=False, is_history=True
             )
 
-        return max(user_input_score, executed_command_score, description_score)
+        best_score = max(
+            user_input_score, result_name_score, actual_command_score, description_score
+        )
+
+        # Apply argument mismatch penalty
+        return self._apply_argument_mismatch_penalty(query, entry_data, best_score)
 
     def _sort_and_limit_results(
         self, results: List[SearchResult]
@@ -347,23 +360,24 @@ class HistoryPlugin(Plugin):
         """Safely extract and validate entry data"""
         try:
             user_input = self._get_string_field(entry, "user_input", "")
-            executed_command = self._get_string_field(
-                entry, "executed_command", user_input
-            )
+            result_name = self._get_string_field(entry, "result_name", "")
+            actual_command = self._get_string_field(entry, "actual_command", user_input)
             description = self._get_string_field(entry, "description", "")
             usage_count = self._get_numeric_field(entry, "usage_count", 1)
 
             original_plugin_id = self._validate_original_plugin_id(entry)
             original_item_id = self._validate_original_item_id(entry)
 
-            display_name = user_input if user_input else "Unknown Command"
+            # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
+            display_name = self._build_hybrid_display_name(user_input, result_name)
             display_description = self._build_display_description(
-                executed_command, description, user_input
+                actual_command, description, user_input, result_name
             )
 
             return {
                 "user_input": user_input,
-                "executed_command": executed_command,
+                "result_name": result_name,
+                "actual_command": actual_command,
                 "description": description,
                 "usage_count": usage_count,
                 "original_plugin_id": original_plugin_id,
@@ -412,30 +426,121 @@ class HistoryPlugin(Plugin):
             return default
 
     def _build_display_description(
-        self, executed_command: str, description: str, user_input: str
+        self,
+        actual_command: str,
+        description: str,
+        user_input: str,
+        result_name: str = None,
     ) -> str:
         """Build display description from entry data"""
         try:
-            display_description = ""
-            if executed_command and executed_command != user_input:
-                display_description = executed_command
+            display_parts = []
 
+            # Show result_name if it's different from user_input (preserves title-cased names)
+            if result_name and result_name != user_input:
+                display_parts.append(result_name)
+
+            # Add actual_command if it's different from user_input and result_name
+            if (
+                actual_command
+                and actual_command != user_input
+                and actual_command != result_name
+            ):
+                display_parts.append(actual_command)
+
+            # Add description if it's different from other fields
             if (
                 description
-                and description != executed_command
+                and description != actual_command
                 and description != user_input
+                and description != result_name
             ):
-                if display_description:
-                    display_description += f" - {description}"
-                else:
-                    display_description = description
+                display_parts.append(description)
 
-            return display_description
+            return " - ".join(display_parts)
         except Exception as desc_error:
             logger.warning(
                 f"Error building display description: {desc_error} - using empty string"
             )
             return ""
+
+    def _build_hybrid_display_name(self, user_input: str, result_name: str) -> str:
+        """
+        Build hybrid display name:
+        - If result_name available: use canonical name + any args (e.g., "Firefox" or "Firefox --new-window")
+        - If no result_name: use original input (e.g., "fire")
+        """
+        try:
+            if not user_input:
+                return "Unknown Command"
+
+            # If we have a canonical result name, use it
+            if result_name and result_name != user_input:
+                # Check if user input has arguments (contains spaces)
+                user_parts = user_input.split()
+                if len(user_parts) > 1:
+                    # User input has arguments, use canonical name + args
+                    args = " ".join(user_parts[1:])
+                    return f"{result_name} {args}"
+                else:
+                    # No arguments, just use canonical name
+                    return result_name
+            else:
+                # No result_name available, use original input
+                return user_input
+
+        except Exception as e:
+            logger.warning(
+                f"Error building hybrid display name: {e} - using user_input"
+            )
+            return user_input if user_input else "Unknown Command"
+
+    def _apply_argument_mismatch_penalty(
+        self, query: str, entry_data: Dict[str, str], base_score: float
+    ) -> float:
+        """
+        Apply penalty when query and history entry have mismatched argument patterns.
+        - If query has no args but history entry has args: penalize
+        - If query has args but history entry has no args: penalize less
+        - If both have args or both have no args: no penalty
+        """
+        try:
+            if base_score <= 0:
+                return base_score
+
+            query_parts = query.strip().split()
+            user_input_parts = entry_data["user_input"].strip().split()
+
+            query_has_args = len(query_parts) > 1
+            entry_has_args = len(user_input_parts) > 1
+
+            # No penalty if both have same argument pattern
+            if query_has_args == entry_has_args:
+                return base_score
+
+            # Moderate penalty if query has no args but entry has args
+            # (user wants simple command, but history has complex command with args)
+            if not query_has_args and entry_has_args:
+                penalty_factor = 0.8  # Reduce score to 80%
+                logger.debug(
+                    f"Applying argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'"
+                )
+                return base_score * penalty_factor
+
+            # Light penalty if query has args but entry has no args
+            # (user wants complex command, but history has simple command)
+            elif query_has_args and not entry_has_args:
+                penalty_factor = 0.9  # Reduce score to 90%
+                logger.debug(
+                    f"Applying light argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'"
+                )
+                return base_score * penalty_factor
+
+            return base_score
+
+        except Exception as e:
+            logger.warning(f"Error applying argument mismatch penalty: {e}")
+            return base_score
 
     def _build_result_metadata(
         self, entry: Dict[str, Any], entry_data: Dict[str, Any]
@@ -640,3 +745,89 @@ class HistoryPlugin(Plugin):
     def cleanup(self) -> None:
         """Clean up resources"""
         self.history_manager = None
+
+    def get_recent_history_as_results(self, max_items: int = 100) -> List[SearchResult]:
+        """Get recent history entries as SearchResults for display in launcher window"""
+        if not self.history_manager:
+            return []
+
+        all_history = self.history_manager.get_recent_history(max_items)
+        if not all_history:
+            return []
+
+        results = []
+        for history_entry in all_history:
+            if not history_entry.get("user_input"):
+                continue
+
+            try:
+                result = self._create_history_search_result(history_entry)
+                if result:
+                    results.append(result)
+            except Exception as e:
+                logger.debug(f"Error creating history result: {e}")
+                continue
+
+        return results
+
+    def _create_history_search_result(
+        self, history_entry: Dict[str, Any]
+    ) -> SearchResult:
+        """Create a SearchResult from a history entry"""
+        user_input = history_entry.get("user_input", "")
+        result_name = history_entry.get("result_name", "")
+        plugin_id = history_entry.get("plugin_id", "")
+        item_id = history_entry.get("item_id", "")
+        description = history_entry.get("description", user_input)
+
+        # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
+        display_name = self._build_hybrid_display_name(user_input, result_name)
+
+        # Get the appropriate icon
+        display_icon = self._get_history_icon_for_entry(
+            plugin_id, item_id, history_entry
+        )
+
+        # Create SearchResult
+        result = SearchResult(
+            plugin_id="history",  # Mark as coming from history plugin
+            item_id=f"history_{plugin_id}_{item_id}",  # Unique ID for history item
+            name=display_name,
+            description=description,
+            icon=display_icon,
+            score=0,
+        )
+
+        # Store original metadata for execution
+        result.metadata = {
+            "original_plugin_id": plugin_id,
+            "original_item_id": item_id,
+            "user_input": user_input,
+            "usage_count": history_entry.get("usage_count", 0),
+            "history_entry": history_entry,
+        }
+
+        return result
+
+    def _get_history_icon_for_entry(
+        self, plugin_id: str, item_id: str, history_entry: Dict[str, Any]
+    ):
+        """Get the appropriate icon for a history entry"""
+        if not self.history_manager:
+            return self._get_fallback_icon()
+
+        actual_result = self.history_manager.get_result_for_history_entry(
+            plugin_id, item_id, history_entry, self.plugin_manager, self.icon_size
+        )
+
+        if actual_result and actual_result.icon:
+            return actual_result.icon
+
+        return self._get_fallback_icon()
+
+    def _get_fallback_icon(self):
+        """Get fallback icon for history items"""
+        from launcher.utils.icon_utils import load_theme_icon
+
+        fallback_names = ["document-open-recent"]
+        return load_theme_icon("accessories-history", self.icon_size, fallback_names)

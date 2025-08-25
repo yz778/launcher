@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
+from typing import Dict, Any, Optional
+from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_state_home
 import logging
 import os
 import yaml
-from typing import Dict, Any, Optional
-from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_state_home
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +17,14 @@ class ConfigManager:
     DEFAULT_CONFIG = {
         "max_results": 15,
         "icon_size": 48,
-        "terminal_command": "term",
+        "terminal_command": "footclient",
         "window_width": 600,
         "window_height": 70,
         "window_height_results": 300,
         "item_height": 50,
         "border_width": 10,
         "padding": 20,
-        "history_file": str(xdg_state_home() / "launcher/history.json"),
+        "history_file": str(xdg_state_home() / "launcher/history.yaml"),
         "css_file": str(xdg_config_home() / "launcher/launcher.css"),
         "cache_dir": str(xdg_cache_home() / "launcher"),
         "window_position_vertical_percent": 25,
