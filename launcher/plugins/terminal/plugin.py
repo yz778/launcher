@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 
+from ..base import Plugin, SearchResult
+from gi.repository import GLib
+from launcher.utils.scoring_system import calculate_match_score
+from typing import Dict, Any, List
 import logging
 import shlex
-from typing import Dict, Any, List
-
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib  # GLib might not be strictly needed if no idle_add
-
-from ..base import Plugin, SearchResult
-from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -42,33 +37,6 @@ class TerminalPlugin(Plugin):
             "track_history": True,  # Track terminal commands in history
         }
 
-    def get_default_css(self) -> str:
-        return """
-        /* Terminal Plugin CSS */
-        .terminal-result #app-list-item {
-            padding: 8px;
-            border-radius: 8px;
-            transition: background-color 0.2s ease;
-            min-height: 50px;
-        }
-        .terminal-result #app-list-item:hover {
-            background-color: rgba(70, 90, 110, 0.4);
-        }
-        .terminal-result #app-list-item:selected {
-            background-color: rgba(90, 110, 130, 0.6);
-        }
-        .terminal-result #app-name {
-            color: #d0e0f0;
-            font-size: 16px;
-            font-weight: bold;
-        }
-        .terminal-result #app-description {
-            color: #a0b0c0;
-            font-size: 12px;
-            font-family: monospace;
-        }
-        """
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         super().initialize(config, config_manager)
 
@@ -78,17 +46,15 @@ class TerminalPlugin(Plugin):
         return True
 
     def start(self) -> bool:
-        GLib.idle_add(self._load_default_icon)
-        logger.info("TerminalPlugin started.")
+        GLib.idle_add(self._load_icon)
         return True
 
-    def _load_default_icon(self) -> bool:
-        """Load the default terminal icon from the icon theme"""
-        from launcher.utils.icon_utils import load_theme_icon
+    def _load_icon(self) -> bool:
+        from launcher.utils.icon_utils import load_custom_icon
 
-        self.default_icon = load_theme_icon("utilities-terminal", self.icon_size)
-
-        # Return False to ensure this function is only called once by idle_add
+        icon_url = "https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png"
+        icon_size = self.icon_size or 48  # Fallback to 48 if icon_size is None
+        self.default_icon = load_custom_icon(icon_url, icon_size)
         return False
 
     def search(self, query: str) -> List[SearchResult]:

@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 
-import logging
-from typing import Dict, List, Any, Optional
-import subprocess
-
-import pyperclip
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
-
 from ..base import Plugin, SearchResult
+from gi.repository import GLib
 from launcher.utils.scoring_system import calculate_match_score
+from typing import Dict, List, Any, Optional
+import logging
+import pyperclip
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -40,39 +35,6 @@ class QalculatePlugin(Plugin):
             "track_history": True,  # Track calculator results in history
         }
 
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Qalculate Plugin CSS */
-.qalculate-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
-}
-
-.qalculate-result #app-list-item:hover {
-    background-color: rgba(130, 90, 70, 0.4);
-}
-
-.qalculate-result #app-list-item:selected {
-    background-color: rgba(150, 110, 90, 0.6);
-}
-
-.qalculate-result #app-name {
-    color: #f0e0d0;
-    font-size: 18px;
-    font-weight: bold;
-    font-family: monospace;
-}
-
-.qalculate-result #app-description {
-    color: #c0b0a0;
-    font-size: 14px;
-    font-family: monospace;
-}
-"""
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
@@ -92,19 +54,13 @@ class QalculatePlugin(Plugin):
         return True
 
     def start(self) -> bool:
-        """
-        Start the plugin and perform any necessary setup work
-
-        This loads the calculator icon.
-        """
         GLib.idle_add(self._load_icon)
         return True
 
     def _load_icon(self) -> bool:
-        """Load the calculator icon"""
         from launcher.utils.icon_utils import load_theme_icon
 
-        self.icon = load_theme_icon("qalculate", self.icon_size)
+        self.icon = load_theme_icon("accessories-calculator", self.icon_size)
         return False
 
     def _is_calculation(self, query: str) -> bool:
@@ -138,20 +94,27 @@ class QalculatePlugin(Plugin):
         Calculate the result of the expression using qalc CLI
 
         Returns None if calculation fails
+        Kills qalc if it runs longer than 5 seconds.
         """
         # Strip leading = if present
         if expression.startswith("="):
             expression = expression[1:].strip()
 
         try:
-            # Use qalc for calculation
-            # The -t option provides a terse output (just the result)
+            # Use qalc for calculation with a timeout
             process = subprocess.run(
-                ["qalc", "-t", expression], capture_output=True, text=True, check=True
+                ["qalc", "-t", expression],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=5,
             )
             result = process.stdout.strip()
             return result
 
+        except subprocess.TimeoutExpired:
+            logger.warning("qalc process timed out and was killed after 5 seconds")
+            return None
         except FileNotFoundError:
             logger.debug("qalc command not found during calculation")
             return None

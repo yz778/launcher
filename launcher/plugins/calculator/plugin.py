@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
 
-import logging
-from typing import Dict, List, Any, Optional
-import pyperclip
-
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
-
 from ..base import Plugin, SearchResult
+from gi.repository import GLib
 from launcher.utils.scoring_system import calculate_match_score
+from typing import Dict, List, Any, Optional
+import logging
+import pyperclip
 
 logger = logging.getLogger(__name__)
 
@@ -56,39 +51,6 @@ class CalculatorPlugin(Plugin):
             "angle_unit": "degree",
             "track_history": False,  # Don't track calculator results in history by default
         }
-
-    def get_default_css(self) -> str:
-        """Get default CSS for this plugin"""
-        return """
-/* Calculator Plugin CSS */
-.calculator-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
-}
-
-.calculator-result #app-list-item:hover {
-    background-color: rgba(130, 90, 70, 0.4);
-}
-
-.calculator-result #app-list-item:selected {
-    background-color: rgba(150, 110, 90, 0.6);
-}
-
-.calculator-result #app-name {
-    color: #f0e0d0;
-    font-size: 18px;
-    font-weight: bold;
-    font-family: monospace;
-}
-
-.calculator-result #app-description {
-    color: #c0b0a0;
-    font-size: 14px;
-    font-family: monospace;
-}
-"""
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
