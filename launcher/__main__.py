@@ -245,7 +245,9 @@ def complete_initialization(
 
     # Set managers on history plugin if it was loaded
     if "history" in plugin_manager.plugins:
-        plugin_manager.plugins["history"].set_managers(history_manager, plugin_manager)
+        history_plugin = plugin_manager.plugins["history"]
+        history_plugin.set_managers(history_manager, plugin_manager)
+        history_plugin.register_with_launcher()
 
     # Load CSS
     CssManager.load_css(config, plugin_manager.plugins)
