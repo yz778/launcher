@@ -545,7 +545,7 @@ class DesktopFilePlugin(Plugin):
                 del env["GDK_BACKEND"]
                 logger.debug("Removed GDK_BACKEND from environment")
 
-            subprocess.Popen(cmd_parts, env=env, preexec_fn=os.setsid)
+            subprocess.Popen(cmd_parts, env=env, start_new_session=True)
 
             return True
         except Exception as e:
