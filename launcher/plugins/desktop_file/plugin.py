@@ -526,6 +526,7 @@ class DesktopFilePlugin(Plugin):
         )
 
         try:
+            import os
             import subprocess
 
             if desktop_file.terminal:
@@ -537,7 +538,14 @@ class DesktopFilePlugin(Plugin):
             result.metadata["actual_executed_command"] = actual_executed_command
 
             logger.info(f"Executing command: {actual_executed_command}")
-            subprocess.Popen(cmd_parts)
+
+            # Create a copy of the environment and remove GDK_BACKEND
+            env = os.environ.copy()
+            if "GDK_BACKEND" in env:
+                del env["GDK_BACKEND"]
+                logger.debug("Removed GDK_BACKEND from environment")
+
+            subprocess.Popen(cmd_parts, env=env, start_new_session=True)
 
             return True
         except Exception as e:
