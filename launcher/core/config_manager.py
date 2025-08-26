@@ -19,7 +19,7 @@ class ConfigManager:
         "icon_size": 48,
         "terminal_command": "footclient",
         "window_width": 600,
-        "window_height": 70,
+        "window_height": 300,
         "window_height_results": 300,
         "item_height": 50,
         "border_width": 10,
