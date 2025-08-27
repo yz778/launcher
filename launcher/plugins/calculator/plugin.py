@@ -182,6 +182,10 @@ class CalculatorPlugin(Plugin):
         if not query or not self._is_calculation(query):
             return []
 
+        # Ensure the icon is loaded before creating the result
+        if self.calculator_icon is None:
+            self._load_calculator_icon()
+
         # Try to calculate
         result = self._calculate(query)
 
