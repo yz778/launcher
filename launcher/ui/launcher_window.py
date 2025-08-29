@@ -1151,15 +1151,7 @@ class LauncherWindow(Gtk.Window):
         if not result.metadata.get("original_item_id"):
             result.metadata["original_item_id"] = result.item_id
 
-        self.history_manager.add_execution(
-            result.plugin_id,
-            result.item_id,
-            executed_command,
-            user_input,
-            result.name,
-            result.description,
-            icon_pixbuf,
-        )
+        self.history_manager.add_execution(result, user_input)
         self.history_manager.save_history()
         logger.debug(f"Stored execution in history: {user_input} -> {executed_command}")
 
