@@ -553,9 +553,6 @@ class HistoryPlugin(Plugin):
                 "history_entry": entry,
                 "usage_count": entry_data["usage_count"],
                 "track_history": False,
-                "has_original_metadata": bool(
-                    entry_data["original_plugin_id"] and entry_data["original_item_id"]
-                ),
             }
         except Exception as metadata_create_error:
             logger.error(
@@ -696,11 +693,18 @@ class HistoryPlugin(Plugin):
                 logger.error("No history entry found in result metadata")
                 return False
 
-            original_plugin_id = history_entry.get("plugin_id")
-            original_item_id = history_entry.get("item_id")
-            user_input = history_entry.get("user_input", "")
+            # Reconstruct the original SearchResult from the history entry
+            reconstructed_result = SearchResult(
+                plugin_id=history_entry.get("plugin_id"),
+                item_id=history_entry.get("item_id"),
+                name=history_entry.get("result_name"),
+                description=history_entry.get("description"),
+                icon=result.icon,  # Use the icon from the current result
+                score=0, # Score is not relevant for re-execution
+                metadata={},
+            )
 
-            if not original_plugin_id or not original_item_id:
+            if not reconstructed_result.plugin_id or not reconstructed_result.item_id:
                 logger.error(
                     "Missing original plugin/item information in history entry"
                 )
@@ -711,32 +715,13 @@ class HistoryPlugin(Plugin):
                 logger.error("Plugin manager not available")
                 return False
 
-            plugin_manager = self.plugin_manager
+            # We need to reconstruct the arguments for the command
+            user_input = history_entry.get("user_input", "")
+            parts = user_input.split(" ")
+            if len(parts) > 1:
+                reconstructed_result.metadata["args"] = parts[1:]
 
-            # Get the original plugin
-            original_plugin = plugin_manager.plugins.get(original_plugin_id)
-            if not original_plugin:
-                logger.error(f"Original plugin {original_plugin_id} not found")
-                return False
-
-            # Search for the original item
-            search_results = original_plugin.search(user_input)
-
-            # Find the exact item by item_id
-            target_result = None
-            for search_result in search_results:
-                if search_result.item_id == original_item_id:
-                    target_result = search_result
-                    break
-
-            if target_result:
-                # Execute the original result
-                return plugin_manager.execute(target_result)
-            else:
-                logger.warning(
-                    f"Could not find original item {original_item_id} in plugin {original_plugin_id}"
-                )
-                return False
+            return self.plugin_manager.execute(reconstructed_result)
 
         except Exception as e:
             logger.error(f"Error executing history result: {e}")

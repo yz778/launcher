@@ -265,30 +265,6 @@ class ExecutablePlugin(Plugin):
         )
         return False  # Remove from idle queue
 
-    def rescan(self) -> None:
-        """Rescan executable files (for intelligent rescanning)"""
-        logger.info("Rescanning executable files...")
-        threading.Thread(target=self._rescan_with_cleanup, daemon=True).start()
-
-    def _rescan_with_cleanup(self) -> None:
-        """Perform rescan and cleanup invalid history entries"""
-        # First do the normal rescan
-        self._scan_and_update_matcher()
-
-        # Then clean up invalid history entries
-        try:
-            from launcher import get_history_manager
-
-            history_manager = get_history_manager()
-            if history_manager:
-                removed_count = self.clean_invalid_history_entries(history_manager)
-                if removed_count > 0:
-                    logger.info(
-                        f"Executable rescan removed {removed_count} invalid history entries"
-                    )
-        except Exception as e:
-            logger.error(f"Error cleaning history during executable rescan: {e}")
-
     def clean_invalid_history_entries(self, history_manager) -> int:
         """
         Clean invalid history entries for executable files that no longer exist or are no longer executable.

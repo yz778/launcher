@@ -46,19 +46,11 @@ def rescan_callback(plugin_id: str = None):
     global launcher_window
     if launcher_window and launcher_window.plugin_manager:
         if plugin_id:
-            # Rescan specific plugin
-            plugin = launcher_window.plugin_manager.plugins.get(plugin_id)
-            if plugin and hasattr(plugin, "rescan"):
-                logger.info(f"Rescanning {plugin_id} plugin via IPC")
-                plugin.rescan()
-            else:
-                logger.warning(
-                    f"Plugin {plugin_id} not found or doesn't support rescanning"
-                )
+            logger.info(f"Reloading {plugin_id} plugin via IPC")
+            launcher_window.plugin_manager.reload_plugin(plugin_id)
         else:
-            # Rescan all plugins
-            logger.info("Rescanning all plugins via IPC")
-            launcher_window._trigger_rescan()
+            logger.info("Reloading all plugins via IPC")
+            launcher_window.plugin_manager.reload_all_plugins()
 
 
 def show_window():

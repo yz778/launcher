@@ -130,33 +130,29 @@ class HistoryManager:
             logger.error(f"Error getting usage count for {plugin_id}:{item_id}: {e}")
             return 0
 
-    def add_execution(
-        self,
-        plugin_id: str,
-        item_id: str,
-        actual_command: str,
-        original_user_input: str,
-        result_name: str = None,
-        description: str = None,
-        icon_pixbuf=None,
-    ) -> None:
+    def add_execution(self, result: SearchResult, user_input: str) -> None:
         """
         Record a successful execution in history.
 
         Args:
-            plugin_id: Plugin ID that was executed
-            item_id: Item ID that was executed
-            actual_command: The actual command that was executed (subprocess command)
-            original_user_input: The exact text that the user typed before submitting
-            result_name: The display name of the executed result (e.g., title-cased executable name)
-            description: Description of the executed item
-            icon_pixbuf: The actual icon pixbuf to store for better performance
+            result: The SearchResult object that was executed.
+            user_input: The exact text that the user typed.
         """
+        if not result or not user_input:
+            return
+
         current_time = time.time()
 
-        # Add to user input history
+        # Extract all necessary information from the result object
+        plugin_id = result.plugin_id
+        item_id = result.item_id
+        result_name = result.name
+        description = result.description
+        icon_pixbuf = result.icon
+        actual_command = result.metadata.get("actual_executed_command", user_input)
+
         self.add_user_input_history(
-            original_user_input,
+            user_input,
             plugin_id,
             item_id,
             current_time,

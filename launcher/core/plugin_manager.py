@@ -23,6 +23,7 @@ class PluginManager:
         "active_search_threads",
         "active_search_threads_lock",
         "_executor",
+        "plugins_dir",
     )
 
     def __init__(self, config_manager=None):
@@ -33,6 +34,7 @@ class PluginManager:
         self.active_search_threads = 0
         self.active_search_threads_lock = threading.Lock()
         self._executor = None
+        self.plugins_dir = ""
 
     def _get_executor(self):
         """Get or create thread pool executor"""
@@ -40,15 +42,15 @@ class PluginManager:
             import concurrent.futures
 
             self._executor = concurrent.futures.ThreadPoolExecutor(
-                max_workers=8, thread_name_prefix="plugin-search"
+                max_workers=os.cpu_count() or 4, thread_name_prefix="plugin-search"
             )
         return self._executor
 
     def load_plugins(self, plugins_dir: str, config: Dict[str, Any]) -> None:
         """Discover and load all plugins from the specified directory"""
         self.config = config
+        self.plugins_dir = plugins_dir
 
-        # Look for plugin directories (not files)
         plugin_dirs = [
             d
             for d in os.listdir(plugins_dir)
@@ -58,48 +60,52 @@ class PluginManager:
         ]
 
         for plugin_dir in plugin_dirs:
-            try:
-                # Check if the directory has a plugin.py file
-                plugin_file = os.path.join(plugins_dir, plugin_dir, "plugin.py")
-                if not os.path.exists(plugin_file):
-                    continue
+            self.load_plugin(plugin_dir)
 
-                module_name = f"plugins.{plugin_dir}.plugin"
-                module = importlib.import_module(module_name)
-                for name, obj in inspect.getmembers(module):
-                    if (
-                        inspect.isclass(obj)
-                        and issubclass(obj, Plugin)
-                        and obj != Plugin
-                        and not inspect.isabstract(obj)
-                    ):
-                        self._register_plugin(obj, config)
-            except Exception as e:
-                logger.error(f"Error loading plugin {plugin_dir}: {e}")
+    def load_plugin(self, plugin_dir: str) -> bool:
+        """Load a single plugin from its directory"""
+        try:
+            plugin_file = os.path.join(self.plugins_dir, plugin_dir, "plugin.py")
+            if not os.path.exists(plugin_file):
+                return False
+
+            module_name = f"plugins.{plugin_dir}.plugin"
+            module = importlib.import_module(module_name)
+            importlib.reload(module)  # Ensure we get the latest code
+
+            for name, obj in inspect.getmembers(module):
+                if (
+                    inspect.isclass(obj)
+                    and issubclass(obj, Plugin)
+                    and obj != Plugin
+                    and not inspect.isabstract(obj)
+                ):
+                    return self._register_plugin(obj, self.config)
+        except Exception as e:
+            logger.error(f"Error loading plugin {plugin_dir}: {e}")
+            return False
+        return False
 
     def _register_plugin(
         self, plugin_class: Type[Plugin], config: Dict[str, Any]
-    ) -> None:
+    ) -> bool:
         """Register and initialize a single plugin"""
         try:
-            # Create a temporary instance just to get the plugin ID and defaults
-            temp_plugin = plugin_class()
-            plugin_id = temp_plugin.get_id()
+            plugin = plugin_class()
+            plugin_id = plugin.get_id()
 
-            # Check if plugin is enabled before doing any real work
             plugins_config = config.get("plugins", {})
             plugin_specific_config = plugins_config.get(plugin_id, {})
             enabled = plugin_specific_config.get("enabled", True)
 
             if not enabled:
                 logger.info(
-                    f"Plugin disabled: {temp_plugin.get_name()} ({plugin_id}) - skipping registration"
+                    f"Plugin disabled: {plugin.get_name()} ({plugin_id}) - skipping registration"
                 )
-                return
+                return False
 
-            # Plugin is enabled, proceed with full registration
             try:
-                plugin_defaults = temp_plugin.get_config_defaults()
+                plugin_defaults = plugin.get_config_defaults()
                 if self.config_manager:
                     self.config_manager.register_plugin_defaults(
                         plugin_id, plugin_defaults
@@ -111,20 +117,50 @@ class PluginManager:
 
             logger.debug(f"Registering enabled plugin '{plugin_id}'")
 
-            # Initialize the plugin
-            if temp_plugin.initialize(plugin_specific_config, self.config_manager):
-                self.plugins[plugin_id] = temp_plugin
+            if plugin.initialize(plugin_specific_config, self.config_manager):
+                self.plugins[plugin_id] = plugin
                 self.enabled_plugins[plugin_id] = True
-                logger.info(
-                    f"Initialized plugin: {temp_plugin.get_name()} ({plugin_id})"
-                )
+                logger.info(f"Initialized plugin: {plugin.get_name()} ({plugin_id})")
+                return True
             else:
                 logger.warning(
-                    f"Failed to initialize plugin: {temp_plugin.get_name()} ({plugin_id})"
+                    f"Failed to initialize plugin: {plugin.get_name()} ({plugin_id})"
                 )
+                return False
 
         except Exception as e:
             logger.error(f"Error registering plugin {plugin_class.__name__}: {e}")
+            return False
+
+    def unload_plugin(self, plugin_id: str) -> bool:
+        """Unload a single plugin"""
+        if plugin_id not in self.plugins:
+            return False
+
+        logger.info(f"Unloading plugin: {plugin_id}")
+        plugin = self.plugins.pop(plugin_id, None)
+        if plugin:
+            try:
+                plugin.cleanup()
+            except Exception as e:
+                logger.error(f"Error cleaning up plugin {plugin_id}: {e}")
+
+        self.enabled_plugins.pop(plugin_id, None)
+        return True
+
+    def reload_plugin(self, plugin_id: str) -> bool:
+        """Reload a single plugin"""
+        logger.info(f"Reloading plugin: {plugin_id}")
+        plugin_dir = self.plugins[plugin_id].__module__.split(".")[1]
+        self.unload_plugin(plugin_id)
+        return self.load_plugin(plugin_dir)
+
+    def reload_all_plugins(self) -> None:
+        """Reload all currently loaded plugins"""
+        logger.info("Reloading all plugins...")
+        # Create a copy of the keys to avoid issues with modifying the dict while iterating
+        for plugin_id in list(self.plugins.keys()):
+            self.reload_plugin(plugin_id)
 
     def search(
         self,
@@ -135,18 +171,12 @@ class PluginManager:
     ) -> None:
         """
         Search across enabled plugins non-blockingly using thread pool.
-        Results for each plugin are passed via result_callback.
-        finished_callback is called once all plugins have been processed.
-        Callbacks are executed in the main GTK thread via GLib.idle_add.
-        search_id is used to track and ignore stale results.
         """
         if not query or not query.strip():
             GLib.idle_add(finished_callback, search_id)
             return
 
-        # Since only enabled plugins are in self.plugins, we can search all of them
         plugins_to_search = list(self.plugins.items())
-
         if not plugins_to_search:
             GLib.idle_add(finished_callback, search_id)
             return
@@ -191,7 +221,6 @@ class PluginManager:
     def execute(self, result: SearchResult) -> bool:
         """Execute an action for the given search result"""
         plugin_id = result.plugin_id
-
         if plugin_id in self.plugins:
             try:
                 return self.plugins[plugin_id].execute(result)
@@ -202,16 +231,11 @@ class PluginManager:
             logger.error(f"Plugin {plugin_id} not found or not enabled")
             return False
 
-        return True
-
     def cleanup(self) -> None:
         """Release all plugin resources"""
         if self._executor:
             self._executor.shutdown(wait=True)
             self._executor = None
 
-        for plugin_id, plugin in self.plugins.items():
-            try:
-                plugin.cleanup()
-            except Exception as e:
-                logger.error(f"Error cleaning up plugin {plugin_id}: {e}")
+        for plugin_id in list(self.plugins.keys()):
+            self.unload_plugin(plugin_id)

@@ -60,7 +60,7 @@ class QalculatePlugin(Plugin):
     def _load_icon(self) -> bool:
         from launcher.utils.icon_utils import load_theme_icon
 
-        self.icon = load_theme_icon("accessories-calculator", self.icon_size)
+        self.icon = load_theme_icon("qalculate", self.icon_size)
         return False
 
     def _is_calculation(self, query: str) -> bool:
@@ -130,6 +130,10 @@ class QalculatePlugin(Plugin):
         # Check if this is a calculation
         if not query or not self._is_calculation(query):
             return []
+
+        # Ensure the icon is loaded before creating the result
+        if self.icon is None:
+            self._load_icon()
 
         result = self._calculate(query)
 
