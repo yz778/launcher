@@ -1,27 +1,25 @@
-/* Executable Plugin CSS */
 .executable-result #app-list-item {
     padding: 8px;
     border-radius: 8px;
     transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
+    min-height: 50px;
 }
 
 .executable-result #app-list-item:hover {
-    background-color: rgba(60, 100, 80, 0.4);
+    background-color: rgba(70, 90, 130, 0.4);
 }
 
 .executable-result #app-list-item:selected {
-    background-color: rgba(80, 120, 100, 0.6);
+    background-color: rgba(90, 110, 150, 0.6);
 }
 
 .executable-result #app-name {
-    color: #e0f0e0;
+    color: #f0f0f0;
     font-size: 16px;
     font-weight: bold;
 }
 
 .executable-result #app-description {
-    color: #a0c0a0;
+    color: #b0b0b0;
     font-size: 12px;
-    font-family: monospace;
 }
