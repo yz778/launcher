@@ -115,14 +115,7 @@ class QalculatePlugin(Plugin):
         except subprocess.TimeoutExpired:
             logger.warning("qalc process timed out and was killed after 5 seconds")
             return None
-        except FileNotFoundError:
-            logger.debug("qalc command not found during calculation")
-            return None
-        except subprocess.CalledProcessError as e:
-            logger.debug(f"Error calculating with qalc: {e.stderr}")
-            return None
-        except Exception as e:
-            logger.debug(f"Error processing qalc output: {e}")
+        except Exception:
             return None
 
     def search(self, query: str) -> List[SearchResult]:

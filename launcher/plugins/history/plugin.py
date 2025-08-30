@@ -161,19 +161,14 @@ class HistoryPlugin(Plugin):
         """Validate entry structure"""
         try:
             if not isinstance(entry, dict):
-                logger.debug(f"History entry is not a dict ({type(entry)}) - skipping")
                 return False
 
             user_input = entry.get("user_input", "")
             if not isinstance(user_input, str):
-                logger.debug(
-                    f"user_input is not a string ({type(user_input)}) - skipping entry"
-                )
                 return False
 
             return True
-        except Exception as entry_error:
-            logger.debug(f"Error processing history entry: {entry_error} - skipping")
+        except Exception:
             return False
 
     def _extract_search_fields(self, entry: Dict[str, Any]) -> Dict[str, str]:
@@ -185,8 +180,7 @@ class HistoryPlugin(Plugin):
                 "result_name": entry.get("result_name", ""),
                 "description": entry.get("description", ""),
             }
-        except Exception as e:
-            logger.debug(f"Error extracting search fields: {e}")
+        except Exception:
             return None
 
     def _calculate_best_match_score(
@@ -275,16 +269,12 @@ class HistoryPlugin(Plugin):
 
             # Return empty string if None or not a string
             if not isinstance(plugin_id, str):
-                logger.debug(
-                    f"Invalid plugin_id type in history entry: {type(plugin_id)}"
-                )
                 return ""
 
             # Return the plugin_id (could be empty string, which is valid for fallback)
             return plugin_id.strip()
 
         except Exception as e:
-            logger.debug(f"Error validating original plugin ID: {e}")
             return ""
 
     def _validate_original_item_id(self, entry: Dict[str, Any]) -> str:
@@ -294,14 +284,12 @@ class HistoryPlugin(Plugin):
 
             # Return empty string if None or not a string
             if not isinstance(item_id, str):
-                logger.debug(f"Invalid item_id type in history entry: {type(item_id)}")
                 return ""
 
             # Return the item_id (could be empty string, which is valid for fallback)
             return item_id.strip()
 
-        except Exception as e:
-            logger.debug(f"Error validating original item ID: {e}")
+        except Exception:
             return ""
 
     def _create_history_result(
@@ -329,9 +317,6 @@ class HistoryPlugin(Plugin):
             return None
         except Exception as e:
             logger.error(f"Critical error creating history result: {e}")
-            logger.debug(
-                f"Error context - entry: {repr(entry)}, score: {repr(score)}, query: {repr(query)}"
-            )
             return None
 
     def _validate_result_inputs(
@@ -370,9 +355,7 @@ class HistoryPlugin(Plugin):
 
             # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
             display_name = self._build_hybrid_display_name(user_input, result_name)
-            display_description = self._build_display_description(
-                actual_command, description, user_input, result_name
-            )
+            display_description = description
 
             return {
                 "user_input": user_input,
@@ -424,45 +407,6 @@ class HistoryPlugin(Plugin):
                 f"Error getting {field_name} from entry: {e} - using default"
             )
             return default
-
-    def _build_display_description(
-        self,
-        actual_command: str,
-        description: str,
-        user_input: str,
-        result_name: str = None,
-    ) -> str:
-        """Build display description from entry data"""
-        try:
-            display_parts = []
-
-            # Show result_name if it's different from user_input (preserves title-cased names)
-            if result_name and result_name != user_input:
-                display_parts.append(result_name)
-
-            # Add actual_command if it's different from user_input and result_name
-            if (
-                actual_command
-                and actual_command != user_input
-                and actual_command != result_name
-            ):
-                display_parts.append(actual_command)
-
-            # Add description if it's different from other fields
-            if (
-                description
-                and description != actual_command
-                and description != user_input
-                and description != result_name
-            ):
-                display_parts.append(description)
-
-            return " - ".join(display_parts)
-        except Exception as desc_error:
-            logger.warning(
-                f"Error building display description: {desc_error} - using empty string"
-            )
-            return ""
 
     def _build_hybrid_display_name(self, user_input: str, result_name: str) -> str:
         """
@@ -522,18 +466,12 @@ class HistoryPlugin(Plugin):
             # (user wants simple command, but history has complex command with args)
             if not query_has_args and entry_has_args:
                 penalty_factor = 0.8  # Reduce score to 80%
-                logger.debug(
-                    f"Applying argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'"
-                )
                 return base_score * penalty_factor
 
             # Light penalty if query has args but entry has no args
             # (user wants complex command, but history has simple command)
             elif query_has_args and not entry_has_args:
                 penalty_factor = 0.9  # Reduce score to 90%
-                logger.debug(
-                    f"Applying light argument mismatch penalty: query='{query}' vs entry='{entry_data['user_input']}'"
-                )
                 return base_score * penalty_factor
 
             return base_score
@@ -609,9 +547,6 @@ class HistoryPlugin(Plugin):
                 metadata=metadata,
             )
 
-            logger.debug(
-                f"Created history result: '{entry_data['display_name']}' with score {score}"
-            )
             return result
 
         except Exception as result_error:
@@ -627,9 +562,6 @@ class HistoryPlugin(Plugin):
                     entry, self.icon_size
                 )
                 if stored_icon:
-                    logger.debug(
-                        f"Using stored icon for history entry: {entry.get('user_input', '')}"
-                    )
                     return stored_icon
 
             # If no stored icon, try to get the original plugin's icon
@@ -658,19 +590,13 @@ class HistoryPlugin(Plugin):
                                 search_result.item_id == original_item_id
                                 and search_result.icon
                             ):
-                                logger.debug(
-                                    f"Using original plugin icon for history entry: {entry.get('user_input', '')}"
-                                )
                                 return search_result.icon
-                except Exception as e:
-                    logger.debug(f"Could not get original plugin icon: {e}")
+                except Exception:
+                    pass
 
             # Fallback to generic history icon only if no original icon found
             try:
                 icon_theme = Gtk.IconTheme.get_default()
-                logger.debug(
-                    f"Using fallback history icon for: {entry.get('user_input', '')}"
-                )
                 return icon_theme.load_icon("document-open-recent", self.icon_size, 0)
             except Exception:
                 # If history icon fails, try clock icon
@@ -681,8 +607,7 @@ class HistoryPlugin(Plugin):
                 except Exception:
                     return None
 
-        except Exception as e:
-            logger.debug(f"Could not load icon for history entry: {e}")
+        except Exception:
             return None
 
     def execute(self, result: SearchResult) -> bool:
@@ -694,15 +619,23 @@ class HistoryPlugin(Plugin):
                 return False
 
             # Reconstruct the original SearchResult from the history entry
+            # Copy the original metadata to ensure all necessary context is preserved
             reconstructed_result = SearchResult(
                 plugin_id=history_entry.get("plugin_id"),
                 item_id=history_entry.get("item_id"),
                 name=history_entry.get("result_name"),
                 description=history_entry.get("description"),
                 icon=result.icon,  # Use the icon from the current result
-                score=0, # Score is not relevant for re-execution
-                metadata={},
+                score=0,  # Score is not relevant for re-execution
+                metadata=history_entry.get(
+                    "original_metadata", {}
+                ).copy(),  # Copy original metadata
             )
+
+            # Explicitly add actual_command to metadata if it exists in history_entry
+            actual_command = history_entry.get("actual_command")
+            if actual_command:
+                reconstructed_result.metadata["actual_command"] = actual_command
 
             if not reconstructed_result.plugin_id or not reconstructed_result.item_id:
                 logger.error(
@@ -749,8 +682,7 @@ class HistoryPlugin(Plugin):
                 result = self._create_history_search_result(history_entry)
                 if result:
                     results.append(result)
-            except Exception as e:
-                logger.debug(f"Error creating history result: {e}")
+            except Exception:
                 continue
 
         return results

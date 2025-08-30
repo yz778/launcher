@@ -96,26 +96,22 @@ class ExecutableFile:
                             value = stripped_line[5:].strip()
                             if value:
                                 self.custom_icon = value
-                                logger.debug(f"Found #icon '{value}' for {self.path}")
 
                         elif stripped_line.startswith("name "):
                             value = stripped_line[5:].strip()
                             if value:
                                 self.name = value
-                                logger.debug(f"Found #name '{value}' for {self.path}")
 
                         elif stripped_line.startswith("desc "):
                             value = stripped_line[5:].strip()
                             if value:
                                 self.description = value
-                                logger.debug(f"Found #desc '{value}' for {self.path}")
 
                         elif stripped_line.startswith("noterm"):
                             self.use_terminal = False
-                            logger.debug(f"Found #noterm for {self.path}")
 
-        except Exception as e:
-            logger.debug(f"Could not parse directives from {self.path}: {e}")
+        except Exception:
+            pass
 
     def get_command(self) -> str:
         """Get the command to execute the file"""
@@ -289,20 +285,11 @@ class ExecutablePlugin(Plugin):
             else:
                 if entry.get("plugin_id") == self.get_id():
                     removed_count += 1
-                    logger.debug(
-                        f"Removing invalid executable entry: {entry.get('user_input', 'unknown')}"
-                    )
                 else:
                     # Keep entries from other plugins
                     valid_entries.append(entry)
 
         history_manager.user_input_history = valid_entries
-
-        if removed_count > 0:
-            logger.info(
-                f"Executable plugin cleaned {removed_count} invalid history entries"
-            )
-            history_manager.save_history()
 
         return removed_count
 
@@ -327,23 +314,19 @@ class ExecutablePlugin(Plugin):
 
             # Check if the executable file still exists
             if not os.path.isfile(item_id):
-                logger.debug(f"Executable file no longer exists: {item_id}")
                 return False
 
             # Check if the file is still executable
             try:
                 st = os.stat(item_id)
                 if not (st.st_mode & stat.S_IXUSR):
-                    logger.debug(f"File no longer executable: {item_id}")
                     return False
-            except Exception as e:
-                logger.debug(f"Cannot check executable status for {item_id}: {e}")
+            except Exception:
                 return False
 
             return True
 
         except Exception as e:
-            logger.debug(f"Error validating executable entry: {e}")
             return False
 
     def get_scan_directories(self) -> List[str]:
@@ -441,7 +424,7 @@ class ExecutablePlugin(Plugin):
                 metadata={
                     "command": executable.get_command(),
                     "args": args,
-                    "executable": executable,
+                    "executable_data": executable.to_dict(),  # Store dictionary representation
                     "track_history": self.should_track_history(),
                 },
             )
@@ -454,7 +437,11 @@ class ExecutablePlugin(Plugin):
         if result.plugin_id != self.get_id():
             return False
 
-        executable: ExecutableFile = result.metadata.get("executable")
+        executable_data: Dict[str, Any] = result.metadata.get("executable_data")
+        if not executable_data:
+            logger.error("Executable data not found in result metadata.")
+            return False
+        executable: ExecutableFile = ExecutableFile.from_dict(executable_data)
         command: str = result.metadata.get("command")
         if not command:
             return False
@@ -465,7 +452,7 @@ class ExecutablePlugin(Plugin):
         )
 
         try:
-            import subprocess
+            from launcher.utils.process_manager import launch_detached_process
 
             if use_terminal:
                 terminal_command = self.get_terminal_command()
@@ -481,11 +468,10 @@ class ExecutablePlugin(Plugin):
             env = os.environ.copy()
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
-                logger.debug("Removed GDK_BACKEND from environment")
 
-            subprocess.Popen(cmd_parts, env=env, start_new_session=True)
+            success = launch_detached_process(cmd_parts, env=env)
+            return success
 
-            return True
         except Exception as e:
             logger.error(f"Error executing command {command}: {e}")
             return False

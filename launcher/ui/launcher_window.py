@@ -6,6 +6,7 @@ from gi.repository import Gtk, Gdk, Pango, GLib
 from plugins.base import SearchResult
 from typing import Dict, Any, List
 from ui.css_manager import CssManager
+from launcher.utils.result_deduplicator import ResultDeduplicator
 import logging
 
 logger = logging.getLogger(__name__)
@@ -215,9 +216,7 @@ class TextHighlighter:
 
             return " ".join(attrs)
 
-        except Exception as e:
-            logger.debug(f"Could not extract CSS styles for {css_class}: {e}")
-            # Fallback to default highlighting
+        except Exception:
             return 'foreground="#8be9fd" weight="bold"'
 
 
@@ -359,6 +358,7 @@ class LauncherWindow(Gtk.Window):
 
         self.plugin_manager = plugin_manager
         self.history_manager = history_manager
+        self.result_deduplicator = ResultDeduplicator()
         self.config = config
         self.foreground_mode = foreground_mode
         # Cache general config to avoid repeated lookups
@@ -615,20 +615,30 @@ class LauncherWindow(Gtk.Window):
 
     def _execute_history_item(self, history_entry: Dict[str, Any]) -> None:
         """
-        Execute an item from history using the history manager.
+        Execute an item from history using the history plugin.
         Falls back to regular search if execution fails.
         """
-        if not self.history_manager or not self.plugin_manager:
+        if not self.history_plugin or not self.plugin_manager:
+            logger.error("History plugin or plugin manager not available.")
             # Fallback to regular search
             user_input = history_entry.get("user_input", "")
             self.entry.set_text(user_input)
             self.on_entry_changed(self.entry)
             return
 
-        # Try to execute via history manager
-        success = self.history_manager.execute_history_item(
-            history_entry, self.plugin_manager
+        # Convert history_entry to SearchResult for execution by the history plugin
+        # The history plugin's execute method expects a SearchResult
+        history_search_result = self.history_plugin._create_history_search_result(
+            history_entry
         )
+
+        if history_search_result:
+            success = self.history_plugin.execute(history_search_result)
+        else:
+            success = False
+            logger.error(
+                f"Failed to create SearchResult from history entry: {history_entry.get('user_input', 'N/A')}"
+            )
 
         if not success:
             # Fallback to regular search
@@ -723,21 +733,13 @@ class LauncherWindow(Gtk.Window):
     ):
         """Callback for when a plugin returns results."""
         if search_id != self.active_search_id:
-            logger.debug(
-                f"Ignoring stale results from plugin {plugin_id} for search_id {search_id} (current is {self.active_search_id})"
-            )
             return
 
-        logger.debug(
-            f"Received {len(plugin_results)} results from plugin {plugin_id} for search_id {search_id}"
-        )
-
         # No need to handle highlighting here - UI layer will handle it based on current query
-
         self.current_results.extend(plugin_results)
 
         # Apply deduplication: remove history results if exact match exists from other plugins
-        self.current_results = self.history_manager.deduplicate_results(
+        self.current_results = self.result_deduplicator.deduplicate_results(
             self.current_results
         )
 
@@ -769,12 +771,8 @@ class LauncherWindow(Gtk.Window):
     def handle_search_finished(self, search_id: int):
         """Callback for when all plugins have finished searching."""
         if search_id != self.active_search_id:
-            logger.debug(
-                f"Ignoring stale search_finished signal for search_id {search_id} (current is {self.active_search_id})"
-            )
             return
 
-        logger.debug(f"All plugins have finished searching for search_id {search_id}.")
         # Always show dropdown if user has typed something, even if no results
         query_text = self.entry.get_text().strip()
         if query_text and not self.current_results:
@@ -821,10 +819,6 @@ class LauncherWindow(Gtk.Window):
             )
 
         self.active_search_id += 1
-        logger.debug(
-            f"Initiating new search with search_id: {self.active_search_id} for query: '{query}'"
-        )
-
         self.plugin_manager.search(
             query,
             self.active_search_id,
@@ -1131,9 +1125,7 @@ class LauncherWindow(Gtk.Window):
             return
 
         user_input = self.entry.get_text().strip()
-        should_store = self.history_manager.should_store_in_history(
-            user_input, self.current_results, result
-        )
+        should_store = self.history_manager.should_store_in_history(user_input, result)
 
         if should_store:
             self._store_new_history_entry(result, user_input)
@@ -1152,23 +1144,10 @@ class LauncherWindow(Gtk.Window):
             result.metadata["original_item_id"] = result.item_id
 
         self.history_manager.add_execution(result, user_input)
-        self.history_manager.save_history()
-        logger.debug(f"Stored execution in history: {user_input} -> {executed_command}")
 
     def _increment_existing_usage(self, result: SearchResult, user_input: str) -> None:
         """Increment usage count for existing history entries"""
-        incremented = self.history_manager.increment_usage_count(
-            result.plugin_id, result.item_id
-        )
-
-        if incremented:
-            logger.debug(
-                f"Incremented usage count for existing entry: {result.plugin_id}:{result.item_id}"
-            )
-        else:
-            logger.debug(
-                f"Skipped storage for partial match without arguments: {user_input}"
-            )
+        self.history_manager.increment_usage_count(result.plugin_id, result.item_id)
 
     def show_and_focus(self):
         """Show window at consistent position and grab focus"""
@@ -1215,8 +1194,8 @@ class LauncherWindow(Gtk.Window):
             # Some window managers need an extra nudge
             self.activate_focus()
 
-        except Exception as e:
-            logger.debug(f"Error in delayed focus and positioning: {e}")
+        except Exception:
+            pass
 
         return False  # Remove from idle queue
 
@@ -1316,6 +1295,9 @@ class LauncherWindow(Gtk.Window):
         """Update the window with the full configuration after initialization"""
         self.plugin_manager = plugin_manager
         self.history_manager = history_manager
+        self.history_plugin = self.plugin_manager.plugins.get(
+            "history"
+        )  # Add this line
         self.config = config
 
         # Update window size if needed - cache general config

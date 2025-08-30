@@ -115,8 +115,6 @@ class PluginManager:
                     f"Error getting config defaults for plugin {plugin_id}: {e}"
                 )
 
-            logger.debug(f"Registering enabled plugin '{plugin_id}'")
-
             if plugin.initialize(plugin_specific_config, self.config_manager):
                 self.plugins[plugin_id] = plugin
                 self.enabled_plugins[plugin_id] = True

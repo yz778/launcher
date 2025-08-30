@@ -87,8 +87,7 @@ class TerminalPlugin(Plugin):
             return False
 
         try:
-            import os
-            import subprocess
+            from launcher.utils.process_manager import launch_detached_process
 
             terminal_command = self.get_terminal_command()
             cmd_parts = terminal_command.split() + shlex.split(command)
@@ -99,11 +98,10 @@ class TerminalPlugin(Plugin):
             env = os.environ.copy()
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
-                logger.debug("Removed GDK_BACKEND from environment")
 
-            subprocess.Popen(cmd_parts, env=env, start_new_session=True)
+            success = launch_detached_process(cmd_parts, env=env)
+            return success
 
-            return True
         except Exception as e:
             logger.error(f"Error executing command {command}: {e}")
             return False
