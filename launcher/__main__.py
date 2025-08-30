@@ -208,6 +208,10 @@ def main() -> None:
         if launcher_window and launcher_window.plugin_manager:
             launcher_window.plugin_manager.cleanup()
 
+        # Clean up history manager resources
+        if _history_manager:
+            _history_manager.cleanup()
+
     return 0
 
 

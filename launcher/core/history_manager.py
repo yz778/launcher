@@ -150,6 +150,7 @@ class HistoryManager:
         description = result.description
         icon_pixbuf = result.icon
         actual_command = result.metadata.get("actual_executed_command", user_input)
+        processed_metadata = result.metadata.copy()
 
         self.add_user_input_history(
             user_input,
@@ -160,7 +161,7 @@ class HistoryManager:
             result_name,
             description,
             icon_pixbuf,
-            result.metadata, # Pass the original metadata
+            processed_metadata,  # Pass the processed metadata
         )
 
     def _normalize_command_for_comparison(self, command: str) -> Optional[str]:
@@ -193,7 +194,7 @@ class HistoryManager:
         result_name: str = None,
         description: str = None,
         icon_pixbuf=None,
-        original_metadata: Optional[Dict[str, Any]] = None, # New parameter
+        original_metadata: Optional[Dict[str, Any]] = None,  # New parameter
     ) -> None:
         """
         Add user input to history, removing duplicates and maintaining order.
@@ -227,7 +228,7 @@ class HistoryManager:
             description,
             current_usage_count + 1,
             icon_pixbuf,
-            original_metadata, # Pass the new parameter
+            original_metadata,  # Pass the new parameter
         )
 
         self._add_and_limit_history(entry)
@@ -292,7 +293,7 @@ class HistoryManager:
         description: str,
         usage_count: int,
         icon_pixbuf,
-        original_metadata: Optional[Dict[str, Any]] = None, # New parameter
+        original_metadata: Optional[Dict[str, Any]] = None,  # New parameter
     ) -> dict:
         """Create a new history entry"""
         entry = {
@@ -304,7 +305,9 @@ class HistoryManager:
             "description": description,
             "usage_count": usage_count,
             "actual_command": actual_command_string,
-            "original_metadata": original_metadata if original_metadata is not None else {}, # Store original metadata
+            "original_metadata": original_metadata
+            if original_metadata is not None
+            else {},  # Store original metadata
         }
 
         if icon_pixbuf:
@@ -924,3 +927,10 @@ class HistoryManager:
 
         fallback_names = ["document-open-recent"]
         return load_theme_icon("accessories-history", icon_size, fallback_names)
+
+    def cleanup(self) -> None:
+        """
+        Clean up resources, ensuring history is saved on exit.
+        """
+        self.save_history()
+        logger.info("HistoryManager cleaned up and history saved.")
