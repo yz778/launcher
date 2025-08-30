@@ -370,9 +370,7 @@ class HistoryPlugin(Plugin):
 
             # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
             display_name = self._build_hybrid_display_name(user_input, result_name)
-            display_description = self._build_display_description(
-                actual_command, description, user_input, result_name
-            )
+            display_description = description
 
             return {
                 "user_input": user_input,
@@ -424,45 +422,6 @@ class HistoryPlugin(Plugin):
                 f"Error getting {field_name} from entry: {e} - using default"
             )
             return default
-
-    def _build_display_description(
-        self,
-        actual_command: str,
-        description: str,
-        user_input: str,
-        result_name: str = None,
-    ) -> str:
-        """Build display description from entry data"""
-        try:
-            display_parts = []
-
-            # Show result_name if it's different from user_input (preserves title-cased names)
-            if result_name and result_name != user_input:
-                display_parts.append(result_name)
-
-            # Add actual_command if it's different from user_input and result_name
-            if (
-                actual_command
-                and actual_command != user_input
-                and actual_command != result_name
-            ):
-                display_parts.append(actual_command)
-
-            # Add description if it's different from other fields
-            if (
-                description
-                and description != actual_command
-                and description != user_input
-                and description != result_name
-            ):
-                display_parts.append(description)
-
-            return " - ".join(display_parts)
-        except Exception as desc_error:
-            logger.warning(
-                f"Error building display description: {desc_error} - using empty string"
-            )
-            return ""
 
     def _build_hybrid_display_name(self, user_input: str, result_name: str) -> str:
         """
@@ -694,15 +653,23 @@ class HistoryPlugin(Plugin):
                 return False
 
             # Reconstruct the original SearchResult from the history entry
+            # Copy the original metadata to ensure all necessary context is preserved
             reconstructed_result = SearchResult(
                 plugin_id=history_entry.get("plugin_id"),
                 item_id=history_entry.get("item_id"),
                 name=history_entry.get("result_name"),
                 description=history_entry.get("description"),
                 icon=result.icon,  # Use the icon from the current result
-                score=0, # Score is not relevant for re-execution
-                metadata={},
+                score=0,  # Score is not relevant for re-execution
+                metadata=history_entry.get(
+                    "original_metadata", {}
+                ).copy(),  # Copy original metadata
             )
+
+            # Explicitly add actual_command to metadata if it exists in history_entry
+            actual_command = history_entry.get("actual_command")
+            if actual_command:
+                reconstructed_result.metadata["actual_command"] = actual_command
 
             if not reconstructed_result.plugin_id or not reconstructed_result.item_id:
                 logger.error(
