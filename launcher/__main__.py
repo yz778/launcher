@@ -67,12 +67,38 @@ def hide_window():
         launcher_window.hide()
 
 
-def signal_handler(signum, frame):
-    """Handle termination signals"""
-    global singleton_manager
-    logger.info(f"Received signal {signum}, shutting down...")
+def cleanup_resources():
+    """Clean up all resources including process manager, singleton, and plugin managers"""
+    global singleton_manager, launcher_window, _history_manager
+
+    # Clean up process manager
+    try:
+        from .utils.process_manager import get_process_manager
+
+        process_manager = get_process_manager()
+        process_manager.cleanup_all()
+    except Exception as e:
+        logger.error(f"Error cleaning up process manager: {e}")
+
+    # Always clean up singleton server
     if singleton_manager:
         singleton_manager.stop_server()
+
+    # Clean up plugin manager resources
+    if launcher_window and launcher_window.plugin_manager:
+        launcher_window.plugin_manager.cleanup()
+
+    # Clean up history manager resources
+    if _history_manager:
+        _history_manager.cleanup()
+
+
+def signal_handler(signum, frame):
+    """Handle termination signals"""
+    logger.info(f"Received signal {signum}, shutting down...")
+
+    cleanup_resources()
+
     try:
         # Lazy import Gtk only if needed
         from gi.repository import Gtk
@@ -80,7 +106,7 @@ def signal_handler(signum, frame):
         Gtk.main_quit()
     except ImportError:
         pass  # Gtk not loaded yet
-    except:
+    except Exception:
         pass  # Gtk might not be running
     sys.exit(0)
 
@@ -194,23 +220,8 @@ def main() -> None:
         )
         Gtk.main()
 
-    except Exception as e:
-        logger.error(f"Error starting GUI: {e}")
-        if singleton_manager:
-            singleton_manager.stop_server()
-        raise
     finally:
-        # Always clean up singleton server on exit
-        if singleton_manager:
-            singleton_manager.stop_server()
-
-        # Clean up plugin manager resources
-        if launcher_window and launcher_window.plugin_manager:
-            launcher_window.plugin_manager.cleanup()
-
-        # Clean up history manager resources
-        if _history_manager:
-            _history_manager.cleanup()
+        cleanup_resources()
 
     return 0
 
@@ -222,6 +233,12 @@ def complete_initialization(
     args,
 ) -> bool:
     """Finish async initialization tasks after UI is visible"""
+
+    # Initialize process manager early
+    from .utils.process_manager import get_process_manager
+
+    process_manager = get_process_manager()
+    logger.info("Process manager initialized")
 
     # Lazy import heavy modules
     from .ui.css_manager import CssManager

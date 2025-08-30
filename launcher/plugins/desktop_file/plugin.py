@@ -495,8 +495,7 @@ class DesktopFilePlugin(Plugin):
         )
 
         try:
-            import os
-            import subprocess
+            from launcher.utils.process_manager import launch_detached_process
 
             if desktop_file.terminal:
                 terminal_command = self.get_terminal_command()
@@ -513,9 +512,9 @@ class DesktopFilePlugin(Plugin):
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
 
-            subprocess.Popen(cmd_parts, env=env, start_new_session=True)
+            success = launch_detached_process(cmd_parts, env=env)
+            return success
 
-            return True
         except Exception as e:
             logger.error(f"Error executing command {desktop_file.exec_cmd}: {e}")
             return False
