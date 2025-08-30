@@ -166,7 +166,6 @@ class TimezonePlugin(Plugin):
             }
 
         except Exception as e:
-            logger.debug(f"Error parsing timezone query: {e}")
             return None
 
     def _parse_time_and_timezone(
@@ -223,7 +222,6 @@ class TimezonePlugin(Plugin):
             try:
                 target_tz = pytz.timezone(target_tz_name)
             except pytz.UnknownTimeZoneError:
-                logger.debug(f"Unknown target timezone: {target_tz_name}")
                 return None
 
             # Handle "now" keyword
@@ -238,7 +236,6 @@ class TimezonePlugin(Plugin):
                     try:
                         source_tz = pytz.timezone(source_tz_name)
                     except pytz.UnknownTimeZoneError:
-                        logger.debug(f"Unknown source timezone: {source_tz_name}")
                         return None
                     source_dt = datetime.now(source_tz)
                     target_dt = source_dt.astimezone(target_tz)
@@ -246,7 +243,6 @@ class TimezonePlugin(Plugin):
                 try:
                     source_tz = pytz.timezone(source_tz_name)
                 except pytz.UnknownTimeZoneError:
-                    logger.debug(f"Unknown source timezone: {source_tz_name}")
                     return None
                 now = datetime.now()
 
@@ -293,8 +289,7 @@ class TimezonePlugin(Plugin):
 
             return f"{target_time_12h} ({target_time_24h}) {target_tz_abbr}"
 
-        except Exception as e:
-            logger.debug(f"Error converting time: {e}")
+        except Exception:
             return None
 
     def search(self, query: str) -> List[SearchResult]:
@@ -317,7 +312,6 @@ class TimezonePlugin(Plugin):
         try:
             target_tz_obj = pytz.timezone(parsed["target_tz"])
         except pytz.UnknownTimeZoneError:
-            logger.debug(f"Unknown target timezone for display: {parsed['target_tz']}")
             return []
 
         if parsed["source_tz"] == "local":
@@ -327,9 +321,6 @@ class TimezonePlugin(Plugin):
                 source_tz_obj = pytz.timezone(parsed["source_tz"])
                 source_tz_display = source_tz_obj.zone
             except pytz.UnknownTimeZoneError:
-                logger.debug(
-                    f"Unknown source timezone for display: {parsed['source_tz']}"
-                )
                 return []
 
         description = f"{result} in {target_tz_obj.zone}"

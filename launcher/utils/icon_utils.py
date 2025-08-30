@@ -36,8 +36,7 @@ def load_theme_icon(
     for name in [icon_name] + fallback_names:
         try:
             return icon_theme.load_icon(name, size, 0)
-        except Exception as e:
-            logger.debug(f"Failed to load icon '{name}': {e}")
+        except Exception:
             continue
 
     logger.warning(
@@ -188,7 +187,6 @@ def _load_icon_from_url(
 
     # Check if icon is already cached
     if os.path.isfile(cache_path):
-        logger.debug(f"Loading cached URL icon: {cache_path}")
         try:
             return GdkPixbuf.Pixbuf.new_from_file_at_scale(cache_path, size, size, True)
         except Exception as e:
@@ -200,7 +198,6 @@ def _load_icon_from_url(
                 pass
 
     # Download icon from URL
-    logger.debug(f"Downloading icon from URL: {icon_url}")
     try:
         # Set a reasonable timeout and user agent
         request = urllib.request.Request(
@@ -243,10 +240,6 @@ def _load_icon_from_url(
                 # Save to cache
                 with open(cache_path, "wb") as f:
                     f.write(content)
-
-                logger.debug(
-                    f"Successfully cached icon from {icon_url} to {cache_path} (content-type: {content_type})"
-                )
 
                 # Load and return the icon
                 return GdkPixbuf.Pixbuf.new_from_file_at_scale(
