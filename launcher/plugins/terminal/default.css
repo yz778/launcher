@@ -1,23 +1,25 @@
-/* Terminal Plugin CSS */
 .terminal-result #app-list-item {
     padding: 8px;
     border-radius: 8px;
     transition: background-color 0.2s ease;
     min-height: 50px;
 }
+
 .terminal-result #app-list-item:hover {
-    background-color: rgba(70, 90, 110, 0.4);
+    background-color: rgba(70, 90, 130, 0.4);
 }
+
 .terminal-result #app-list-item:selected {
-    background-color: rgba(90, 110, 130, 0.6);
+    background-color: rgba(90, 110, 150, 0.6);
 }
+
 .terminal-result #app-name {
-    color: #d0e0f0;
+    color: #f0f0f0;
     font-size: 16px;
     font-weight: bold;
 }
+
 .terminal-result #app-description {
-    color: #a0b0c0;
+    color: #b0b0b0;
     font-size: 12px;
-    font-family: monospace;
 }
