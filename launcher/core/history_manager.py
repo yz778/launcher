@@ -2,14 +2,15 @@
 
 from gi.repository import GdkPixbuf
 from launcher.plugins.base import SearchResult
-from launcher.utils.result_analyzer import ResultAnalyzer
+
 from typing import Dict, Any, List, Optional
 import base64
 import logging
 import math
 import os
 import time
-import yaml
+import pickle
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +44,8 @@ class HistoryManager:
 
         if os.path.isfile(self.history_file):
             try:
-                with open(self.history_file, "r") as f:
-                    data = yaml.safe_load(f)
+                with open(self.history_file, "rb") as f:
+                    data = pickle.load(f)
                     self.user_input_history = data if data is not None else []
 
                 logger.info(f"Loaded history from {self.history_file}")
@@ -67,13 +68,13 @@ class HistoryManager:
             return False
 
         try:
-            with open(self.history_file, "w") as f:
-                yaml.dump(
-                    self.user_input_history,
-                    f,
-                    default_flow_style=False,
-                    allow_unicode=True,
-                )
+            # Write to a temporary file first
+            fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(self.history_file), suffix=".tmp")
+            with os.fdopen(fd, "wb") as f:
+                pickle.dump(self.user_input_history, f)
+
+            # Atomically rename the temporary file to the history file
+            os.replace(temp_path, self.history_file)
             logger.info(f"Saved history to {self.history_file}")
             return True
         except Exception as e:
@@ -423,7 +424,6 @@ class HistoryManager:
         removed_count = original_length - len(self.user_input_history)
 
         if removed_count > 0:
-            self.save_history()
             logger.info(f"Removed {removed_count} history entries.")
         else:
             logger.info("No history entries matched for removal.")
@@ -448,7 +448,6 @@ class HistoryManager:
         ]
 
         if len(self.user_input_history) < original_length:
-            self.save_history()
             return True
         return False
 
@@ -763,12 +762,6 @@ class HistoryManager:
                 f"Incremented usage count for {plugin_id}:{item_id} from {current_count} to {new_count}"
             )
 
-            save_success = self.save_history()
-            if not save_success:
-                logger.warning(
-                    f"Failed to save history after incrementing usage count for {plugin_id}:{item_id}"
-                )
-
             return True
         except Exception as increment_error:
             logger.error(
@@ -835,7 +828,6 @@ class HistoryManager:
 
         if removed_count > 0:
             logger.info(f"Cleaned {removed_count} structurally invalid history entries")
-            self.save_history()
         else:
             logger.info("All history entries are structurally valid")
 
