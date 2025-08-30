@@ -55,7 +55,6 @@ class ConfigManager:
             defaults: Default configuration for the plugin
         """
         self.plugin_defaults[plugin_id] = defaults
-        logger.debug(f"Registered default configuration for plugin {plugin_id}")
 
     def build_default_config(self) -> Dict[str, Any]:
         """
@@ -95,7 +94,6 @@ class ConfigManager:
                 try:
                     with open(expanded_path, "r") as f:
                         user_config = yaml.safe_load(f)
-                        logger.debug(f"User config loaded: {user_config}")
 
                     if user_config:
                         self._merge_config(config, user_config)
@@ -106,7 +104,6 @@ class ConfigManager:
                         f"Error loading configuration from {expanded_path}: {e}"
                     )
             else:
-                logger.debug(f"Configuration file not found: {expanded_path}")
                 logger.info("Using default configuration")
 
             self.config_file = expanded_path

@@ -26,17 +26,9 @@ class ResultAnalyzer:
         try:
             # Enhanced input validation
             if not query:
-                if query is None:
-                    logger.debug("Query is None in exact match check")
-                else:
-                    logger.debug(f"Query is falsy ({type(query)}): {repr(query)}")
                 return False
 
             if not result:
-                if result is None:
-                    logger.debug("Result is None in exact match check")
-                else:
-                    logger.debug(f"Result is falsy ({type(result)})")
                 return False
 
             # Validate query is a string
@@ -53,7 +45,6 @@ class ResultAnalyzer:
                 return False
 
             if result_name is None:
-                logger.debug("Result has no name attribute")
                 return False
 
             # Safely normalize strings with type checking
@@ -74,9 +65,6 @@ class ResultAnalyzer:
                 try:
                     description_normalized = str(result_description).strip().lower()
                 except Exception as e:
-                    logger.debug(
-                        f"Error normalizing result description '{result_description}': {e}"
-                    )
                     description_normalized = ""
 
             # Check exact match with name or description
@@ -84,16 +72,10 @@ class ResultAnalyzer:
                 description_normalized and query_normalized == description_normalized
             )
 
-            logger.debug(
-                f"Exact match check: '{query}' vs '{result_name}' -> {is_match}"
-            )
             return is_match
 
         except Exception as e:
             logger.error(f"Critical error in exact match check: {e}")
-            logger.debug(
-                f"Error context - query: {repr(query)}, result: {repr(result)}"
-            )
             return False
 
     @staticmethod
@@ -115,7 +97,6 @@ class ResultAnalyzer:
         try:
             # Enhanced input validation
             if not query or not result:
-                logger.debug("Query or result is falsy in partial match check")
                 return False
 
             # Validate input types
@@ -128,7 +109,6 @@ class ResultAnalyzer:
             # If it's an exact match, it's not a partial match
             try:
                 if ResultAnalyzer.is_exact_match(query, result):
-                    logger.debug("Query is exact match, not partial")
                     return False
             except Exception as exact_error:
                 logger.warning(
@@ -147,7 +127,6 @@ class ResultAnalyzer:
                 return False
 
             if result_name is None:
-                logger.debug("Result has no name attribute in partial match check")
                 return False
 
             # Safely normalize strings
@@ -171,10 +150,7 @@ class ResultAnalyzer:
             if result_description:
                 try:
                     description_normalized = str(result_description).strip().lower()
-                except Exception as e:
-                    logger.debug(
-                        f"Error normalizing result description in partial match '{result_description}': {e}"
-                    )
+                except Exception:
                     description_normalized = ""
 
             # Check if query is contained in name/description or vice versa
@@ -192,9 +168,6 @@ class ResultAnalyzer:
                     )
                 )
 
-                logger.debug(
-                    f"Partial match check: '{query}' vs '{result_name}' -> {is_partial}"
-                )
                 return is_partial
 
             except Exception as match_error:
@@ -205,9 +178,6 @@ class ResultAnalyzer:
 
         except Exception as e:
             logger.error(f"Critical error in partial match check: {e}")
-            logger.debug(
-                f"Error context - query: {repr(query)}, result: {repr(result)}"
-            )
             return False
 
     @staticmethod
@@ -228,7 +198,6 @@ class ResultAnalyzer:
         try:
             # Enhanced input validation
             if not query or not result:
-                logger.debug("Query or result is falsy in command arguments check")
                 return False
 
             # Validate input types
@@ -248,35 +217,22 @@ class ResultAnalyzer:
                 return False
 
             if result_name is None:
-                logger.debug("Result has no name attribute in command arguments check")
                 return False
 
             # Safely strip query
             try:
                 query_stripped = query.strip()
-            except Exception as e:
-                logger.warning(
-                    f"Error stripping query in command arguments check '{query}': {e}"
-                )
+            except Exception:
                 return False
 
             # If query is empty or too short, no arguments
             if len(query_stripped) < 2:
-                logger.debug(
-                    f"Query too short for command arguments: '{query_stripped}'"
-                )
                 return False
 
             # Parse command line arguments with enhanced error handling
             try:
                 parsed_args = shlex.split(query_stripped)
-                logger.debug(
-                    f"Parsed {len(parsed_args)} arguments from query: {parsed_args}"
-                )
             except ValueError as e:
-                logger.debug(
-                    f"shlex failed to parse query '{query_stripped}': {e} - treating as no arguments"
-                )
                 return False
             except Exception as e:
                 logger.warning(
@@ -286,7 +242,6 @@ class ResultAnalyzer:
 
             # If there's only one argument, no additional arguments
             if len(parsed_args) <= 1:
-                logger.debug("Query has only one argument, no command arguments")
                 return False
 
             # Safely get the first argument (potential command)
@@ -304,9 +259,6 @@ class ResultAnalyzer:
                     or base_command in result_name_lower
                     or result_name_lower in base_command
                 )
-                logger.debug(
-                    f"Command match check: '{base_command}' vs '{result_name_lower}' -> {command_matches}"
-                )
             except Exception as e:
                 logger.warning(f"Error checking command match: {e}")
                 return False
@@ -314,28 +266,20 @@ class ResultAnalyzer:
             if command_matches:
                 # Check if remaining arguments look like command line options/arguments
                 remaining_args = parsed_args[1:]
-                logger.debug(
-                    f"Checking {len(remaining_args)} remaining arguments for command patterns"
-                )
 
                 # Look for common argument patterns with error handling
                 for i, arg in enumerate(remaining_args):
                     try:
                         # Validate argument is a string
                         if not isinstance(arg, str):
-                            logger.debug(
-                                f"Argument {i} is not a string ({type(arg)}): {repr(arg)}"
-                            )
                             continue
 
                         # Arguments starting with - or --
                         if arg.startswith("-"):
-                            logger.debug(f"Found command line option: '{arg}'")
                             return True
 
                         # URLs or file paths
                         if "://" in arg or arg.startswith("/") or arg.startswith("~"):
-                            logger.debug(f"Found URL or file path: '{arg}'")
                             return True
 
                         # File extensions (but be careful not to match regular words)
@@ -347,44 +291,28 @@ class ResultAnalyzer:
                                     and len(parts[1]) <= 4
                                     and parts[1].isalnum()
                                 ):
-                                    logger.debug(f"Found file with extension: '{arg}'")
                                     return True
-                            except Exception as ext_error:
-                                logger.debug(
-                                    f"Error checking file extension for '{arg}': {ext_error}"
-                                )
+                            except Exception:
+                                pass
 
                         # Mathematical expressions (for calculator)
                         try:
                             if re.search(r"[+\-*/=]", arg):
-                                logger.debug(f"Found mathematical expression: '{arg}'")
                                 return True
-                        except Exception as regex_error:
-                            logger.debug(
-                                f"Error checking mathematical expression for '{arg}': {regex_error}"
-                            )
+                        except Exception:
+                            pass
 
-                    except Exception as arg_error:
-                        logger.debug(
-                            f"Error processing argument {i} '{arg}': {arg_error}"
-                        )
+                    except Exception:
                         continue
 
                 # If we have additional arguments but they don't look like command line args,
                 # this might just be a search phrase, not a command with arguments
-                logger.debug(
-                    "No command line argument patterns found in remaining arguments"
-                )
                 return False
 
-            logger.debug("Base command does not match result name")
             return False
 
         except Exception as e:
             logger.error(f"Critical error in command arguments check: {e}")
-            logger.debug(
-                f"Error context - query: {repr(query)}, result: {repr(result)}"
-            )
             return False
 
     @staticmethod
@@ -401,18 +329,7 @@ class ResultAnalyzer:
         """
         try:
             # Enhanced input validation
-            if not query:
-                if query is None:
-                    logger.debug("Query is None in match quality check")
-                else:
-                    logger.debug(f"Query is falsy ({type(query)}): {repr(query)}")
-                return "none"
-
-            if not result:
-                if result is None:
-                    logger.debug("Result is None in match quality check")
-                else:
-                    logger.debug(f"Result is falsy ({type(result)})")
+            if not query or not result:
                 return "none"
 
             # Validate input types
@@ -434,7 +351,6 @@ class ResultAnalyzer:
             # Check exact match first with error handling
             try:
                 if ResultAnalyzer.is_exact_match(query, result):
-                    logger.debug(f"Match quality: exact for '{query}'")
                     return "exact"
             except Exception as exact_error:
                 logger.warning(
@@ -445,7 +361,6 @@ class ResultAnalyzer:
             # Check partial match next with error handling
             try:
                 if ResultAnalyzer.is_partial_match(query, result):
-                    logger.debug(f"Match quality: partial for '{query}'")
                     return "partial"
             except Exception as partial_error:
                 logger.warning(
@@ -456,9 +371,6 @@ class ResultAnalyzer:
             # If the result has a positive score but isn't exact or partial, it's fuzzy
             try:
                 if result_score is not None and result_score > 0:
-                    logger.debug(
-                        f"Match quality: fuzzy for '{query}' (score: {result_score})"
-                    )
                     return "fuzzy"
             except Exception as score_error:
                 logger.warning(
@@ -466,12 +378,8 @@ class ResultAnalyzer:
                 )
 
             # No meaningful match
-            logger.debug(f"Match quality: none for '{query}'")
             return "none"
 
         except Exception as e:
             logger.error(f"Critical error in match quality check: {e}")
-            logger.debug(
-                f"Error context - query: {repr(query)}, result: {repr(result)}"
-            )
             return "none"  # Safe fallback

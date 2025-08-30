@@ -69,7 +69,9 @@ class HistoryManager:
 
         try:
             # Write to a temporary file first
-            fd, temp_path = tempfile.mkstemp(dir=os.path.dirname(self.history_file), suffix=".tmp")
+            fd, temp_path = tempfile.mkstemp(
+                dir=os.path.dirname(self.history_file), suffix=".tmp"
+            )
             with os.fdopen(fd, "wb") as f:
                 pickle.dump(self.user_input_history, f)
 
@@ -95,7 +97,6 @@ class HistoryManager:
         try:
             # Validate input parameters
             if not plugin_id or not item_id:
-                logger.debug("Empty plugin_id or item_id in get_usage_count")
                 return 0
 
             # Handle corrupted history data
@@ -120,9 +121,6 @@ class HistoryManager:
                             usage_count if isinstance(usage_count, (int, float)) else 1
                         )
                 except Exception as e:
-                    logger.debug(
-                        f"Error processing history entry in get_usage_count: {e}"
-                    )
                     continue
 
             return 0
@@ -256,9 +254,6 @@ class HistoryManager:
             if self._should_merge_commands(entry, normalized_new_command):
                 current_usage_count += entry.get("usage_count", 0)
                 entries_to_remove.append(entry)
-                logger.debug(
-                    f"Merging history entry for command '{actual_command_string}' with existing entry: {entry.get('user_input')}"
-                )
 
         self._remove_entries(entries_to_remove)
         return current_usage_count
@@ -324,7 +319,6 @@ class HistoryManager:
             icon_data = self._pixbuf_to_base64(icon_pixbuf)
             if icon_data:
                 entry["icon_data"] = icon_data
-                logger.debug(f"Stored icon data for {plugin_id}: {description}")
             else:
                 logger.warning(
                     f"Failed to convert icon to base64 for {plugin_id}: {description}"
@@ -417,8 +411,6 @@ class HistoryManager:
             )
             if entry_identifier not in remove_set:
                 new_history.append(entry)
-            else:
-                logger.debug(f"Removing history entry: {entry_identifier}")
 
         self.user_input_history = new_history
         removed_count = original_length - len(self.user_input_history)
@@ -561,12 +553,8 @@ class HistoryManager:
                 and last_entry.get("plugin_id") == executed_result.plugin_id
                 and last_entry.get("item_id") == executed_result.item_id
             ):
-                logger.debug(
-                    f"Skipping history storage for exact duplicate: {user_input}"
-                )
                 return False
 
-        logger.debug(f"Storing execution in history: {user_input}")
         return True
 
     def increment_usage_count(
@@ -601,9 +589,6 @@ class HistoryManager:
             logger.error(
                 f"Critical error incrementing usage count for {plugin_id}:{item_id}: {e}"
             )
-            logger.debug(
-                f"Error context - plugin_id: {repr(plugin_id)}, item_id: {repr(item_id)}, user_input: {repr(user_input)}"
-            )
             return False
 
     def _validate_increment_inputs(
@@ -636,10 +621,6 @@ class HistoryManager:
             )
             return False
 
-        logger.debug(
-            f"Searching for history entry to increment: {plugin_id}:{item_id}"
-            + (f" with user_input='{user_input}'" if user_input else "")
-        )
         return True
 
     def _validate_history_structure(self) -> bool:
@@ -676,9 +657,6 @@ class HistoryManager:
                     return True
                 entries_with_errors += 1
 
-        self._log_search_results(
-            entries_checked, entries_with_errors, plugin_id, item_id, user_input
-        )
         return False
 
     def _validate_entry_structure(self, entry: dict, index: int) -> bool:
@@ -700,9 +678,6 @@ class HistoryManager:
             if not isinstance(entry_plugin_id, str) or not isinstance(
                 entry_item_id, str
             ):
-                logger.debug(
-                    f"Entry {index} has invalid plugin_id/item_id types - skipping"
-                )
                 return None
 
             return {
@@ -730,14 +705,8 @@ class HistoryManager:
 
         if user_input:
             if not isinstance(entry_data["user_input"], str):
-                logger.debug(
-                    f"Entry {index} has invalid user_input type - skipping user_input match"
-                )
                 return False
             if entry_data["user_input"].lower() != user_input.lower():
-                logger.debug(
-                    f"Entry {index} user_input mismatch: '{entry_data['user_input']}' != '{user_input}'"
-                )
                 return False
 
         return True
@@ -757,34 +726,13 @@ class HistoryManager:
             new_count = int(current_count) + 1
             entry["usage_count"] = new_count
             entry["timestamp"] = time.time()
-
-            logger.debug(
-                f"Incremented usage count for {plugin_id}:{item_id} from {current_count} to {new_count}"
-            )
-
             return True
+
         except Exception as increment_error:
             logger.error(
                 f"Error incrementing usage count for entry {index}: {increment_error}"
             )
             return False
-
-    def _log_search_results(
-        self,
-        entries_checked: int,
-        entries_with_errors: int,
-        plugin_id: str,
-        item_id: str,
-        user_input: str = None,
-    ):
-        """Log search results"""
-        logger.debug(
-            f"Searched {entries_checked} history entries, {entries_with_errors} had errors"
-        )
-        logger.debug(
-            f"No existing history entry found for {plugin_id}:{item_id}"
-            + (f" with user_input='{user_input}'" if user_input else "")
-        )
 
     def validate_and_clean_history(self, plugin_manager=None) -> int:
         """
@@ -820,9 +768,6 @@ class HistoryManager:
                 valid_entries.append(entry)
             else:
                 removed_count += 1
-                logger.debug(
-                    f"Removing structurally invalid history entry: {entry.get('user_input', 'unknown')}"
-                )
 
         self.user_input_history = valid_entries
 
@@ -895,10 +840,9 @@ class HistoryManager:
         if callable(get_result):
             try:
                 return get_result(item_id, icon_size)
-            except Exception as e:
-                logger.debug(
-                    f"Could not get item {item_id} from plugin {plugin_id}: {e}"
-                )
+            except Exception:
+                pass
+
         return None
 
     def _create_mock_result(self, icon, name, plugin_id, item_id):

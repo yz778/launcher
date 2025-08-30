@@ -79,7 +79,6 @@ class ResultDeduplicator:
             List of deduplicated results
         """
         if not results:
-            logger.debug("No results to deduplicate")
             return results
 
         try:
@@ -87,7 +86,6 @@ class ResultDeduplicator:
             start_time = None
             if logger.isEnabledFor(logging.DEBUG):
                 start_time = time.time()
-                logger.debug(f"Starting deduplication for {len(results)} results")
 
             # Group results by plugin type using list comprehensions for better performance
             history_results = []
@@ -113,14 +111,7 @@ class ResultDeduplicator:
                     other_results.append(result)
                     continue
 
-            logger.debug(
-                f"Found {len(history_results)} history results and {len(other_results)} other results"
-            )
-
             if not history_results or not other_results:
-                logger.debug(
-                    "No deduplication needed - missing history or other results"
-                )
                 return results  # No deduplication needed
 
             # Performance optimization: create efficient lookup structures
@@ -142,9 +133,6 @@ class ResultDeduplicator:
 
                     # Validate that plugin_id and item_id are not None or empty
                     if not result.plugin_id or not result.item_id:
-                        logger.debug(
-                            f"Result has empty plugin_id or item_id: {getattr(result, 'name', 'unknown')}"
-                        )
                         invalid_results_count += 1
                         continue
 
@@ -163,10 +151,6 @@ class ResultDeduplicator:
                     )
                     invalid_results_count += 1
                     continue
-
-            logger.debug(
-                f"Created lookup table with {len(other_result_keys)} entries ({invalid_results_count} invalid results skipped)"
-            )
 
             # Filter out history results that have exact matches in other plugins
             filtered_history_results = []
@@ -215,9 +199,6 @@ class ResultDeduplicator:
 
                     # Validate metadata exists and is not empty with type checking
                     if not original_plugin_id or not original_item_id:
-                        logger.debug(
-                            f"History result '{getattr(history_result, 'name', 'unknown')}' missing original plugin metadata - preserving"
-                        )
                         filtered_history_results.append(history_result)
                         preserved_count += 1
                         missing_metadata_count += 1
@@ -243,9 +224,6 @@ class ResultDeduplicator:
                         # No exact match found, keep this history result
                         filtered_history_results.append(history_result)
                         preserved_count += 1
-                        logger.debug(
-                            f"Preserving history result '{getattr(history_result, 'name', 'unknown')}' - no current match for {original_plugin_id}:{original_item_id}"
-                        )
                     else:
                         # Found a matching result, but only deduplicate if the history entry
                         # represents the same user intent (similar input)
@@ -258,15 +236,9 @@ class ResultDeduplicator:
                             history_name, current_name
                         ):
                             deduplicated_count += 1
-                            logger.debug(
-                                f"Deduplicating history result '{history_name}' - too similar to current result '{current_name}' ({original_plugin_id}:{original_item_id})"
-                            )
                         else:
                             filtered_history_results.append(history_result)
                             preserved_count += 1
-                            logger.debug(
-                                f"Preserving history result '{history_name}' - different intent from current result '{current_name}' ({original_plugin_id}:{original_item_id})"
-                            )
 
                 except AttributeError as e:
                     # Graceful error handling for missing attributes
@@ -296,17 +268,6 @@ class ResultDeduplicator:
             # Maintain original order: other results first, then filtered history results
             deduplicated_results = other_results + filtered_history_results
             original_count = len(results)
-            final_count = len(deduplicated_results)
-
-            # Comprehensive logging summary with error reporting
-            logger.debug(
-                f"Deduplication complete: {original_count} -> {final_count} results"
-            )
-            logger.debug(f"  - Deduplicated: {deduplicated_count} history results")
-            logger.debug(f"  - Preserved: {preserved_count} history results")
-            logger.debug(
-                f"  - Missing metadata: {missing_metadata_count} history results"
-            )
 
             if error_count > 0:
                 logger.warning(
@@ -320,7 +281,6 @@ class ResultDeduplicator:
 
             if start_time and logger.isEnabledFor(logging.DEBUG):
                 elapsed_time = time.time() - start_time
-                logger.debug(f"Deduplication took {elapsed_time:.3f}s")
 
                 # Performance warning for slow deduplication
                 if elapsed_time > 0.1:  # More than 100ms
@@ -340,5 +300,4 @@ class ResultDeduplicator:
         except Exception as e:
             # Graceful error handling - log error but don't break search functionality
             logger.error(f"Critical error during deduplication: {e}")
-            logger.debug("Continuing with original results due to deduplication error")
             return results

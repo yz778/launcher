@@ -99,7 +99,6 @@ class TerminalPlugin(Plugin):
             env = os.environ.copy()
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
-                logger.debug("Removed GDK_BACKEND from environment")
 
             subprocess.Popen(cmd_parts, env=env, start_new_session=True)
 

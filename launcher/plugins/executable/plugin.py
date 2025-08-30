@@ -96,26 +96,22 @@ class ExecutableFile:
                             value = stripped_line[5:].strip()
                             if value:
                                 self.custom_icon = value
-                                logger.debug(f"Found #icon '{value}' for {self.path}")
 
                         elif stripped_line.startswith("name "):
                             value = stripped_line[5:].strip()
                             if value:
                                 self.name = value
-                                logger.debug(f"Found #name '{value}' for {self.path}")
 
                         elif stripped_line.startswith("desc "):
                             value = stripped_line[5:].strip()
                             if value:
                                 self.description = value
-                                logger.debug(f"Found #desc '{value}' for {self.path}")
 
                         elif stripped_line.startswith("noterm"):
                             self.use_terminal = False
-                            logger.debug(f"Found #noterm for {self.path}")
 
-        except Exception as e:
-            logger.debug(f"Could not parse directives from {self.path}: {e}")
+        except Exception:
+            pass
 
     def get_command(self) -> str:
         """Get the command to execute the file"""
@@ -289,9 +285,6 @@ class ExecutablePlugin(Plugin):
             else:
                 if entry.get("plugin_id") == self.get_id():
                     removed_count += 1
-                    logger.debug(
-                        f"Removing invalid executable entry: {entry.get('user_input', 'unknown')}"
-                    )
                 else:
                     # Keep entries from other plugins
                     valid_entries.append(entry)
@@ -321,23 +314,19 @@ class ExecutablePlugin(Plugin):
 
             # Check if the executable file still exists
             if not os.path.isfile(item_id):
-                logger.debug(f"Executable file no longer exists: {item_id}")
                 return False
 
             # Check if the file is still executable
             try:
                 st = os.stat(item_id)
                 if not (st.st_mode & stat.S_IXUSR):
-                    logger.debug(f"File no longer executable: {item_id}")
                     return False
-            except Exception as e:
-                logger.debug(f"Cannot check executable status for {item_id}: {e}")
+            except Exception:
                 return False
 
             return True
 
         except Exception as e:
-            logger.debug(f"Error validating executable entry: {e}")
             return False
 
     def get_scan_directories(self) -> List[str]:
@@ -479,7 +468,6 @@ class ExecutablePlugin(Plugin):
             env = os.environ.copy()
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
-                logger.debug("Removed GDK_BACKEND from environment")
 
             subprocess.Popen(cmd_parts, env=env, start_new_session=True)
 

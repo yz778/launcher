@@ -355,9 +355,6 @@ class DesktopFilePlugin(Plugin):
             if entry.get("plugin_id") == self.get_id():
                 if not self._is_valid_desktop_file_entry(entry):
                     invalid_entries.append(entry)
-                    logger.debug(
-                        f"Marking invalid desktop file entry for removal: {entry.get('user_input', 'unknown')}"
-                    )
 
         if not invalid_entries:
             return 0
@@ -391,23 +388,19 @@ class DesktopFilePlugin(Plugin):
 
             # Check if the desktop file still exists
             if not os.path.isfile(item_id):
-                logger.debug(f"Desktop file no longer exists: {item_id}")
                 return False
 
             # Check if the desktop file is still valid
             try:
                 desktop_file = DesktopFile(item_id)
                 if not desktop_file.is_visible():
-                    logger.debug(f"Desktop file no longer visible: {item_id}")
                     return False
-            except Exception as e:
-                logger.debug(f"Error validating desktop file {item_id}: {e}")
+            except Exception:
                 return False
 
             return True
 
-        except Exception as e:
-            logger.debug(f"Error validating desktop file entry: {e}")
+        except Exception:
             return False
 
     def get_scan_directories(self) -> List[str]:
@@ -519,7 +512,6 @@ class DesktopFilePlugin(Plugin):
             env = os.environ.copy()
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
-                logger.debug("Removed GDK_BACKEND from environment")
 
             subprocess.Popen(cmd_parts, env=env, start_new_session=True)
 

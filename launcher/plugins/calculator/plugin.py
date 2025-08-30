@@ -173,7 +173,6 @@ class CalculatorPlugin(Plugin):
                 # Return the symbolic result if it can't be converted to float
                 return str(result)
         except Exception as e:
-            logger.debug(f"Error calculating with sympy: {e}")
             return None
 
     def search(self, query: str) -> List[SearchResult]:

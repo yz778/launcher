@@ -216,9 +216,7 @@ class TextHighlighter:
 
             return " ".join(attrs)
 
-        except Exception as e:
-            logger.debug(f"Could not extract CSS styles for {css_class}: {e}")
-            # Fallback to default highlighting
+        except Exception:
             return 'foreground="#8be9fd" weight="bold"'
 
 
@@ -643,9 +641,6 @@ class LauncherWindow(Gtk.Window):
             )
 
         if not success:
-            logger.debug(
-                f"History plugin failed to execute item directly. Falling back to search for: {history_entry.get('user_input', 'N/A')}"
-            )
             # Fallback to regular search
             user_input = history_entry.get("user_input", "")
             self.entry.set_text(user_input)
@@ -738,17 +733,9 @@ class LauncherWindow(Gtk.Window):
     ):
         """Callback for when a plugin returns results."""
         if search_id != self.active_search_id:
-            logger.debug(
-                f"Ignoring stale results from plugin {plugin_id} for search_id {search_id} (current is {self.active_search_id})"
-            )
             return
 
-        logger.debug(
-            f"Received {len(plugin_results)} results from plugin {plugin_id} for search_id {search_id}"
-        )
-
         # No need to handle highlighting here - UI layer will handle it based on current query
-
         self.current_results.extend(plugin_results)
 
         # Apply deduplication: remove history results if exact match exists from other plugins
@@ -784,12 +771,8 @@ class LauncherWindow(Gtk.Window):
     def handle_search_finished(self, search_id: int):
         """Callback for when all plugins have finished searching."""
         if search_id != self.active_search_id:
-            logger.debug(
-                f"Ignoring stale search_finished signal for search_id {search_id} (current is {self.active_search_id})"
-            )
             return
 
-        logger.debug(f"All plugins have finished searching for search_id {search_id}.")
         # Always show dropdown if user has typed something, even if no results
         query_text = self.entry.get_text().strip()
         if query_text and not self.current_results:
@@ -836,10 +819,6 @@ class LauncherWindow(Gtk.Window):
             )
 
         self.active_search_id += 1
-        logger.debug(
-            f"Initiating new search with search_id: {self.active_search_id} for query: '{query}'"
-        )
-
         self.plugin_manager.search(
             query,
             self.active_search_id,
@@ -1165,22 +1144,10 @@ class LauncherWindow(Gtk.Window):
             result.metadata["original_item_id"] = result.item_id
 
         self.history_manager.add_execution(result, user_input)
-        logger.debug(f"Stored execution in history: {user_input} -> {executed_command}")
 
     def _increment_existing_usage(self, result: SearchResult, user_input: str) -> None:
         """Increment usage count for existing history entries"""
-        incremented = self.history_manager.increment_usage_count(
-            result.plugin_id, result.item_id
-        )
-
-        if incremented:
-            logger.debug(
-                f"Incremented usage count for existing entry: {result.plugin_id}:{result.item_id}"
-            )
-        else:
-            logger.debug(
-                f"Skipped storage for partial match without arguments: {user_input}"
-            )
+        self.history_manager.increment_usage_count(result.plugin_id, result.item_id)
 
     def show_and_focus(self):
         """Show window at consistent position and grab focus"""
@@ -1227,8 +1194,8 @@ class LauncherWindow(Gtk.Window):
             # Some window managers need an extra nudge
             self.activate_focus()
 
-        except Exception as e:
-            logger.debug(f"Error in delayed focus and positioning: {e}")
+        except Exception:
+            pass
 
         return False  # Remove from idle queue
 

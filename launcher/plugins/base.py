@@ -178,14 +178,12 @@ class Plugin(ABC):
         try:
             # Basic structure validation
             if not isinstance(entry, dict):
-                logger.debug(f"Entry is not a dict: {type(entry)}")
                 return False
 
             # Required fields validation
             required_fields = ["user_input", "plugin_id", "item_id", "timestamp"]
             for field in required_fields:
                 if field not in entry:
-                    logger.debug(f"Entry missing required field '{field}': {entry}")
                     return False
 
             # Type validation
