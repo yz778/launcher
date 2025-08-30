@@ -298,12 +298,6 @@ class ExecutablePlugin(Plugin):
 
         history_manager.user_input_history = valid_entries
 
-        if removed_count > 0:
-            logger.info(
-                f"Executable plugin cleaned {removed_count} invalid history entries"
-            )
-            history_manager.save_history()
-
         return removed_count
 
     def _is_valid_executable_entry(self, entry) -> bool:
@@ -441,7 +435,7 @@ class ExecutablePlugin(Plugin):
                 metadata={
                     "command": executable.get_command(),
                     "args": args,
-                    "executable": executable,
+                    "executable_data": executable.to_dict(),  # Store dictionary representation
                     "track_history": self.should_track_history(),
                 },
             )
@@ -454,7 +448,11 @@ class ExecutablePlugin(Plugin):
         if result.plugin_id != self.get_id():
             return False
 
-        executable: ExecutableFile = result.metadata.get("executable")
+        executable_data: Dict[str, Any] = result.metadata.get("executable_data")
+        if not executable_data:
+            logger.error("Executable data not found in result metadata.")
+            return False
+        executable: ExecutableFile = ExecutableFile.from_dict(executable_data)
         command: str = result.metadata.get("command")
         if not command:
             return False

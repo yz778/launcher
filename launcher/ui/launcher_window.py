@@ -1165,7 +1165,6 @@ class LauncherWindow(Gtk.Window):
             result.metadata["original_item_id"] = result.item_id
 
         self.history_manager.add_execution(result, user_input)
-        self.history_manager.save_history()
         logger.debug(f"Stored execution in history: {user_input} -> {executed_command}")
 
     def _increment_existing_usage(self, result: SearchResult, user_input: str) -> None:
