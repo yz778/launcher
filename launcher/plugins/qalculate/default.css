@@ -1,28 +1,26 @@
-/* Qalculate Plugin CSS */
 .qalculate-result #app-list-item {
     padding: 8px;
     border-radius: 8px;
     transition: background-color 0.2s ease;
-    min-height: 50px; /* Ensure minimum height */
+    min-height: 50px;
 }
 
 .qalculate-result #app-list-item:hover {
-    background-color: rgba(130, 90, 70, 0.4);
+    background-color: rgba(70, 90, 130, 0.4);
 }
 
 .qalculate-result #app-list-item:selected {
-    background-color: rgba(150, 110, 90, 0.6);
+    background-color: rgba(90, 110, 150, 0.6);
 }
 
 .qalculate-result #app-name {
-    color: #f0e0d0;
-    font-size: 18px;
+    color: #f0f0f0;
+    font-size: 10px;
     font-weight: bold;
-    font-family: monospace;
 }
 
 .qalculate-result #app-description {
-    color: #c0b0a0;
-    font-size: 14px;
-    font-family: monospace;
+    color: #ffffff;
+    font-size: 24px;
+    font-weight: bold;
 }

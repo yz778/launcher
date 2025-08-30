@@ -1,4 +1,3 @@
-/* Timezone Plugin CSS */
 .timezone-result #app-list-item {
     padding: 8px;
     border-radius: 8px;
@@ -16,13 +15,12 @@
 
 .timezone-result #app-name {
     color: #e0f0ff;
-    font-size: 18px;
+    font-size: 14px;
     font-weight: bold;
-    font-family: monospace;
 }
 
 .timezone-result #app-description {
     color: #b0d0f0;
     font-size: 14px;
-    font-family: monospace;
+    font-weight: bold;
 }
