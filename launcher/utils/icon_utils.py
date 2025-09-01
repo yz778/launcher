@@ -292,19 +292,13 @@ def normalize_icon_spec(icon_spec: str) -> str:
     Returns:
         Normalized icon specification with appropriate URI scheme
     """
+
     if not icon_spec:
         return "theme://application-x-executable"
-
-    # If it already has a URI scheme, return as-is
-    if any(
-        icon_spec.startswith(scheme)
-        for scheme in ["desktop://", "theme://", "file://", "http://", "https://"]
+    elif icon_spec.startswith(
+        ("desktop://", "theme://", "file://", "http://", "https://")
     ):
         return icon_spec
-
-    # Determine appropriate URI scheme based on content
-    if icon_spec.startswith(("http://", "https://")):
-        return icon_spec  # URLs don't need additional prefix
     elif "/" in icon_spec or icon_spec.endswith(SUPPORTED_IMAGE_EXTENSIONS):
         return f"file://{icon_spec}"
     else:
