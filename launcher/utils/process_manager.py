@@ -6,7 +6,7 @@ import signal
 import subprocess
 import threading
 import time
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +59,8 @@ class ProcessManager:
                     if pid == 0:
                         break
 
-                    # Remove from active processes if tracked
                     if pid in self._active_processes:
                         del self._active_processes[pid]
-                        logger.debug(f"Reaped child process {pid}")
 
                 except OSError:
                     break
@@ -99,11 +97,9 @@ class ProcessManager:
                 # Process is dead, mark for removal
                 finished_pids.append(pid)
 
-        # Remove finished processes
         for pid in finished_pids:
             if pid in self._active_processes:
                 del self._active_processes[pid]
-                logger.debug(f"Cleaned up finished process {pid}")
 
     def launch_detached(
         self,
@@ -201,8 +197,9 @@ class ProcessManager:
         try:
             if env is None:
                 env = os.environ.copy()
-                # Remove GDK_BACKEND to prevent issues with GUI apps
-                env.pop("GDK_BACKEND", None)
+                env.pop(
+                    "GDK_BACKEND", None
+                )  # Remove GDK_BACKEND to prevent issues with GUI apps
 
             process = subprocess.Popen(
                 cmd_parts,
@@ -221,9 +218,6 @@ class ProcessManager:
                 "start_time": time.time(),
             }
 
-            logger.debug(
-                f"Launched tracked process {process.pid}: {' '.join(cmd_parts)}"
-            )
             return process
 
         except Exception as e:

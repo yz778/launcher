@@ -194,7 +194,7 @@ def _load_icon_from_url(
             # Remove corrupted cache file
             try:
                 os.remove(cache_path)
-            except:
+            except Exception:
                 pass
 
     # Download icon from URL
@@ -258,7 +258,7 @@ def _load_icon_from_url(
         try:
             if os.path.exists(cache_path):
                 os.remove(cache_path)
-        except:
+        except Exception:
             pass
 
     return None
@@ -296,3 +296,120 @@ def get_fallback_icon(
     ]
 
     return load_theme_icon(icon_name, size, fallback_names)
+
+
+def load_desktop_file_icon(icon_spec: str, size: int) -> Optional[GdkPixbuf.Pixbuf]:
+    """
+    Load icon for a desktop file with desktop-specific fallback logic
+
+    Args:
+        icon_spec: Icon specification from desktop file (path, theme name, etc.)
+        size: Icon size in pixels
+
+    Returns:
+        Loaded icon pixbuf or fallback icon
+    """
+    if not icon_spec:
+        return _get_desktop_fallback_icon(size)
+
+    try:
+        # Try direct file path first
+        if os.path.isfile(icon_spec):
+            return GdkPixbuf.Pixbuf.new_from_file_at_size(icon_spec, size, size)
+
+        # Try XDG icon theme lookup
+        pixbuf = _load_desktop_icon_from_xdg_theme(icon_spec, size)
+        if pixbuf:
+            return pixbuf
+
+        # Try GTK icon theme
+        pixbuf = _load_desktop_icon_from_gtk_theme(icon_spec, size)
+        if pixbuf:
+            return pixbuf
+
+        # Fallback to default icon
+        return _get_desktop_fallback_icon(size)
+
+    except Exception as e:
+        logger.error(f"Error loading desktop file icon {icon_spec}: {e}")
+        return _get_desktop_fallback_icon(size)
+
+
+def _load_desktop_icon_from_xdg_theme(
+    icon_name: str, size: int
+) -> Optional[GdkPixbuf.Pixbuf]:
+    """Load desktop icon from XDG icon theme"""
+    try:
+        from xdg.IconTheme import getIconPath
+
+        icon_path = getIconPath(icon_name, size)
+
+        # Try without extension if not found
+        if not icon_path and "." in icon_name:
+            icon_name_no_ext = os.path.splitext(icon_name)[0]
+            icon_path = getIconPath(icon_name_no_ext, size)
+
+        if icon_path:
+            try:
+                return GdkPixbuf.Pixbuf.new_from_file_at_size(icon_path, size, size)
+            except Exception:
+                pass
+
+    except ImportError:
+        # xdg module not available
+        pass
+    except Exception:
+        pass
+
+    return None
+
+
+def _load_desktop_icon_from_gtk_theme(
+    icon_name: str, size: int
+) -> Optional[GdkPixbuf.Pixbuf]:
+    """Load desktop icon from GTK icon theme"""
+    try:
+        icon_theme = Gtk.IconTheme.get_default()
+
+        # Try original icon name
+        if icon_theme.has_icon(icon_name):
+            try:
+                return icon_theme.load_icon(icon_name, size, 0)
+            except Exception:
+                pass
+
+        # Try without extension
+        if "." in icon_name:
+            icon_name_no_ext = os.path.splitext(icon_name)[0]
+            if icon_theme.has_icon(icon_name_no_ext):
+                try:
+                    return icon_theme.load_icon(icon_name_no_ext, size, 0)
+                except Exception:
+                    pass
+
+    except Exception:
+        pass
+
+    return None
+
+
+def _get_desktop_fallback_icon(size: int) -> Optional[GdkPixbuf.Pixbuf]:
+    """Get fallback icon for desktop files"""
+    try:
+        icon_theme = Gtk.IconTheme.get_default()
+        return icon_theme.load_icon("application-x-executable", size, 0)
+    except Exception:
+        return None
+
+
+def ensure_correct_icon_size(
+    pixbuf: Optional[GdkPixbuf.Pixbuf], size: int
+) -> Optional[GdkPixbuf.Pixbuf]:
+    """Ensure pixbuf is the correct size"""
+    if not pixbuf:
+        return pixbuf
+
+    if pixbuf.get_width() != size or pixbuf.get_height() != size:
+        return pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+
+    return pixbuf

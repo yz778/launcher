@@ -33,8 +33,6 @@ class TimezonePlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self.icon_size = None
-        self.icon = None
         self._timezone_aliases = self._build_timezone_aliases()
 
     def get_id(self) -> str:
@@ -105,21 +103,11 @@ class TimezonePlugin(Plugin):
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
-        self.icon_size = self.get_icon_size()
         return True
 
     def start(self) -> bool:
         """Start the plugin and perform any necessary setup work"""
-        self._load_icon()
         return True
-
-    def _load_icon(self) -> None:
-        """Load the timezone icon"""
-        from launcher.utils.icon_utils import load_theme_icon
-
-        self.icon = load_theme_icon("appointment-soon", self.icon_size)
-        if not self.icon:
-            logger.warning("Could not load any timezone icon")
 
     def _is_timezone_query(self, query: str) -> bool:
         """Check if the query looks like a timezone conversion"""
@@ -165,7 +153,7 @@ class TimezonePlugin(Plugin):
                 "original_query": query,
             }
 
-        except Exception as e:
+        except Exception:
             return None
 
     def _parse_time_and_timezone(
@@ -331,16 +319,12 @@ class TimezonePlugin(Plugin):
         timezone_bonus = 50
         final_score = base_score + timezone_bonus
 
-        # Ensure icon is loaded
-        if not self.icon:
-            self._load_icon()
-
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,
             name=f"{parsed['source_time']} {source_tz_display} → {result}",
             description=description,
-            icon=self.icon,
+            icon_spec="appointment-soon",
             score=final_score,
             metadata={
                 "result": result,
