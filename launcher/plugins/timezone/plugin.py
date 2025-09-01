@@ -324,7 +324,7 @@ class TimezonePlugin(Plugin):
             item_id=query,
             name=f"{parsed['source_time']} {source_tz_display} → {result}",
             description=description,
-            icon_spec="appointment-soon",
+            icon_spec="theme://appointment-soon",
             score=final_score,
             metadata={
                 "result": result,

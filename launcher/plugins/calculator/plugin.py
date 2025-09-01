@@ -188,7 +188,7 @@ class CalculatorPlugin(Plugin):
             item_id=query,
             name=result,
             description=query,
-            icon_spec="accessories-calculator",
+            icon_spec="theme://accessories-calculator",
             score=calculate_match_score(query, result, is_name=True),
             metadata={
                 "result": result,
