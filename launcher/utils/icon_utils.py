@@ -11,6 +11,20 @@ import urllib.request
 
 logger = logging.getLogger(__name__)
 
+# Common image file extensions supported for icons
+SUPPORTED_IMAGE_EXTENSIONS = (
+    ".png",
+    ".svg",
+    ".jpg",
+    ".jpeg",
+    ".ico",
+    ".gif",
+    ".bmp",
+    ".tiff",
+    ".tif",
+    ".webp",
+)
+
 
 def load_theme_icon(
     icon_name: str, size: int, fallback_names: List[str] = None
@@ -52,10 +66,15 @@ def load_custom_icon(
     cache_dir: str = None,
 ) -> Optional[GdkPixbuf.Pixbuf]:
     """
-    Load custom icon from file path, URL, or theme name with caching
+    Load custom icon with URI scheme support and caching
 
     Args:
-        icon_spec: Icon specification (file path, URL, or theme name)
+        icon_spec: Icon specification with URI scheme support:
+                  - desktop://icon_name for desktop file icons
+                  - theme://icon_name for theme icons
+                  - file:///path/to/icon for file paths
+                  - http://example.com/icon.png for URLs
+                  - Plain strings are treated as theme icons for backward compatibility
         size: Icon size in pixels
         cache: Optional cache dictionary to store loaded icons
         cache_dir: Directory for storing downloaded URL icons
@@ -73,27 +92,27 @@ def load_custom_icon(
     loaded_icon = None
 
     try:
-        # Check if it's a URL
-        if icon_spec.startswith(("http://", "https://")):
+        # Handle URI schemes
+        if icon_spec.startswith("desktop://"):
+            # Desktop file icon: desktop://icon_name
+            icon_name = icon_spec[10:]  # Remove "desktop://" prefix
+            loaded_icon = load_desktop_file_icon(icon_name, size)
+        elif icon_spec.startswith("theme://"):
+            # Theme icon: theme://icon_name
+            icon_name = icon_spec[8:]  # Remove "theme://" prefix
+            loaded_icon = _load_icon_from_theme(icon_name, size)
+        elif icon_spec.startswith(("http://", "https://")):
+            # URL: http://example.com/icon.png
             loaded_icon = _load_icon_from_url(icon_spec, size, cache_dir)
+        elif icon_spec.startswith("file://"):
+            # File URI: file:///path/to/icon
+            file_path = icon_spec[7:]  # Remove "file://" prefix
+            loaded_icon = _load_icon_from_file(file_path, size)
         # Check if it's a file path (contains / or common image extensions)
-        elif "/" in icon_spec or icon_spec.endswith(
-            (
-                ".png",
-                ".svg",
-                ".jpg",
-                ".jpeg",
-                ".ico",
-                ".gif",
-                ".bmp",
-                ".tiff",
-                ".tif",
-                ".webp",
-            )
-        ):
+        elif "/" in icon_spec or icon_spec.endswith(SUPPORTED_IMAGE_EXTENSIONS):
             loaded_icon = _load_icon_from_file(icon_spec, size)
         else:
-            # Try as theme icon name
+            # Backward compatibility: treat as theme icon name
             loaded_icon = _load_icon_from_theme(icon_spec, size)
 
         # Cache the result if cache is provided
@@ -167,19 +186,7 @@ def _load_icon_from_url(
     file_ext = os.path.splitext(parsed_url.path)[1].lower()
 
     # Validate and normalize file extension
-    supported_extensions = {
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".gif",
-        ".svg",
-        ".ico",
-        ".bmp",
-        ".tiff",
-        ".tif",
-        ".webp",
-    }
-    if file_ext not in supported_extensions:
+    if file_ext not in SUPPORTED_IMAGE_EXTENSIONS:
         file_ext = ".png"  # Default to PNG if extension is unknown or unsupported
 
     cache_filename = f"{url_hash}{file_ext}"
@@ -273,6 +280,35 @@ def _load_icon_from_theme(icon_name: str, size: int) -> Optional[GdkPixbuf.Pixbu
     ]
 
     return load_theme_icon(icon_name, size, fallback_names)
+
+
+def normalize_icon_spec(icon_spec: str) -> str:
+    """
+    Normalize an icon specification to use proper URI schemes.
+
+    Args:
+        icon_spec: Raw icon specification (may or may not have URI scheme)
+
+    Returns:
+        Normalized icon specification with appropriate URI scheme
+    """
+    if not icon_spec:
+        return "theme://application-x-executable"
+
+    # If it already has a URI scheme, return as-is
+    if any(
+        icon_spec.startswith(scheme)
+        for scheme in ["desktop://", "theme://", "file://", "http://", "https://"]
+    ):
+        return icon_spec
+
+    # Determine appropriate URI scheme based on content
+    if icon_spec.startswith(("http://", "https://")):
+        return icon_spec  # URLs don't need additional prefix
+    elif "/" in icon_spec or icon_spec.endswith(SUPPORTED_IMAGE_EXTENSIONS):
+        return f"file://{icon_spec}"
+    else:
+        return f"theme://{icon_spec}"
 
 
 def get_fallback_icon(

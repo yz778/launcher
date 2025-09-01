@@ -19,6 +19,19 @@ logger = logging.getLogger(__name__)
 class DesktopFile:
     """Class representing a parsed .desktop file"""
 
+    __slots__ = [
+        "__dict__",
+        "path",
+        "name",
+        "exec_cmd",
+        "icon",
+        "comment",
+        "hidden",
+        "no_display",
+        "terminal",
+        "desktop_entry",
+    ]
+
     def __init__(self, path: str):
         self.path = path
         self.name = ""
@@ -77,7 +90,12 @@ class DesktopFile:
 
     def get_icon_spec(self) -> str:
         """Get the icon specification for this desktop file"""
-        return self.icon or "application-x-executable"
+        if self.icon:
+            # Use desktop:// URI scheme for desktop file icons
+            return f"desktop://{self.icon}"
+        else:
+            # Fallback to theme icon
+            return "theme://application-x-executable"
 
     def is_visible(self) -> bool:
         """Check if the application should be visible in menus"""
@@ -90,6 +108,8 @@ class DesktopFile:
 
 class DesktopFileScanner:
     """Class for scanning and caching .desktop files"""
+
+    __slots__ = ["desktop_files", "scan_locations"]
 
     def __init__(self):
         self.desktop_files: Dict[str, DesktopFile] = {}
@@ -130,13 +150,25 @@ class DesktopFileScanner:
 class DesktopFilePlugin(Plugin):
     """Plugin for searching .desktop files"""
 
+    __slots__ = [
+        "_matcher_lock",
+        "cache_file",
+        "config",
+        "desktop_files",
+        "locations",
+        "matcher",
+        "general_config",
+        "config_manager",
+    ]
+
     def __init__(self):
         super().__init__()
+        self._matcher_lock = threading.Lock()
+        self.cache_file = None
+        self.config = {}
         self.desktop_files = {}
         self.locations = []
         self.matcher = None
-        self.config = {}
-        self.cache_file = None
 
     def get_id(self) -> str:
         return "desktop_file"
@@ -222,10 +254,16 @@ class DesktopFilePlugin(Plugin):
         self._update_matcher()
 
     def _update_matcher(self) -> None:
-        """Updates the string matcher"""
-        self.matcher = StringMatcher(
+        """Updates the string matcher in a thread-safe manner"""
+        # Create new matcher with current desktop files
+        new_matcher = StringMatcher(
             items=list(self.desktop_files.values()), key_func=lambda df: df.name
         )
+
+        # Atomically replace the matcher
+        with self._matcher_lock:
+            self.matcher = new_matcher
+
         logger.info(
             f"Finished loading {len(self.desktop_files)} desktop files in background"
         )
@@ -354,8 +392,12 @@ class DesktopFilePlugin(Plugin):
         search_query = parts[0] if parts else ""
         args = parts[1:] if len(parts) > 1 else []
 
+        # Get a thread-safe reference to the current matcher
+        with self._matcher_lock:
+            current_matcher = self.matcher
+
         # Use string matcher to find matches
-        matches = self.matcher.match(search_query, limit=20)
+        matches = current_matcher.match(search_query, limit=20)
 
         # Convert matches to search results
         results = []

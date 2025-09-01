@@ -2,6 +2,7 @@
 
 from ..base import Plugin, SearchResult
 from launcher.utils.string_matcher import StringMatcher
+from launcher.utils.icon_utils import normalize_icon_spec
 from typing import Dict, List, Any
 import json
 import logging
@@ -121,24 +122,26 @@ class ExecutablePlugin(Plugin):
     """Plugin for searching executable files in custom directories"""
 
     __slots__ = (
-        "executables",
-        "locations",
-        "include_patterns",
-        "exclude_patterns",
-        "matcher",
-        "cache_icons",
+        "_matcher_lock",
         "cache_file",
+        "cache_icons",
+        "exclude_patterns",
+        "executables",
+        "include_patterns",
+        "locations",
+        "matcher",
     )
 
     def __init__(self):
         super().__init__()
-        self.executables = {}
-        self.locations = []
-        self.include_patterns = []
-        self.exclude_patterns = []
-        self.matcher = None
-        self.cache_icons = True
+        self._matcher_lock = threading.Lock()
         self.cache_file = None
+        self.cache_icons = True
+        self.exclude_patterns = []
+        self.executables = {}
+        self.include_patterns = []
+        self.locations = []
+        self.matcher = None
 
     def get_id(self) -> str:
         return "executable"
@@ -238,10 +241,16 @@ class ExecutablePlugin(Plugin):
         self._update_matcher()
 
     def _update_matcher(self) -> None:
-        """Updates the string matcher"""
-        self.matcher = StringMatcher(
+        """Updates the string matcher in a thread-safe manner"""
+        # Create new matcher with current executables
+        new_matcher = StringMatcher(
             items=list(self.executables.values()), key_func=lambda ef: ef.name
         )
+
+        # Atomically replace the matcher
+        with self._matcher_lock:
+            self.matcher = new_matcher
+
         logger.info(
             f"Finished loading {len(self.executables)} executable files in background"
         )
@@ -373,12 +382,19 @@ class ExecutablePlugin(Plugin):
         search_query = parts[0] if parts else ""
         args = parts[1:] if len(parts) > 1 else []
 
-        matches = self.matcher.match(search_query, limit=20)
+        # Get a thread-safe reference to the current matcher
+        with self._matcher_lock:
+            current_matcher = self.matcher
+
+        matches = current_matcher.match(search_query, limit=20)
 
         results = []
         for executable, score in matches:
-            # Use custom icon if specified, otherwise use default theme icon
-            icon_spec = executable.custom_icon or "utilities-terminal"
+            # Use custom icon if specified, otherwise use fallback
+            if executable.custom_icon:
+                icon_spec = normalize_icon_spec(executable.custom_icon)
+            else:
+                icon_spec = "theme://utilities-terminal"
 
             result = SearchResult(
                 plugin_id=self.get_id(),
