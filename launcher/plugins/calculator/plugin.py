@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from ..base import Plugin, SearchResult
-from gi.repository import GLib
 from launcher.utils.scoring_system import calculate_match_score
 from typing import Dict, List, Any, Optional
 import logging
@@ -14,26 +13,20 @@ class CalculatorPlugin(Plugin):
     """Plugin for calculating mathematical expressions"""
 
     __slots__ = (
-        "icon_size",
         "precision",
         "angle_unit",
-        "calculator_icon",
         "_sympy_loaded",
         "_last_valid_result",
         "_sympy",
-        "general_config",
     )
 
     def __init__(self):
         super().__init__()
-        self.icon_size = None
         self.precision = 10
         self.angle_unit = "degree"
-        self.calculator_icon = None
         self._sympy_loaded = False
         self._last_valid_result = None
         self._sympy = None
-        self.general_config = {}
 
     def get_id(self) -> str:
         return "calculator"
@@ -56,9 +49,6 @@ class CalculatorPlugin(Plugin):
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
 
-        # Get icon size using helper
-        self.icon_size = self.get_icon_size()
-
         # Get calculator-specific config using helper
         self.precision = self.get_config_value("precision")
         self.angle_unit = self.get_config_value("angle_unit")
@@ -69,17 +59,9 @@ class CalculatorPlugin(Plugin):
         """
         Start the plugin and perform any necessary setup work
 
-        This loads the calculator icon. Sympy will be loaded lazily when needed.
+        Sympy will be loaded lazily when needed.
         """
-        GLib.idle_add(self._load_calculator_icon)
         return True
-
-    def _load_calculator_icon(self) -> bool:
-        """Load the calculator icon"""
-        from launcher.utils.icon_utils import load_theme_icon
-
-        self.calculator_icon = load_theme_icon("accessories-calculator", self.icon_size)
-        return False
 
     def _is_calculation(self, query: str) -> bool:
         """Check if the query looks like a calculation"""
@@ -172,7 +154,7 @@ class CalculatorPlugin(Plugin):
             except Exception:
                 # Return the symbolic result if it can't be converted to float
                 return str(result)
-        except Exception as e:
+        except Exception:
             return None
 
     def search(self, query: str) -> List[SearchResult]:
@@ -180,10 +162,6 @@ class CalculatorPlugin(Plugin):
         # Check if this is a calculation
         if not query or not self._is_calculation(query):
             return []
-
-        # Ensure the icon is loaded before creating the result
-        if self.calculator_icon is None:
-            self._load_calculator_icon()
 
         # Try to calculate
         result = self._calculate(query)
@@ -210,7 +188,7 @@ class CalculatorPlugin(Plugin):
             item_id=query,
             name=result,
             description=query,
-            icon=self.calculator_icon,
+            icon_spec="accessories-calculator",
             score=calculate_match_score(query, result, is_name=True),
             metadata={
                 "result": result,

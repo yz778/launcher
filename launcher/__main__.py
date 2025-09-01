@@ -233,11 +233,6 @@ def complete_initialization(
     args,
 ) -> bool:
     """Finish async initialization tasks after UI is visible"""
-
-    # Initialize process manager early
-    from .utils.process_manager import get_process_manager
-
-    process_manager = get_process_manager()
     logger.info("Process manager initialized")
 
     # Lazy import heavy modules
@@ -272,7 +267,7 @@ def complete_initialization(
     return False  # Remove from idle queue
 
 
-def start_plugins(plugin_manager: "PluginManager") -> bool:
+def start_plugins(plugin_manager) -> bool:
     """Initialize all enabled plugins"""
     # Lazy import threading only when needed
     import threading

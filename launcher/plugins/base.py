@@ -17,7 +17,7 @@ class SearchResult:
         "item_id",
         "name",
         "description",
-        "icon",
+        "icon_spec",
         "score",
         "metadata",
     )
@@ -28,7 +28,7 @@ class SearchResult:
         item_id: str,
         name: str,
         description: str = "",
-        icon: Any = None,
+        icon_spec: str = None,
         score: float = 0.0,
         metadata: Optional[Dict[str, Any]] = None,
     ):
@@ -40,7 +40,7 @@ class SearchResult:
             item_id: Unique ID for this item within the plugin
             name: Display name of the result
             description: Optional description
-            icon: Optional icon (can be a path, pixbuf, or other format depending on the plugin)
+            icon_spec: Icon specification (theme name, file path, URL, etc.)
             score: Match score (0-100, higher is better)
             metadata: Additional metadata specific to the plugin
         """
@@ -48,7 +48,7 @@ class SearchResult:
         self.item_id = item_id
         self.name = name
         self.description = description
-        self.icon = icon
+        self.icon_spec = icon_spec
         self.score = score
         self.metadata = metadata or {}
 

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 
-from gi.repository import GdkPixbuf
+
 from launcher.plugins.base import SearchResult
 
 from typing import Dict, Any, List, Optional
-import base64
 import logging
 import math
 import os
@@ -120,7 +119,7 @@ class HistoryManager:
                         return (
                             usage_count if isinstance(usage_count, (int, float)) else 1
                         )
-                except Exception as e:
+                except Exception:
                     continue
 
             return 0
@@ -147,7 +146,7 @@ class HistoryManager:
         item_id = result.item_id
         result_name = result.name
         description = result.description
-        icon_pixbuf = result.icon
+        icon_spec = result.icon_spec
         actual_command = result.metadata.get("actual_executed_command", user_input)
         processed_metadata = result.metadata.copy()
 
@@ -159,7 +158,7 @@ class HistoryManager:
             actual_command,
             result_name,
             description,
-            icon_pixbuf,
+            icon_spec,
             processed_metadata,  # Pass the processed metadata
         )
 
@@ -192,7 +191,7 @@ class HistoryManager:
         actual_command_string: str = None,
         result_name: str = None,
         description: str = None,
-        icon_pixbuf=None,
+        icon_spec: str = None,
         original_metadata: Optional[Dict[str, Any]] = None,  # New parameter
     ) -> None:
         """
@@ -207,7 +206,7 @@ class HistoryManager:
             actual_command_string: The actual command string that was executed (subprocess command)
             result_name: The display name of the executed result (e.g., title-cased executable name)
             description: Description of the executed item
-            icon_pixbuf: The actual icon pixbuf to store for better performance
+            icon_spec: The icon specification to store for the item
             original_metadata: The original metadata from the SearchResult
         """
         if timestamp is None:
@@ -226,7 +225,7 @@ class HistoryManager:
             result_name,
             description,
             current_usage_count + 1,
-            icon_pixbuf,
+            icon_spec,
             original_metadata,  # Pass the new parameter
         )
 
@@ -288,7 +287,7 @@ class HistoryManager:
         result_name: str,
         description: str,
         usage_count: int,
-        icon_pixbuf,
+        icon_spec: str,
         original_metadata: Optional[Dict[str, Any]] = None,  # New parameter
     ) -> dict:
         """Create a new history entry"""
@@ -306,25 +305,10 @@ class HistoryManager:
             else {},  # Store original metadata
         }
 
-        if icon_pixbuf:
-            self._store_icon_data(entry, icon_pixbuf, plugin_id, description)
+        if icon_spec:
+            entry["icon_spec"] = icon_spec
 
         return entry
-
-    def _store_icon_data(
-        self, entry: dict, icon_pixbuf, plugin_id: str, description: str
-    ) -> None:
-        """Store icon data in history entry"""
-        try:
-            icon_data = self._pixbuf_to_base64(icon_pixbuf)
-            if icon_data:
-                entry["icon_data"] = icon_data
-            else:
-                logger.warning(
-                    f"Failed to convert icon to base64 for {plugin_id}: {description}"
-                )
-        except Exception as e:
-            logger.error(f"Exception storing icon data for {description}: {e}")
 
     def _add_and_limit_history(self, entry: dict) -> None:
         """Add entry to history and limit to 100 entries"""
@@ -460,71 +444,6 @@ class HistoryManager:
             boost = min(50, 10 * math.log2(count + 1))
             return base_score + boost
         return base_score
-
-    def _pixbuf_to_base64(self, pixbuf) -> Optional[str]:
-        """
-        Convert a GdkPixbuf to base64 encoded PNG data
-
-        Args:
-            pixbuf: GdkPixbuf to convert
-
-        Returns:
-            Base64 encoded PNG data, or None if conversion fails
-        """
-        try:
-            # Save pixbuf to PNG bytes
-            success, buffer = pixbuf.save_to_bufferv("png", [], [])
-            if success:
-                # Encode to base64
-                return base64.b64encode(buffer).decode("utf-8")
-        except Exception as e:
-            logger.error(f"Error converting pixbuf to base64: {e}")
-        return None
-
-    def _base64_to_pixbuf(
-        self, icon_data: str, icon_size: int = 48
-    ) -> Optional[object]:
-        """
-        Convert base64 encoded PNG data back to GdkPixbuf
-
-        Args:
-            icon_data: Base64 encoded PNG data
-            icon_size: Desired icon size
-
-        Returns:
-            GdkPixbuf or None if conversion fails
-        """
-        try:
-            # Decode from base64
-            png_data = base64.b64decode(icon_data)
-
-            # Create pixbuf from PNG data
-            from gi.repository import Gio
-
-            input_stream = Gio.MemoryInputStream.new_from_data(png_data)
-            pixbuf = GdkPixbuf.Pixbuf.new_from_stream_at_scale(
-                input_stream, icon_size, icon_size, True, None
-            )
-            return pixbuf
-        except Exception as e:
-            logger.error(f"Error converting base64 to pixbuf: {e}")
-        return None
-
-    def get_stored_icon(self, history_entry: Dict[str, Any], icon_size: int = 48):
-        """
-        Get the stored icon from a history entry
-
-        Args:
-            history_entry: History entry dict
-            icon_size: Desired icon size
-
-        Returns:
-            GdkPixbuf or None if no stored icon
-        """
-        icon_data = history_entry.get("icon_data")
-        if icon_data:
-            return self._base64_to_pixbuf(icon_data, icon_size)
-        return None
 
     def should_store_in_history(
         self,
@@ -818,16 +737,19 @@ class HistoryManager:
         return self._get_plugin_result(plugin_id, item_id, plugin_manager, icon_size)
 
     def _get_stored_icon_result(self, history_entry, plugin_id, item_id, icon_size):
-        """Get result with stored icon from history entry"""
+        """Get result with stored icon spec from history entry"""
         if not history_entry:
             return None
 
-        stored_icon = self.get_stored_icon(history_entry, icon_size)
-        if not stored_icon:
+        stored_icon_spec = history_entry.get("icon_spec")
+        if not stored_icon_spec:
             return None
 
         return self._create_mock_result(
-            stored_icon, history_entry.get("user_input", ""), plugin_id, item_id
+            stored_icon_spec,
+            history_entry.get("user_input", ""),
+            plugin_id,
+            item_id,
         )
 
     def _get_plugin_result(self, plugin_id, item_id, plugin_manager, icon_size):
@@ -845,17 +767,17 @@ class HistoryManager:
 
         return None
 
-    def _create_mock_result(self, icon, name, plugin_id, item_id):
+    def _create_mock_result(self, icon_spec, name, plugin_id, item_id):
         """Create a mock result object with the given properties"""
 
         class MockResult:
-            def __init__(self, icon, name, plugin_id, item_id):
-                self.icon = icon
+            def __init__(self, icon_spec, name, plugin_id, item_id):
+                self.icon_spec = icon_spec
                 self.name = name
                 self.plugin_id = plugin_id
                 self.item_id = item_id
 
-        return MockResult(icon, name, plugin_id, item_id)
+        return MockResult(icon_spec, name, plugin_id, item_id)
 
     def get_fallback_history_icon(self, icon_size: int = 48):
         """Get fallback icon for history items"""
