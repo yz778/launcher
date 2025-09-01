@@ -131,7 +131,7 @@ class QalculatePlugin(Plugin):
             item_id=query,
             name=query,
             description=result,
-            icon_spec="qalculate",
+            icon_spec="theme://qalculate",
             score=calculate_match_score(query, query, is_name=True),
             metadata={
                 "result": result,

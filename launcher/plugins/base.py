@@ -40,7 +40,12 @@ class SearchResult:
             item_id: Unique ID for this item within the plugin
             name: Display name of the result
             description: Optional description
-            icon_spec: Icon specification (theme name, file path, URL, etc.)
+            icon_spec: Icon specification with URI scheme support:
+                      - theme://icon_name for theme icons
+                      - desktop://icon_name for desktop file icons
+                      - file:///path/to/icon for file paths
+                      - http://example.com/icon.png for URLs
+                      - Plain strings are treated as theme icons for backward compatibility
             score: Match score (0-100, higher is better)
             metadata: Additional metadata specific to the plugin
         """

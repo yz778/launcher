@@ -315,21 +315,11 @@ class AppListItem(Gtk.ListBoxRow):
 
     def _load_result_icon(self, result: SearchResult, size: int):
         """Load icon for a search result using icon_spec"""
-        from launcher.utils.icon_utils import (
-            load_custom_icon,
-            load_desktop_file_icon,
-            get_fallback_icon,
-        )
+        from launcher.utils.icon_utils import load_custom_icon, get_fallback_icon
 
         if result.icon_spec:
-            # Handle desktop file icons specially
-            if result.plugin_id == "desktop_file":
-                return load_desktop_file_icon(result.icon_spec, size)
-            else:
-                # Use general custom icon loading for other plugins
-                return load_custom_icon(result.icon_spec, size)
+            return load_custom_icon(result.icon_spec, size)
         else:
-            # Fallback if no icon_spec provided
             return get_fallback_icon(size)
 
     def _apply_highlighting(self, label: Gtk.Label, text: str, query: str) -> None:
