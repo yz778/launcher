@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from ..base import Plugin, SearchResult
-from gi.repository import Gtk
 from typing import List, Dict, Any
 import logging
 import time
@@ -55,7 +54,6 @@ class HistoryPlugin(Plugin):
     def __init__(self):
         super().__init__()
         self.history_manager = None
-        self.icon_size = 48
 
     def get_id(self) -> str:
         return "history"
@@ -79,7 +77,6 @@ class HistoryPlugin(Plugin):
         """Initialize the history plugin"""
         try:
             self.config = config
-            self.icon_size = config.get("icon_size", 48)
 
             # History manager will be set later via set_managers method
             # For now, just mark as successfully initialized
@@ -274,7 +271,7 @@ class HistoryPlugin(Plugin):
             # Return the plugin_id (could be empty string, which is valid for fallback)
             return plugin_id.strip()
 
-        except Exception as e:
+        except Exception:
             return ""
 
     def _validate_original_item_id(self, entry: Dict[str, Any]) -> str:
@@ -305,11 +302,11 @@ class HistoryPlugin(Plugin):
                 return None
 
             metadata = self._build_result_metadata(entry, entry_data)
-            icon = self._get_history_icon_safely(entry)
+            icon_spec = self._get_history_icon_spec(entry)
             item_id = self._create_item_id(entry)
 
             return self._create_search_result_object(
-                entry_data, metadata, icon, item_id, score
+                entry_data, metadata, icon_spec, item_id, score
             )
 
         except MemoryError as e:
@@ -503,14 +500,6 @@ class HistoryPlugin(Plugin):
                 "track_history": False,
             }
 
-    def _get_history_icon_safely(self, entry: Dict[str, Any]) -> object:
-        """Safely get history icon"""
-        try:
-            return self._get_history_icon(entry)
-        except Exception as icon_error:
-            logger.warning(f"Error getting history icon: {icon_error} - using None")
-            return None
-
     def _create_item_id(self, entry: Dict[str, Any]) -> str:
         """Create item ID for the result"""
         try:
@@ -531,7 +520,7 @@ class HistoryPlugin(Plugin):
         self,
         entry_data: Dict[str, Any],
         metadata: Dict[str, Any],
-        icon: object,
+        icon_spec: str,
         item_id: str,
         score: float,
     ) -> SearchResult:
@@ -542,7 +531,7 @@ class HistoryPlugin(Plugin):
                 item_id=item_id,
                 name=entry_data["display_name"],
                 description=entry_data["display_description"],
-                icon=icon,
+                icon_spec=icon_spec,
                 score=score,
                 metadata=metadata,
             )
@@ -553,18 +542,15 @@ class HistoryPlugin(Plugin):
             logger.error(f"Error creating SearchResult object: {result_error}")
             return None
 
-    def _get_history_icon(self, entry: Dict[str, Any]) -> object:
-        """Get icon for history entry"""
+    def _get_history_icon_spec(self, entry: Dict[str, Any]) -> str:
+        """Get icon specification for history entry"""
         try:
-            # First try to get stored icon data from the history entry
-            if self.history_manager:
-                stored_icon = self.history_manager.get_stored_icon(
-                    entry, self.icon_size
-                )
-                if stored_icon:
-                    return stored_icon
+            # First, try to get the stored icon_spec from the history entry
+            stored_icon_spec = entry.get("icon_spec")
+            if stored_icon_spec:
+                return stored_icon_spec
 
-            # If no stored icon, try to get the original plugin's icon
+            # If no stored icon_spec, try to get it from the original plugin
             original_plugin_id = entry.get("plugin_id")
             original_item_id = entry.get("item_id")
 
@@ -574,41 +560,115 @@ class HistoryPlugin(Plugin):
                 and hasattr(self, "plugin_manager")
                 and self.plugin_manager
             ):
+                # Get plugin-specific icon spec based on plugin type
+                icon_spec = self._get_plugin_specific_icon_spec(
+                    original_plugin_id, original_item_id, entry
+                )
+                if icon_spec:
+                    logger.debug(f"Found icon spec from plugin: {icon_spec}")
+                    return icon_spec
+
+            # Fallback to generic history icon
+            logger.debug("Using fallback icon: document-open-recent")
+            return "document-open-recent"
+
+        except Exception as e:
+            logger.debug(f"Error getting history icon spec: {e}")
+            return "document-open-recent"
+
+    def _get_plugin_specific_icon_spec(
+        self, plugin_id: str, item_id: str, entry: Dict[str, Any]
+    ) -> str:
+        """Get icon spec based on plugin type and stored information"""
+        try:
+            logger.debug(f"Getting icon spec for plugin {plugin_id}, item {item_id}")
+            # For desktop_file plugin, use the stored icon from the desktop file
+            if plugin_id == "desktop_file":
+                # The item_id is the desktop file path, we can create a DesktopFile and get its icon
                 try:
-                    # Get the original plugin
-                    original_plugin = self.plugin_manager.plugins.get(
-                        original_plugin_id
-                    )
-                    if original_plugin:
-                        # Search for the original item to get its current icon
-                        user_input = entry.get("user_input", "")
-                        search_results = original_plugin.search(user_input)
+                    from launcher.plugins.desktop_file.plugin import DesktopFile
+                    import os
 
-                        # Find the exact item by item_id
-                        for search_result in search_results:
-                            if (
-                                search_result.item_id == original_item_id
-                                and search_result.icon
-                            ):
-                                return search_result.icon
-                except Exception:
-                    pass
+                    if (
+                        item_id
+                        and item_id.endswith(".desktop")
+                        and os.path.isfile(item_id)
+                    ):
+                        desktop_file = DesktopFile(item_id)
+                        icon_spec = desktop_file.get_icon_spec()
+                        logger.debug(f"Desktop file icon spec: {icon_spec}")
+                        return icon_spec
+                except Exception as e:
+                    logger.debug(f"Error loading desktop file {item_id}: {e}")
+                return "application-x-executable"
 
-            # Fallback to generic history icon only if no original icon found
-            try:
-                icon_theme = Gtk.IconTheme.get_default()
-                return icon_theme.load_icon("document-open-recent", self.icon_size, 0)
-            except Exception:
-                # If history icon fails, try clock icon
+            # For executable plugin, check if custom icon was stored
+            elif plugin_id == "executable":
+                # Try to get the executable and its custom icon
                 try:
-                    return icon_theme.load_icon(
-                        "accessories-history", self.icon_size, 0
-                    )
-                except Exception:
-                    return None
+                    from launcher.plugins.executable.plugin import ExecutableFile
 
-        except Exception:
+                    if item_id and os.path.isfile(item_id):
+                        executable = ExecutableFile(item_id)
+                        icon_spec = executable.custom_icon or "utilities-terminal"
+                        logger.debug(f"Executable icon spec: {icon_spec}")
+                        return icon_spec
+                except Exception as e:
+                    logger.debug(f"Error loading executable {item_id}: {e}")
+                return "utilities-terminal"
+
+            # For calculator plugin
+            elif plugin_id == "calculator":
+                return "accessories-calculator"
+
+            # For qalculate plugin
+            elif plugin_id == "qalculate":
+                return "qalculate"
+
+            # For terminal plugin
+            elif plugin_id == "terminal":
+                return "https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png"
+
+            # For timezone plugin
+            elif plugin_id == "timezone":
+                return "appointment-soon"
+
+            # For other plugins, try to search and find the item
+            else:
+                return self._search_plugin_for_icon_spec(plugin_id, item_id, entry)
+
+        except Exception as e:
+            logger.debug(
+                f"Error getting plugin-specific icon spec for {plugin_id}: {e}"
+            )
             return None
+
+    def _search_plugin_for_icon_spec(
+        self, plugin_id: str, item_id: str, entry: Dict[str, Any]
+    ) -> str:
+        """Search the original plugin to find the icon spec"""
+        try:
+            original_plugin = self.plugin_manager.plugins.get(plugin_id)
+            if not original_plugin:
+                return None
+
+            # Search for the original item to get its current icon
+            user_input = entry.get("user_input", "")
+            search_results = original_plugin.search(user_input)
+
+            # Find the exact item by item_id
+            for search_result in search_results:
+                if search_result.item_id == item_id and search_result.icon_spec:
+                    return search_result.icon_spec
+
+            # If exact match not found, try the first result if it has an icon_spec
+            if search_results and search_results[0].icon_spec:
+                return search_results[0].icon_spec
+
+        except Exception as e:
+            logger.debug(f"Error searching plugin {plugin_id} for icon spec: {e}")
+
+        return None
 
     def execute(self, result: SearchResult) -> bool:
         """Execute a history result by re-running the original command"""
@@ -625,7 +685,7 @@ class HistoryPlugin(Plugin):
                 item_id=history_entry.get("item_id"),
                 name=history_entry.get("result_name"),
                 description=history_entry.get("description"),
-                icon=result.icon,  # Use the icon from the current result
+                icon_spec="document-open-recent",  # Use fallback icon spec
                 score=0,  # Score is not relevant for re-execution
                 metadata=history_entry.get(
                     "original_metadata", {}
@@ -654,7 +714,19 @@ class HistoryPlugin(Plugin):
             if len(parts) > 1:
                 reconstructed_result.metadata["args"] = parts[1:]
 
-            return self.plugin_manager.execute(reconstructed_result)
+            # Execute the original command
+            success = self.plugin_manager.execute(reconstructed_result)
+
+            # If execution was successful, increment the usage count for this history entry
+            if success and self.history_manager:
+                original_plugin_id = history_entry.get("plugin_id")
+                original_item_id = history_entry.get("item_id")
+                if original_plugin_id and original_item_id:
+                    self.history_manager.increment_usage_count(
+                        original_plugin_id, original_item_id, user_input
+                    )
+
+            return success
 
         except Exception as e:
             logger.error(f"Error executing history result: {e}")
@@ -700,8 +772,8 @@ class HistoryPlugin(Plugin):
         # Hybrid display logic: use canonical name + args if user input has args, otherwise original input
         display_name = self._build_hybrid_display_name(user_input, result_name)
 
-        # Get the appropriate icon
-        display_icon = self._get_history_icon_for_entry(
+        # Get the appropriate icon specification
+        display_icon_spec = self._get_history_icon_spec_for_entry(
             plugin_id, item_id, history_entry
         )
 
@@ -711,7 +783,7 @@ class HistoryPlugin(Plugin):
             item_id=f"history_{plugin_id}_{item_id}",  # Unique ID for history item
             name=display_name,
             description=description,
-            icon=display_icon,
+            icon_spec=display_icon_spec,
             score=0,
         )
 
@@ -726,25 +798,8 @@ class HistoryPlugin(Plugin):
 
         return result
 
-    def _get_history_icon_for_entry(
+    def _get_history_icon_spec_for_entry(
         self, plugin_id: str, item_id: str, history_entry: Dict[str, Any]
-    ):
-        """Get the appropriate icon for a history entry"""
-        if not self.history_manager:
-            return self._get_fallback_icon()
-
-        actual_result = self.history_manager.get_result_for_history_entry(
-            plugin_id, item_id, history_entry, self.plugin_manager, self.icon_size
-        )
-
-        if actual_result and actual_result.icon:
-            return actual_result.icon
-
-        return self._get_fallback_icon()
-
-    def _get_fallback_icon(self):
-        """Get fallback icon for history items"""
-        from launcher.utils.icon_utils import load_theme_icon
-
-        fallback_names = ["document-open-recent"]
-        return load_theme_icon("accessories-history", self.icon_size, fallback_names)
+    ) -> str:
+        """Get the appropriate icon specification for a history entry"""
+        return self._get_history_icon_spec(history_entry)

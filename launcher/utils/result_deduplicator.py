@@ -2,7 +2,7 @@
 
 import logging
 import time
-from typing import Dict, Any, List, Optional
+from typing import List
 from launcher.plugins.base import SearchResult
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from ..base import Plugin, SearchResult
-from gi.repository import GLib
 from launcher.utils.scoring_system import calculate_match_score
 from typing import Dict, List, Any, Optional
 import logging
@@ -16,8 +15,6 @@ class QalculatePlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self.icon_size = None
-        self.icon = None
         self._last_valid_result = None
 
     def get_id(self) -> str:
@@ -48,20 +45,10 @@ class QalculatePlugin(Plugin):
             logger.warning("qalc command not found. Qalculate plugin will be disabled.")
             return False
 
-        # Get icon size using helper
-        self.icon_size = self.get_icon_size()
-
         return True
 
     def start(self) -> bool:
-        GLib.idle_add(self._load_icon)
         return True
-
-    def _load_icon(self) -> bool:
-        from launcher.utils.icon_utils import load_theme_icon
-
-        self.icon = load_theme_icon("qalculate", self.icon_size)
-        return False
 
     def _is_calculation(self, query: str) -> bool:
         """Check if the query looks like a calculation using simple heuristics"""
@@ -124,10 +111,6 @@ class QalculatePlugin(Plugin):
         if not query or not self._is_calculation(query):
             return []
 
-        # Ensure the icon is loaded before creating the result
-        if self.icon is None:
-            self._load_icon()
-
         result = self._calculate(query)
 
         if result is None:
@@ -148,7 +131,7 @@ class QalculatePlugin(Plugin):
             item_id=query,
             name=query,
             description=result,
-            icon=self.icon,
+            icon_spec="qalculate",
             score=calculate_match_score(query, query, is_name=True),
             metadata={
                 "result": result,

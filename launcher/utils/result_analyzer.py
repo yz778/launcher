@@ -64,7 +64,7 @@ class ResultAnalyzer:
             if result_description:
                 try:
                     description_normalized = str(result_description).strip().lower()
-                except Exception as e:
+                except Exception:
                     description_normalized = ""
 
             # Check exact match with name or description
@@ -232,7 +232,7 @@ class ResultAnalyzer:
             # Parse command line arguments with enhanced error handling
             try:
                 parsed_args = shlex.split(query_stripped)
-            except ValueError as e:
+            except ValueError:
                 return False
             except Exception as e:
                 logger.warning(

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 from ..base import Plugin, SearchResult
-from gi.repository import GLib
 from launcher.utils.string_matcher import StringMatcher
 from typing import Dict, List, Any
 import json
@@ -126,12 +125,8 @@ class ExecutablePlugin(Plugin):
         "locations",
         "include_patterns",
         "exclude_patterns",
-        "icon_size",
         "matcher",
-        "default_icon",
-        "icon_cache",
         "cache_icons",
-        "general_config",
         "cache_file",
     )
 
@@ -141,12 +136,8 @@ class ExecutablePlugin(Plugin):
         self.locations = []
         self.include_patterns = []
         self.exclude_patterns = []
-        self.icon_size = None
         self.matcher = None
-        self.default_icon = None
-        self.icon_cache = {}  # Cache for loaded custom icons
         self.cache_icons = True
-        self.general_config = {}
         self.cache_file = None
 
     def get_id(self) -> str:
@@ -193,9 +184,6 @@ class ExecutablePlugin(Plugin):
         exclude_patterns = self.get_config_value("exclude")
         self.exclude_patterns = [re.compile(pattern) for pattern in exclude_patterns]
 
-        # Get icon size using helper
-        self.icon_size = self.get_icon_size()
-
         # Get cache icons setting using helper
         self.cache_icons = self.get_config_value("cache_icons")
 
@@ -234,32 +222,29 @@ class ExecutablePlugin(Plugin):
         """
         Start the plugin and perform any necessary setup work
 
-        This loads the default icon and starts scanning for executable files in a background thread.
+        This starts scanning for executable files in a background thread.
         """
-        GLib.idle_add(self._load_default_icon)
-
         self._load_from_cache()
-        self._update_matcher_on_main_thread()  # Initial update from cache
+        self._update_matcher()  # Initial update from cache
 
         threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
 
         return True
 
     def _scan_and_update_matcher(self) -> None:
-        """Performs the executable file scan and updates the matcher in the main thread"""
+        """Performs the executable file scan and updates the matcher"""
         self._scan_executables()
         self._save_to_cache()  # Save the newly scanned files to cache
-        GLib.idle_add(self._update_matcher_on_main_thread)
+        self._update_matcher()
 
-    def _update_matcher_on_main_thread(self) -> bool:
-        """Updates the string matcher on the main GTK thread"""
+    def _update_matcher(self) -> None:
+        """Updates the string matcher"""
         self.matcher = StringMatcher(
             items=list(self.executables.values()), key_func=lambda ef: ef.name
         )
         logger.info(
             f"Finished loading {len(self.executables)} executable files in background"
         )
-        return False  # Remove from idle queue
 
     def clean_invalid_history_entries(self, history_manager) -> int:
         """
@@ -277,7 +262,7 @@ class ExecutablePlugin(Plugin):
         valid_entries = []
         removed_count = 0
 
-        logger.info(f"Cleaning executable file history entries...")
+        logger.info("Cleaning executable file history entries...")
 
         for entry in history_manager.user_input_history:
             if self._is_valid_executable_entry(entry):
@@ -312,6 +297,11 @@ class ExecutablePlugin(Plugin):
             if not self.is_structurally_valid(entry):
                 return False
 
+            # Get the item_id (executable file path) from the entry
+            item_id = entry.get("item_id", "")
+            if not item_id:
+                return False
+
             # Check if the executable file still exists
             if not os.path.isfile(item_id):
                 return False
@@ -326,32 +316,12 @@ class ExecutablePlugin(Plugin):
 
             return True
 
-        except Exception as e:
+        except Exception:
             return False
 
     def get_scan_directories(self) -> List[str]:
         """Get directories that should be watched for changes"""
         return self.locations
-
-    def _load_default_icon(self) -> bool:
-        """Load the default icon for executables"""
-        from launcher.utils.icon_utils import load_theme_icon
-
-        self.default_icon = load_theme_icon("utilities-terminal", self.icon_size)
-        return False
-
-    def _load_custom_icon(self, icon_spec: str):
-        """Load a custom icon based on the icon specification"""
-        if not icon_spec:
-            return self.default_icon
-
-        from launcher.utils.icon_utils import load_custom_icon
-
-        cache = self.icon_cache if self.cache_icons else None
-        cache_dir = os.path.join(self.config_manager.get_cache_dir(), "url_icons")
-        loaded_icon = load_custom_icon(icon_spec, self.icon_size, cache, cache_dir)
-
-        return loaded_icon or self.default_icon
 
     def _scan_executables(self) -> None:
         """Scan for executable files in the configured locations"""
@@ -390,7 +360,6 @@ class ExecutablePlugin(Plugin):
     def cleanup(self) -> None:
         """Clean up plugin resources"""
         self.executables.clear()
-        self.icon_cache.clear()
 
         if self.matcher:
             self.matcher = None
@@ -408,18 +377,15 @@ class ExecutablePlugin(Plugin):
 
         results = []
         for executable, score in matches:
-            icon = (
-                self._load_custom_icon(executable.custom_icon)
-                if executable.custom_icon
-                else self.default_icon
-            )
+            # Use custom icon if specified, otherwise use default theme icon
+            icon_spec = executable.custom_icon or "utilities-terminal"
 
             result = SearchResult(
                 plugin_id=self.get_id(),
                 item_id=executable.path,
                 name=executable.name,
                 description=executable.description,
-                icon=icon,
+                icon_spec=icon_spec,
                 score=score,
                 metadata={
                     "command": executable.get_command(),

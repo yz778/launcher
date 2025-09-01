@@ -248,13 +248,15 @@ class AppListItem(Gtk.ListBoxRow):
             "height-request", 60
         )  # Height to accommodate name and description
 
-        if result.icon:
+        # Load and display icon
+        icon_pixbuf = self._load_result_icon(result, icon_size)
+        if icon_pixbuf:
             # Create a fixed size container for the icon
             icon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
             icon_box.set_size_request(icon_size, icon_size)
 
             # Use the icon
-            icon = Gtk.Image.new_from_pixbuf(result.icon)
+            icon = Gtk.Image.new_from_pixbuf(icon_pixbuf)
 
             # Center the icon in the fixed size box
             icon_box.pack_start(icon, True, False, 0)
@@ -310,6 +312,25 @@ class AppListItem(Gtk.ListBoxRow):
 
         if result.description:
             self.set_tooltip_text(result.description)
+
+    def _load_result_icon(self, result: SearchResult, size: int):
+        """Load icon for a search result using icon_spec"""
+        from launcher.utils.icon_utils import (
+            load_custom_icon,
+            load_desktop_file_icon,
+            get_fallback_icon,
+        )
+
+        if result.icon_spec:
+            # Handle desktop file icons specially
+            if result.plugin_id == "desktop_file":
+                return load_desktop_file_icon(result.icon_spec, size)
+            else:
+                # Use general custom icon loading for other plugins
+                return load_custom_icon(result.icon_spec, size)
+        else:
+            # Fallback if no icon_spec provided
+            return get_fallback_icon(size)
 
     def _apply_highlighting(self, label: Gtk.Label, text: str, query: str) -> None:
         """Apply highlighting to a label based on the search query using flexible highlighting"""
@@ -526,17 +547,25 @@ class LauncherWindow(Gtk.Window):
                 else:
                     display_description = result_name
 
-            # Get fallback icon
-            display_icon = self.history_manager.get_fallback_history_icon(
-                self.icon_size or 48
+            # Get the appropriate icon specification from history plugin
+            history_plugin = (
+                self.plugin_manager.plugins.get("history")
+                if self.plugin_manager
+                else None
             )
+            if history_plugin:
+                display_icon_spec = history_plugin._get_history_icon_spec_for_entry(
+                    plugin_id, item_id, history_entry
+                )
+            else:
+                display_icon_spec = "document-open-recent"
 
             result = SearchResult(
                 plugin_id="history",
                 item_id=f"history_{plugin_id}_{item_id}",
                 name=display_name,
                 description=display_description,
-                icon=display_icon,
+                icon_spec=display_icon_spec,
                 score=0,
             )
 
@@ -1032,10 +1061,9 @@ class LauncherWindow(Gtk.Window):
     def on_row_activated(self, list_box, row) -> None:
         """Handle activation of a row in the results list"""
         if row:
-            if self.showing_history and hasattr(row, "user_input"):
-                # History item activated - populate entry and search
-                self.entry.set_text(row.user_input)
-                self.on_entry_changed(self.entry)
+            if self.showing_history and hasattr(row, "history_entry"):
+                # History item activated - execute it directly
+                self._execute_history_item(row.history_entry)
             elif hasattr(row, "result"):
                 # Regular search result activated
                 self.execute_result(row.result, None)
@@ -1134,9 +1162,6 @@ class LauncherWindow(Gtk.Window):
 
     def _store_new_history_entry(self, result: SearchResult, user_input: str) -> None:
         """Store a new history entry for the executed result"""
-        executed_command = self._build_executed_command(result)
-        icon_pixbuf = result.icon
-
         # Preserve original plugin metadata
         if not result.metadata.get("original_plugin_id"):
             result.metadata["original_plugin_id"] = result.plugin_id

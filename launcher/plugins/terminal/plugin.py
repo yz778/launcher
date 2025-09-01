@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 from ..base import Plugin, SearchResult
-from gi.repository import GLib
 from launcher.utils.scoring_system import calculate_match_score
 from typing import Dict, Any, List
 import logging
+import os
 import shlex
 
 logger = logging.getLogger(__name__)
@@ -18,9 +18,6 @@ class TerminalPlugin(Plugin):
     def __init__(self):
         super().__init__()
         self.prefix = ">"
-        self.default_icon = None
-        self.general_config = {}
-        self.icon_size = None
 
     def get_id(self) -> str:
         return "terminal"
@@ -42,20 +39,10 @@ class TerminalPlugin(Plugin):
 
         # Get configuration using helpers
         self.prefix = self.get_config_value("prefix")
-        self.icon_size = self.get_icon_size()
         return True
 
     def start(self) -> bool:
-        GLib.idle_add(self._load_icon)
         return True
-
-    def _load_icon(self) -> bool:
-        from launcher.utils.icon_utils import load_custom_icon
-
-        icon_url = "https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png"
-        icon_size = self.icon_size or 48  # Fallback to 48 if icon_size is None
-        self.default_icon = load_custom_icon(icon_url, icon_size)
-        return False
 
     def search(self, query: str) -> List[SearchResult]:
         if query.startswith(self.prefix):
@@ -68,7 +55,7 @@ class TerminalPlugin(Plugin):
                 item_id=command,
                 name=command,
                 description="Execute in terminal",
-                icon=self.default_icon,
+                icon_spec="https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png",
                 score=calculate_match_score(query, command, is_name=True),
                 metadata={
                     "command": command,

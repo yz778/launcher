@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 
 from ..base import Plugin, SearchResult
-from gi.repository import Gtk, GdkPixbuf, GLib
 from launcher.utils.string_matcher import StringMatcher
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from xdg_base_dirs import xdg_data_home, xdg_data_dirs
 from xdg.DesktopEntry import DesktopEntry
 import glob
@@ -30,7 +29,6 @@ class DesktopFile:
         self.no_display = False
         self.terminal = False
         self.desktop_entry = None
-        self._icon_cache = {}
         self._parse()
 
     def to_dict(self) -> Dict[str, Any]:
@@ -59,7 +57,6 @@ class DesktopFile:
         instance.no_display = data.get("no_display", False)
         instance.terminal = data.get("terminal", False)
         instance.desktop_entry = None
-        instance._icon_cache = {}
         return instance
 
     def _parse(self) -> None:
@@ -78,106 +75,9 @@ class DesktopFile:
         except Exception as e:
             logger.error(f"Error parsing {self.path}: {e}")
 
-    def _get_fallback_icon(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
-        """Get fallback icon when primary icon loading fails"""
-        try:
-            icon_theme = Gtk.IconTheme.get_default()
-            pixbuf = icon_theme.load_icon("application-x-executable", size, 0)
-            return pixbuf
-        except Exception:
-            return None
-
-    def get_icon_pixbuf(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
-        """Load the icon as a pixbuf with exact size using pyxdg for icon lookup"""
-        if size in self._icon_cache:
-            return self._icon_cache[size]
-
-        try:
-            pixbuf = self._load_icon_pixbuf(size)
-            pixbuf = self._ensure_correct_size(pixbuf, size)
-            self._icon_cache[size] = pixbuf
-            return pixbuf
-        except Exception as e:
-            logger.error(f"Error loading icon {self.icon}: {e}")
-            pixbuf = self._get_fallback_icon(size)
-            self._icon_cache[size] = pixbuf
-            return pixbuf
-
-    def _load_icon_pixbuf(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
-        """Load icon pixbuf from various sources"""
-        # Try direct file path first
-        if os.path.isfile(self.icon):
-            return GdkPixbuf.Pixbuf.new_from_file_at_size(self.icon, size, size)
-
-        # Try XDG icon theme lookup
-        pixbuf = self._load_from_xdg_theme(size)
-        if pixbuf:
-            return pixbuf
-
-        # Try GTK icon theme
-        pixbuf = self._load_from_gtk_theme(size)
-        if pixbuf:
-            return pixbuf
-
-        # Fallback to default icon
-        return self._get_fallback_icon(size)
-
-    def _load_from_xdg_theme(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
-        """Load icon from XDG icon theme"""
-        from xdg.IconTheme import getIconPath
-
-        icon_path = getIconPath(self.icon, size)
-
-        # Try without extension if not found
-        if not icon_path and "." in self.icon:
-            icon_name = os.path.splitext(self.icon)[0]
-            icon_path = getIconPath(icon_name, size)
-
-        if icon_path:
-            try:
-                return GdkPixbuf.Pixbuf.new_from_file_at_size(icon_path, size, size)
-            except GLib.Error:
-                pass
-
-        return None
-
-    def _load_from_gtk_theme(self, size: int) -> Optional[GdkPixbuf.Pixbuf]:
-        """Load icon from GTK icon theme"""
-        icon_theme = Gtk.IconTheme.get_default()
-
-        # Try original icon name
-        if icon_theme.has_icon(self.icon):
-            try:
-                return icon_theme.load_icon(self.icon, size, 0)
-            except GLib.Error:
-                pass
-
-        # Try without extension
-        if "." in self.icon:
-            icon_name = os.path.splitext(self.icon)[0]
-            if icon_theme.has_icon(icon_name):
-                try:
-                    return icon_theme.load_icon(icon_name, size, 0)
-                except GLib.Error:
-                    pass
-
-        return None
-
-    def _ensure_correct_size(
-        self, pixbuf: Optional[GdkPixbuf.Pixbuf], size: int
-    ) -> Optional[GdkPixbuf.Pixbuf]:
-        """Ensure pixbuf is the correct size"""
-        if not pixbuf:
-            return pixbuf
-
-        if pixbuf.get_width() != size or pixbuf.get_height() != size:
-            return pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
-
-        return pixbuf
-
-    def cleanup(self) -> None:
-        """Clean up cached pixbufs to prevent memory leaks"""
-        self._icon_cache.clear()
+    def get_icon_spec(self) -> str:
+        """Get the icon specification for this desktop file"""
+        return self.icon or "application-x-executable"
 
     def is_visible(self) -> bool:
         """Check if the application should be visible in menus"""
@@ -234,7 +134,6 @@ class DesktopFilePlugin(Plugin):
         super().__init__()
         self.desktop_files = {}
         self.locations = []
-        self.icon_size = None
         self.matcher = None
         self.config = {}
         self.cache_file = None
@@ -272,9 +171,6 @@ class DesktopFilePlugin(Plugin):
             os.path.expanduser(loc)
             for loc in config.get("locations", defaults["locations"])
         ]
-
-        # Get icon size from general config
-        self.icon_size = self.get_icon_size()
 
         # Initialize with empty data first
         self.desktop_files = {}
@@ -314,26 +210,25 @@ class DesktopFilePlugin(Plugin):
     def start(self) -> bool:
         """Load from cache and then start a background scan to refresh"""
         self._load_from_cache()
-        self._update_matcher_on_main_thread()  # Initial update from cache
+        self._update_matcher()  # Initial update from cache
 
         threading.Thread(target=self._scan_and_update_matcher, daemon=True).start()
         return True
 
     def _scan_and_update_matcher(self) -> None:
-        """Performs the desktop file scan and updates the matcher in the main thread"""
+        """Performs the desktop file scan and updates the matcher"""
         self._scan_desktop_files()
         self._save_to_cache()  # Save the newly scanned files to cache
-        GLib.idle_add(self._update_matcher_on_main_thread)
+        self._update_matcher()
 
-    def _update_matcher_on_main_thread(self) -> bool:
-        """Updates the string matcher on the main GTK thread"""
+    def _update_matcher(self) -> None:
+        """Updates the string matcher"""
         self.matcher = StringMatcher(
             items=list(self.desktop_files.values()), key_func=lambda df: df.name
         )
         logger.info(
             f"Finished loading {len(self.desktop_files)} desktop files in background"
         )
-        return False
 
     def clean_invalid_history_entries(self, history_manager) -> int:
         """
@@ -348,7 +243,7 @@ class DesktopFilePlugin(Plugin):
         if not history_manager or not hasattr(history_manager, "user_input_history"):
             return 0
 
-        logger.info(f"Cleaning desktop file history entries...")
+        logger.info("Cleaning desktop file history entries...")
 
         invalid_entries = []
         for entry in history_manager.user_input_history:
@@ -384,6 +279,11 @@ class DesktopFilePlugin(Plugin):
 
             # Use common structural validation
             if not self.is_structurally_valid(entry):
+                return False
+
+            # Get the item_id (desktop file path) from the entry
+            item_id = entry.get("item_id", "")
+            if not item_id:
                 return False
 
             # Check if the desktop file still exists
@@ -439,8 +339,6 @@ class DesktopFilePlugin(Plugin):
 
     def cleanup(self) -> None:
         """Clean up plugin resources"""
-        for desktop_file in self.desktop_files.values():
-            desktop_file.cleanup()
         self.desktop_files.clear()
 
         if self.matcher:
@@ -467,7 +365,7 @@ class DesktopFilePlugin(Plugin):
                 item_id=desktop_file.path,
                 name=desktop_file.name,
                 description=desktop_file.comment,
-                icon=desktop_file.get_icon_pixbuf(size=self.icon_size),
+                icon_spec=desktop_file.get_icon_spec(),
                 score=score,
                 metadata={
                     "desktop_file": desktop_file,
