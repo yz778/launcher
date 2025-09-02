@@ -10,9 +10,9 @@ with open("requirements.txt", "r", encoding="utf-8") as fh:
 
 setup(
     name="launcher",
-    version="0.1.0",
+    version="1.0.0",
     author="yz778",
-    description="My GTK launcher",
+    description="GTK Launcher",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yz778/launcher",
@@ -24,15 +24,8 @@ setup(
         "Environment :: X11 Applications :: GTK",
         "Environment :: Wayland",
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.12",
     install_requires=requirements,
     include_package_data=True,
     license="MIT",
-    # Instead of a console script, we provide a pre-compiled executable.
-    # The 'launcher' executable must be built via 'make' before packaging.
-    entry_points={
-        "console_scripts": [
-            "launcher=launcher.launcher:main",
-        ]
-    },
 )

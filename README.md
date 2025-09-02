@@ -139,7 +139,6 @@ Customize search result highlighting by overriding CSS classes:
 - **Shift+Enter** to launch the selected result in terminal window
 - **Tab** to autocomplete with the selected result
 - **Escape** to clear or exit
-- **F5** or **Ctrl+R** to rescan plugins
 - **Ctrl+Q** to quit
 - **Shift+Delete** to remove selected history items (single or multiple)
 

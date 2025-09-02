@@ -71,7 +71,6 @@ class PluginManager:
 
             module_name = f"plugins.{plugin_dir}.plugin"
             module = importlib.import_module(module_name)
-            importlib.reload(module)  # Ensure we get the latest code
 
             for name, obj in inspect.getmembers(module):
                 if (
@@ -145,20 +144,6 @@ class PluginManager:
 
         self.enabled_plugins.pop(plugin_id, None)
         return True
-
-    def reload_plugin(self, plugin_id: str) -> bool:
-        """Reload a single plugin"""
-        logger.info(f"Reloading plugin: {plugin_id}")
-        plugin_dir = self.plugins[plugin_id].__module__.split(".")[1]
-        self.unload_plugin(plugin_id)
-        return self.load_plugin(plugin_dir)
-
-    def reload_all_plugins(self) -> None:
-        """Reload all currently loaded plugins"""
-        logger.info("Reloading all plugins...")
-        # Create a copy of the keys to avoid issues with modifying the dict while iterating
-        for plugin_id in list(self.plugins.keys()):
-            self.reload_plugin(plugin_id)
 
     def search(
         self,

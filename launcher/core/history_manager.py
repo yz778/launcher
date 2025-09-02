@@ -116,9 +116,7 @@ class HistoryManager:
                         and entry.get("item_id") == item_id
                     ):
                         usage_count = entry.get("usage_count", 1)
-                        return (
-                            usage_count if isinstance(usage_count, (int, float)) else 1
-                        )
+                        return usage_count if isinstance(usage_count, (int)) else 1
                 except Exception:
                     continue
 
