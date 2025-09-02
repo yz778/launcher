@@ -354,7 +354,6 @@ class LauncherWindow(Gtk.Window):
                 query="",
             )
             list_item.set_name("history-item")
-            list_item.user_input = result.metadata.get("user_input", result.name)
             list_item.history_entry = result.metadata.get("history_entry", {})
             self.list_box.add(list_item)
 
@@ -423,11 +422,6 @@ class LauncherWindow(Gtk.Window):
                 icon_size=self.icon_size or 48,
                 launch_count=history_count,
                 query=self.entry.get_text().strip(),
-            )
-            list_item.user_input = (
-                result.metadata.get("user_input")
-                or result.metadata.get("command")
-                or result.name
             )
 
             if result.plugin_id == "history":
@@ -593,9 +587,7 @@ class LauncherWindow(Gtk.Window):
         target_row = self.list_box.get_row_at_index(target_index)
 
         if not (state & Gdk.ModifierType.SHIFT_MASK):
-            for row in self.list_box.get_selected_rows():
-                if row != target_row:
-                    self.list_box.unselect_row(row)
+            self.list_box.unselect_all()
         self.list_box.select_row(target_row)
 
         # Ensure the selected row is visible

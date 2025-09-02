@@ -197,14 +197,3 @@ def calculate_exact_name_match_score(query: str, text: str) -> float:
         return EXACT_NAME_MATCH_BASE + EXACT_NAME_MATCH_BONUS
 
     return 0.0
-
-
-# Convenience functions (deprecated - use calculate_match_score directly)
-def score_name_match(query: str, name: str) -> float:
-    """Score a name/title match (deprecated - use calculate_match_score)"""
-    return calculate_match_score(query, name, is_name=True)
-
-
-def score_description_match(query: str, description: str) -> float:
-    """Score a description match (deprecated - use calculate_match_score)"""
-    return calculate_match_score(query, description, is_name=False)
