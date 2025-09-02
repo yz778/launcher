@@ -40,18 +40,6 @@ def arg_parser():
         help="Run in foreground mode (disable singleton behavior)",
         action="store_true",
     )
-    parser.add_argument(
-        "--rescan",
-        help="Trigger a rescan of all plugins in running instance",
-        action="store_true",
-    )
-    parser.add_argument(
-        "--rescan-plugin",
-        help="Trigger a rescan of specific plugin in running instance",
-        type=str,
-        metavar="PLUGIN_ID",
-    )
-
     return parser.parse_args()
 
 

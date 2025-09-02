@@ -41,18 +41,6 @@ def get_plugin_manager():
     return _plugin_manager
 
 
-def rescan_callback(plugin_id: str = None):
-    """Callback to handle rescan commands"""
-    global launcher_window
-    if launcher_window and launcher_window.plugin_manager:
-        if plugin_id:
-            logger.info(f"Reloading {plugin_id} plugin via IPC")
-            launcher_window.plugin_manager.reload_plugin(plugin_id)
-        else:
-            logger.info("Reloading all plugins via IPC")
-            launcher_window.plugin_manager.reload_all_plugins()
-
-
 def show_window():
     """Callback to show the launcher window"""
     global launcher_window
@@ -156,17 +144,6 @@ def main() -> None:
         logger.info("Running in singleton mode")
         singleton_manager = SingletonManager("launcher")
 
-        # Handle rescan commands
-        if args.rescan or args.rescan_plugin:
-            if singleton_manager.is_running():
-                logger.info("Sending rescan command to running instance...")
-                if not singleton_manager.send_rescan_command(args.rescan_plugin):
-                    logger.error("Failed to send rescan command")
-                    return 1
-            else:
-                logger.error("No running instance found to rescan")
-                return 1
-
         # Check if another instance is already running
         if singleton_manager.is_running():
             logger.info("Another instance is already running, sending show command...")
@@ -178,16 +155,11 @@ def main() -> None:
                 )
 
         # Start singleton server for this instance
-        if not singleton_manager.start_server(show_window, rescan_callback):
+        if not singleton_manager.start_server(show_window):
             logger.error("Failed to start singleton server")
             return 1
     else:
         logger.info("Running in foreground mode (singleton disabled)")
-
-        # In foreground mode, rescan commands should just exit with error
-        if args.rescan or args.rescan_plugin:
-            logger.error("Rescan commands not supported in foreground mode")
-            return 1
 
     # Only import heavy modules when we actually need to start the GUI
     import gi

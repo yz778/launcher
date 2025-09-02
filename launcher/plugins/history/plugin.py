@@ -45,7 +45,7 @@ class HistoryPlugin(Plugin):
                 launcher_window.list_box.add(list_item)
         launcher_window.list_box.show_all()
         launcher_window.scrolled.show()
-        launcher_window.showing_history = True
+        
         count_text = (
             f"{len(all_history)} history item{'s' if len(all_history) != 1 else ''}"
         )

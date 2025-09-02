@@ -39,19 +39,24 @@ class ResultDeduplicator:
         if not history_results or not other_results:
             return results
 
-        # Build set of actual commands from non-history results
-        other_commands = set()
+        deduplicated_results = []
+        seen_keys = set()
+
+        # Prioritize non-history results
         for result in other_results:
-            actual_command = result.metadata.get("actual_executed_command")
-            if actual_command:
-                other_commands.add(actual_command)
+            key = (result.plugin_id, result.item_id)
+            if key not in seen_keys:
+                deduplicated_results.append(result)
+                seen_keys.add(key)
 
-        # Filter history results - keep only those whose actual command
-        # doesn't exist in the current non-history results
-        filtered_history = []
+        # Add history results only if the original item hasn't been seen from a live plugin
         for history_result in history_results:
-            history_command = history_result.metadata.get("actual_command")
-            if not history_command or history_command not in other_commands:
-                filtered_history.append(history_result)
+            original_plugin_id = history_result.metadata.get("original_plugin_id")
+            original_item_id = history_result.metadata.get("original_item_id")
+            key = (original_plugin_id, original_item_id)
 
-        return other_results + filtered_history
+            if key not in seen_keys:
+                deduplicated_results.append(history_result)
+                seen_keys.add(key)
+
+        return deduplicated_results
