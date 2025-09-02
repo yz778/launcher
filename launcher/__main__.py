@@ -30,15 +30,37 @@ launcher_window = None
 _history_manager = None
 _plugin_manager = None
 
-
-def get_history_manager():
-    """Get the global history manager instance"""
-    return _history_manager
+# Shutdown coordination
+_quit_requested = False
 
 
-def get_plugin_manager():
-    """Get the global plugin manager instance"""
-    return _plugin_manager
+def request_app_quit(reason: str = ""):
+    """Request a graceful application shutdown in a centralized, idempotent way.
+
+    This will:
+    - Log the quit request once
+    - Set a flag so the Gtk main loop exit can be scheduled by the launcher window
+    - Avoid duplicate cleanup calls
+    """
+
+    global _quit_requested
+
+    if _quit_requested:
+        return
+
+    _quit_requested = True
+
+    if reason:
+        logger.info(f"Quit requested: {reason}")
+    else:
+        logger.info("Quit requested")
+
+    try:
+        global launcher_window
+        if launcher_window and hasattr(launcher_window, "request_quit"):
+            launcher_window.request_quit(reason)
+    except Exception as e:
+        logger.debug(f"Launcher window quit request failed: {e}")
 
 
 def show_window():
@@ -48,18 +70,10 @@ def show_window():
         launcher_window.show_and_focus()
 
 
-def hide_window():
-    """Hide the launcher window instead of quitting"""
-    global launcher_window
-    if launcher_window:
-        launcher_window.hide()
-
-
 def cleanup_resources():
     """Clean up all resources including process manager, singleton, and plugin managers"""
     global singleton_manager, launcher_window, _history_manager
 
-    # Clean up process manager
     try:
         from .utils.process_manager import get_process_manager
 
@@ -83,36 +97,20 @@ def cleanup_resources():
 
 def signal_handler(signum, frame):
     """Handle termination signals"""
-    logger.info(f"Received signal {signum}, shutting down...")
-
-    cleanup_resources()
-
-    try:
-        # Lazy import Gtk only if needed
-        from gi.repository import Gtk
-
-        Gtk.main_quit()
-    except ImportError:
-        pass  # Gtk not loaded yet
-    except Exception:
-        pass  # Gtk might not be running
-    sys.exit(0)
+    request_app_quit(reason=f"signal {signum}")
 
 
 def main() -> None:
     """Run the launcher application"""
     global singleton_manager, launcher_window
 
-    # Change to home directory at startup
-    os.chdir(os.path.expanduser("~"))
+    os.chdir(os.path.expanduser("~"))  # Change to home directory at startup
 
-    # Parse arguments first to check for foreground mode
     args = arg_parser()
 
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    # Handle utility flags that exit immediately (lazy import)
     if args.create_config:
         from .utils.config_utils import create_default_config_file
         from .core.config_manager import ConfigManager
@@ -139,22 +137,19 @@ def main() -> None:
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    # Skip singleton behavior if running in foreground mode
     if not args.foreground:
         logger.info("Running in singleton mode")
         singleton_manager = SingletonManager("launcher")
 
-        # Check if another instance is already running
         if singleton_manager.is_running():
             logger.info("Another instance is already running, sending show command...")
             if singleton_manager.send_show_command():
-                return  # Fast exit path - no heavy imports needed!
+                return
             else:
                 logger.warning(
                     "Failed to communicate with existing instance, starting new one..."
                 )
 
-        # Start singleton server for this instance
         if not singleton_manager.start_server(show_window):
             logger.error("Failed to start singleton server")
             return 1
@@ -162,17 +157,12 @@ def main() -> None:
         logger.info("Running in foreground mode (singleton disabled)")
 
     # Only import heavy modules when we actually need to start the GUI
-    import gi
-
-    gi.require_version("Gtk", "3.0")
-    from gi.repository import Gtk, GLib
     from .core.config_manager import ConfigManager
     from .ui.launcher_window import LauncherWindow
+    from .ui import run_main_loop, process_pending_events, idle_add
 
     config_manager = ConfigManager()
     plugins_dir = os.path.join(current_dir, "plugins")
-
-    # Create minimal UI immediately for responsiveness
     config = {"general": config_manager.DEFAULT_CONFIG.copy()}
 
     try:
@@ -181,16 +171,17 @@ def main() -> None:
         )
 
         launcher_window.show_and_focus()
-
-        while Gtk.events_pending():
-            Gtk.main_iteration()
-
-        GLib.idle_add(
+        process_pending_events()
+        idle_add(
             lambda: complete_initialization(
                 launcher_window, config_manager, plugins_dir, args
             )
         )
-        Gtk.main()
+
+        if _quit_requested:
+            return 0
+
+        run_main_loop()
 
     finally:
         cleanup_resources()
@@ -199,7 +190,7 @@ def main() -> None:
 
 
 def complete_initialization(
-    win,  # Don't need type hints for better import speed
+    win,
     config_manager,
     plugins_dir: str,
     args,
