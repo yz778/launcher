@@ -108,6 +108,7 @@ class ConfigManager:
 
             self.config_file = expanded_path
 
+        self._expand_user_paths(config)
         self.config = config
 
         return config

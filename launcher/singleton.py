@@ -19,7 +19,6 @@ class SingletonManager:
         "socket_path",
         "server_socket",
         "show_callback",
-        "rescan_callback",
         "server_thread",
         "_running",
     )
@@ -37,7 +36,6 @@ class SingletonManager:
             )
         self.server_socket: Optional[socket.socket] = None
         self.show_callback: Optional[Callable] = None
-        self.rescan_callback: Optional[Callable] = None
         self.server_thread: Optional[threading.Thread] = None
         self._running = False
 
@@ -83,39 +81,15 @@ class SingletonManager:
             logger.error(f"Error sending show command: {e}")
             return False
 
-    def send_rescan_command(self, plugin_id: str = None) -> bool:
-        """Send rescan command to existing instance"""
-        if not self.is_running():
-            return False
-
-        try:
-            client_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            client_socket.settimeout(0.05)
-            client_socket.connect(self.socket_path)
-
-            if plugin_id:
-                client_socket.send(f"RESCAN:{plugin_id}".encode())
-            else:
-                client_socket.send(b"RESCAN")
-
-            response = client_socket.recv(16)
-            client_socket.close()
-            return response == b"OK"
-        except Exception as e:
-            logger.error(f"Error sending rescan command: {e}")
-            return False
-
     def start_server(
-        self, show_callback: Callable, rescan_callback: Callable = None
+        self, show_callback: Callable
     ) -> bool:
-        """Start the singleton server to listen for show and rescan commands"""
+        """Start the singleton server to listen for show commands"""
         if self.is_running():
             logger.info("Another instance is already running")
             return False
 
         self.show_callback = show_callback
-        self.rescan_callback = rescan_callback
-
         # Clean up any stale socket file
         try:
             os.unlink(self.socket_path)
@@ -154,27 +128,6 @@ class SingletonManager:
                         except ImportError:
                             # GLib not available, call directly
                             self.show_callback()
-                            client_socket.send(b"OK")
-                    elif data == b"RESCAN" and self.rescan_callback:
-                        # Call rescan callback for all plugins
-                        try:
-                            from gi.repository import GLib
-
-                            GLib.idle_add(lambda: self.rescan_callback())
-                            client_socket.send(b"OK")
-                        except ImportError:
-                            self.rescan_callback()
-                            client_socket.send(b"OK")
-                    elif data.startswith(b"RESCAN:") and self.rescan_callback:
-                        # Call rescan callback for specific plugin
-                        plugin_id = data[7:].decode()  # Remove "RESCAN:" prefix
-                        try:
-                            from gi.repository import GLib
-
-                            GLib.idle_add(lambda: self.rescan_callback(plugin_id))
-                            client_socket.send(b"OK")
-                        except ImportError:
-                            self.rescan_callback(plugin_id)
                             client_socket.send(b"OK")
                     elif data == b"PING":
                         # Respond to ping to confirm we're alive
