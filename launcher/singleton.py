@@ -81,9 +81,7 @@ class SingletonManager:
             logger.error(f"Error sending show command: {e}")
             return False
 
-    def start_server(
-        self, show_callback: Callable
-    ) -> bool:
+    def start_server(self, show_callback: Callable) -> bool:
         """Start the singleton server to listen for show commands"""
         if self.is_running():
             logger.info("Another instance is already running")

@@ -3,13 +3,16 @@
 from core.history_manager import HistoryManager
 from core.plugin_manager import PluginManager
 from gi.repository import Gtk, Gdk, Pango, GLib
+from launcher.utils.icon_utils import load_custom_icon, get_fallback_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
 from launcher.utils.text_highlighter import TextHighlighter
 from plugins.base import SearchResult
 from typing import Dict, Any, List
 from ui.css_manager import CssManager
+import gi
 import logging
 
+gi.require_version("Gtk", "3.0")
 logger = logging.getLogger(__name__)
 
 
@@ -98,8 +101,6 @@ class AppListItem(Gtk.ListBoxRow):
 
     def _load_result_icon(self, result: SearchResult, size: int):
         """Load icon for a search result using icon_spec"""
-        from launcher.utils.icon_utils import load_custom_icon, get_fallback_icon
-
         if result.icon_spec:
             return load_custom_icon(result.icon_spec, size)
         else:
@@ -133,6 +134,8 @@ class AppListItem(Gtk.ListBoxRow):
 
 class LauncherWindow(Gtk.Window):
     """Main launcher window"""
+
+    _quit_scheduled = False
 
     def __init__(
         self,
@@ -169,6 +172,9 @@ class LauncherWindow(Gtk.Window):
         self.connect("key-press-event", self.on_key_press)
         self.connect("focus-out-event", self.on_focus_out)
 
+        # Keep a reference to the main loop quit function without leaking Gtk details to main
+        self._schedule_quit = lambda reason=None: GLib.idle_add(Gtk.main_quit)
+
         # Create a vertical box for the layout
         self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.vbox.set_border_width(general_config.get("border_width"))
@@ -182,7 +188,6 @@ class LauncherWindow(Gtk.Window):
         self.entry = Gtk.Entry()
         self.entry.set_activates_default(True)
         self.entry.set_name("launcher-entry")
-        self.entry.connect("changed", self.on_entry_changed)
         self.entry.connect("key-press-event", self.on_entry_key_press)
 
         # Store the signal handler ID for later connection/disconnection
@@ -220,9 +225,6 @@ class LauncherWindow(Gtk.Window):
         self.list_box = Gtk.ListBox()
         self.list_box.set_selection_mode(Gtk.SelectionMode.MULTIPLE)
         self.list_box.connect("row-activated", self.on_row_activated)
-        self.list_box.connect(
-            "selected-rows-changed", self.on_list_box_selection_changed
-        )  # Connect selection changed signal
         self.list_box.set_name("results-list")
         self.scrolled.add(self.list_box)
 
@@ -254,21 +256,14 @@ class LauncherWindow(Gtk.Window):
         self.result_count_label.set_text("")
         self.result_count_label.hide()
         self.resize(self.window_width, self.window_height)
+
     def _show_recent_history(self):
         """Show all history items when launcher opens with empty input, with scrolling support."""
         if not self.history_manager:
             return
 
-        # Get history results from the history plugin if available
-        history_plugin = (
-            self.plugin_manager.plugins.get("history") if self.plugin_manager else None
-        )
-        if history_plugin:
-            history_results = history_plugin.get_recent_history_as_results(100)
-        else:
-            # Fallback to direct history manager access
-            all_history = self.history_manager.get_recent_history(100)
-            history_results = self._convert_history_entries_to_results(all_history)
+        all_history = self.history_manager.get_recent_history(100)
+        history_results = self._convert_history_entries_to_results(all_history)
 
         if not history_results:
             return
@@ -279,61 +274,36 @@ class LauncherWindow(Gtk.Window):
     def _convert_history_entries_to_results(
         self, all_history: List[Dict[str, Any]]
     ) -> List[SearchResult]:
-        """Convert history entries to SearchResults (fallback when history plugin unavailable)"""
+        """Convert history entries to SearchResults (simple mapping, use info directly)"""
         results = []
         for history_entry in all_history:
             if not history_entry.get("user_input"):
                 continue
 
-            user_input = history_entry.get("user_input", "")
-            result_name = history_entry.get("result_name", "")
             plugin_id = history_entry.get("plugin_id", "")
             item_id = history_entry.get("item_id", "")
-            description = history_entry.get("description", user_input)
-            display_name = self._build_hybrid_display_name(user_input, result_name)
-            display_description = description
-            if (
-                result_name
-                and result_name != user_input
-                and result_name not in display_name
-            ):
-                if display_description and display_description != result_name:
-                    display_description = f"{result_name} - {display_description}"
-                else:
-                    display_description = result_name
-
-            # Get the appropriate icon specification from history plugin
-            history_plugin = (
-                self.plugin_manager.plugins.get("history")
-                if self.plugin_manager
-                else None
-            )
-            if history_plugin:
-                display_icon_spec = history_plugin._get_history_icon_spec_for_entry(
-                    plugin_id, item_id, history_entry
-                )
-            else:
-                display_icon_spec = "document-open-recent"
+            user_input = history_entry.get("user_input", "")
+            result_name = history_entry.get("result_name")
+            name = self._build_hybrid_display_name(user_input, result_name)
+            description = history_entry.get("description", "")
+            icon_spec = history_entry.get("icon_spec") or ""
 
             result = SearchResult(
                 plugin_id="history",
                 item_id=f"history_{plugin_id}_{item_id}",
-                name=display_name,
-                description=display_description,
-                icon_spec=display_icon_spec,
+                name=name,
+                description=description,
+                icon_spec=icon_spec,
                 score=0,
             )
-
             result.metadata = {
                 "original_plugin_id": plugin_id,
                 "original_item_id": item_id,
-                "user_input": user_input,
+                "user_input": history_entry.get("user_input", ""),
                 "usage_count": history_entry.get("usage_count", 0),
                 "history_entry": history_entry,
             }
-
             results.append(result)
-
         return results
 
     def _build_hybrid_display_name(self, user_input: str, result_name: str) -> str:
@@ -454,11 +424,14 @@ class LauncherWindow(Gtk.Window):
                 launch_count=history_count,
                 query=self.entry.get_text().strip(),
             )
+            list_item.user_input = (
+                result.metadata.get("user_input")
+                or result.metadata.get("command")
+                or result.name
+            )
 
-            # Apply special styling for history plugin results to ensure bold font weight
             if result.plugin_id == "history":
                 list_item.set_name("history-search-result")
-                # Ensure history results display with bold font weight
                 list_item.get_style_context().add_class("history-result")
 
             self.list_box.add(list_item)
@@ -564,12 +537,7 @@ class LauncherWindow(Gtk.Window):
         """Handle text changes in the entry field with debouncing."""
         # Cancel any pending search
         if self._search_timeout_id:
-            from gi.repository import GLib
-
             GLib.source_remove(self._search_timeout_id)
-
-        # Schedule new search with debouncing
-        from gi.repository import GLib
 
         self._search_timeout_id = GLib.timeout_add(
             self._search_delay_ms, self._perform_search
@@ -588,9 +556,8 @@ class LauncherWindow(Gtk.Window):
 
         if not query:
             self._clear_list_box_and_hide()
-            # Show recent history when empty
             self._show_recent_history()
-            return False  # Remove from timeout
+            return False
 
         # Check for autocomplete matches - cache history manager check
         if self.history_manager:
@@ -605,7 +572,52 @@ class LauncherWindow(Gtk.Window):
             self.handle_plugin_results,
             self.handle_search_finished,
         )
-        return False  # Remove from timeout
+        return False
+
+    def _navigate_selection(self, direction: int, state) -> bool:
+        """Navigate selection in the results list by direction (+1 down, -1 up), wrapping around.
+        Updates the entry line with the selected row's user_input without triggering a search.
+        """
+        self.user_navigating = True
+        children = self.list_box.get_children()
+        if not children:
+            return True
+
+        selected_row = self.list_box.get_selected_row()
+        if selected_row:
+            index = selected_row.get_index()
+            target_index = (index + direction) % len(children)
+        else:
+            target_index = 0 if direction > 0 else len(children) - 1
+
+        target_row = self.list_box.get_row_at_index(target_index)
+
+        if not (state & Gdk.ModifierType.SHIFT_MASK):
+            for row in self.list_box.get_selected_rows():
+                if row != target_row:
+                    self.list_box.unselect_row(row)
+        self.list_box.select_row(target_row)
+
+        # Ensure the selected row is visible
+        adjustment = self.scrolled.get_vadjustment()
+        if adjustment:
+            row_alloc = target_row.get_allocation()
+            adjustment.clamp_page(row_alloc.y, row_alloc.y + row_alloc.height)
+
+        # Cancel any pending search while navigating
+        if self._search_timeout_id:
+            GLib.source_remove(self._search_timeout_id)
+            self._search_timeout_id = None
+
+        # Update the entry with the row's user_input without triggering search
+        if self.entry_changed_handler_id is not None:
+            self.entry.handler_block(self.entry_changed_handler_id)
+        self.entry.set_text(target_row.result.name)
+        self.entry.set_position(-1)
+        if self.entry_changed_handler_id is not None:
+            self.entry.handler_unblock(self.entry_changed_handler_id)
+
+        return True
 
     def on_entry_key_press(self, widget, event) -> bool:
         """Handle key presses in the entry field"""
@@ -643,94 +655,11 @@ class LauncherWindow(Gtk.Window):
         if self.scrolled.get_visible():
             # Handle Down arrow
             if keyval == Gdk.KEY_Down:
-                self.user_navigating = True
-                selected_row = (
-                    self.list_box.get_selected_row()
-                )  # Get the currently focused row
-                target_row = None
-
-                if selected_row:
-                    index = selected_row.get_index()
-                    children = self.list_box.get_children()
-                    if index < len(children) - 1:
-                        target_row = self.list_box.get_row_at_index(index + 1)
-                else:
-                    # No current selection, select the first item
-                    children = self.list_box.get_children()
-                    if children:
-                        target_row = self.list_box.get_row_at_index(0)
-
-                if target_row:
-                    if not (state & Gdk.ModifierType.SHIFT_MASK):
-                        # If Shift is NOT pressed, ensure only the target_row is selected
-                        for row in self.list_box.get_selected_rows():
-                            if row != target_row:
-                                self.list_box.unselect_row(row)
-                    self.list_box.select_row(target_row)  # Select the target row
-
-                    adjustment = self.scrolled.get_vadjustment()
-                    if adjustment:
-                        row_alloc = target_row.get_allocation()
-                        adjustment.clamp_page(
-                            row_alloc.y, row_alloc.y + row_alloc.height
-                        )
-
-                    if hasattr(target_row, "user_input"):
-                        # Temporarily block the "changed" signal
-                        if self.entry_changed_handler_id is not None:
-                            self.entry.handler_block(self.entry_changed_handler_id)
-                        self.entry.set_text(target_row.user_input)
-                        self.entry.set_position(-1)
-                        # Unblock the "changed" signal
-                        if self.entry_changed_handler_id is not None:
-                            self.entry.handler_unblock(self.entry_changed_handler_id)
-                return True
+                return self._navigate_selection(+1, state)
 
             # Handle Up arrow
             elif keyval == Gdk.KEY_Up:
-                self.user_navigating = True
-                selected_row = (
-                    self.list_box.get_selected_row()
-                )  # Get the currently focused row
-                target_row = None
-
-                if selected_row:
-                    index = selected_row.get_index()
-                    if index > 0:
-                        target_row = self.list_box.get_row_at_index(index - 1)
-                else:
-                    # No current selection, select the last item
-                    children = self.list_box.get_children()
-                    if children:
-                        target_row = self.list_box.get_row_at_index(
-                            len(children) - 1
-                        )  # Select the last item if no selection
-
-                if target_row:
-                    if not (state & Gdk.ModifierType.SHIFT_MASK):
-                        # If Shift is NOT pressed, ensure only the target_row is selected
-                        for row in self.list_box.get_selected_rows():
-                            if row != target_row:
-                                self.list_box.unselect_row(row)
-                    self.list_box.select_row(target_row)  # Select the target row
-
-                    adjustment = self.scrolled.get_vadjustment()
-                    if adjustment:
-                        row_alloc = target_row.get_allocation()
-                        adjustment.clamp_page(
-                            row_alloc.y, row_alloc.y + row_alloc.height
-                        )
-
-                    if hasattr(target_row, "user_input"):
-                        # Temporarily block the "changed" signal
-                        if self.entry_changed_handler_id is not None:
-                            self.entry.handler_block(self.entry_changed_handler_id)
-                        self.entry.set_text(target_row.user_input)
-                        self.entry.set_position(-1)
-                        # Unblock the "changed" signal
-                        if self.entry_changed_handler_id is not None:
-                            self.entry.handler_unblock(self.entry_changed_handler_id)
-                return True
+                return self._navigate_selection(-1, state)
 
             # Handle Tab for non-autocomplete (select item name)
             elif keyval == Gdk.KEY_Tab:
@@ -756,7 +685,9 @@ class LauncherWindow(Gtk.Window):
                         # If this row corresponds to a history entry, capture it for removal
                         if hasattr(row, "history_entry"):
                             entries_to_remove.append(row.history_entry)
-                        elif hasattr(row, "result") and row.result.plugin_id == "history":
+                        elif (
+                            hasattr(row, "result") and row.result.plugin_id == "history"
+                        ):
                             history_entry = row.result.metadata.get("history_entry")
                             if history_entry:
                                 entries_to_remove.append(history_entry)
@@ -780,16 +711,6 @@ class LauncherWindow(Gtk.Window):
                         return True
                 return False  # Allow other handlers if no selection
 
-        # Global hotkeys (work anywhere in the window)
-        # Handle Ctrl+Q to quit (hide first for snappy response)
-        if keyval == Gdk.KEY_q and state & Gdk.ModifierType.CONTROL_MASK:
-            logger.info("Ctrl+Q pressed, hiding window and quitting application")
-            self.hide()  # Hide immediately for snappy response
-            from gi.repository import GLib
-
-            GLib.timeout_add(50, lambda: Gtk.main_quit())  # Delayed clean shutdown
-            return True
-
         return False
 
     def on_row_activated(self, list_box, row) -> None:
@@ -802,10 +723,6 @@ class LauncherWindow(Gtk.Window):
                 # Regular search result activated
                 self.execute_result(row.result, None)
 
-    def on_list_box_selection_changed(self, list_box) -> None:
-        """Handle selection changes in the list box."""
-        pass
-
     def _build_executed_command(self, result: SearchResult) -> str:
         """
         Build the complete command that represents what was actually executed.
@@ -817,13 +734,10 @@ class LauncherWindow(Gtk.Window):
         Returns:
             Actual command string that was executed (or would be executed)
         """
-        # Try to get the actual executed command from metadata if available
         actual_command = result.metadata.get("actual_executed_command")
         if actual_command:
             return actual_command
 
-        # Fallback: try to reconstruct what would be executed
-        # For executable plugin, this would be the file path + args
         command = result.metadata.get("command")
         if command:
             args = result.metadata.get("args", [])
@@ -831,7 +745,6 @@ class LauncherWindow(Gtk.Window):
                 return command + " " + " ".join(args)
             return command
 
-        # Final fallback: use result name + args (old behavior)
         base_command = result.name
         args = result.metadata.get("args", [])
         if args:
@@ -887,7 +800,6 @@ class LauncherWindow(Gtk.Window):
 
     def _store_new_history_entry(self, result: SearchResult, user_input: str) -> None:
         """Store a new history entry for the executed result"""
-        # Preserve original plugin metadata
         if not result.metadata.get("original_plugin_id"):
             result.metadata["original_plugin_id"] = result.plugin_id
         if not result.metadata.get("original_item_id"):
@@ -921,42 +833,32 @@ class LauncherWindow(Gtk.Window):
     def _delayed_focus_and_position(self):
         """Position window and grab focus after window is fully shown and mapped"""
         try:
-            # Make sure window is visible and mapped before positioning
             if not self.get_visible() or not self.get_mapped():
-                # If not ready yet, try again in a short while
-                from gi.repository import GLib
-
                 GLib.timeout_add(10, self._delayed_focus_and_position)
                 return False
 
-            # Make sure window is at the front
             if self.get_window():
                 self.get_window().raise_()
                 self.get_window().focus(0)
 
-            # Grab focus for the entry field
             self.entry.grab_focus()
-
-            # Additional focus enforcement for stubborn window managers
             self.present()
-
-            # Some window managers need an extra nudge
             self.activate_focus()
 
         except Exception:
             pass
 
-        return False  # Remove from idle queue
+        return False
 
     def on_delete_event(self, widget, event):
-        """Handle window delete event - hide or quit based on mode"""
+        """Handle window delete event - hide or quit in foreground mode"""
         if self.foreground_mode:
-            # In foreground mode, quit the application
-            Gtk.main_quit()
+            # In foreground mode, closing the window should quit the app via GTK loop
+            self.request_quit("window delete")
         else:
-            # In singleton mode, hide the window
+            # In singleton mode, just hide the window
             self.hide()
-        return True  # Prevent default destroy behavior
+        return True
 
     def on_key_press(self, widget, event) -> bool:
         keyval = event.keyval
@@ -969,18 +871,16 @@ class LauncherWindow(Gtk.Window):
             Gdk.KEY_Page_Down,
         ]
 
-        # Handle Ctrl+Q to quit (global hotkey)
         if keyval == Gdk.KEY_q and state & Gdk.ModifierType.CONTROL_MASK:
-            logger.info("Ctrl+Q pressed, hiding window and quitting application")
-            self.hide()  # Hide immediately for snappy response
-            from gi.repository import GLib
-
-            GLib.timeout_add(50, lambda: Gtk.main_quit())  # Delayed clean shutdown
+            logger.info("Ctrl+Q pressed, quitting via launcher window")
+            # Route quit through launcher's quit logic
+            self.request_quit("Ctrl+Q")
             return True
 
         if keyval == Gdk.KEY_Escape:
             self.close_window()
             return True
+
         if keyval not in nav_keys and not self.is_active():
             self.present()
             self.entry.grab_focus()
@@ -996,12 +896,23 @@ class LauncherWindow(Gtk.Window):
     def close_window(self):
         """Hide the window or quit based on mode"""
         if self.foreground_mode:
-            # In foreground mode, quit the application
-            Gtk.main_quit()
+            # Quit GTK loop through launcher's own method
+            self.request_quit("close_window")
         else:
-            # In singleton mode, hide the window
             self.hide()
         return True
+
+    def request_quit(self, reason: str = ""):
+        """Schedule quitting the main loop once, allowing cleanup in finally blocks.
+
+        This keeps GTK knowledge within the launcher window and avoids main importing Gtk.
+        """
+        if LauncherWindow._quit_scheduled:
+            return
+        LauncherWindow._quit_scheduled = True
+        logger.info(f"LauncherWindow requested quit: {reason}")
+        # Quit on idle to ensure signal handlers and UI events complete
+        self._schedule_quit(reason)
 
     def update_with_full_config(self, plugin_manager, history_manager, config):
         """Update the window with the full configuration after initialization"""
