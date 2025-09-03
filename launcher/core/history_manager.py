@@ -71,13 +71,19 @@ class HistoryManager:
             fd, temp_path = tempfile.mkstemp(
                 dir=os.path.dirname(self.history_file), suffix=".tmp"
             )
+
+            def _json_default(obj):
+                if hasattr(obj, "to_dict") and callable(obj.to_dict):
+                    return obj.to_dict()
+                return ""
+
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(
                     self.user_input_history,
                     f,
                     ensure_ascii=False,
                     indent=2,
-                    default=str,
+                    default=_json_default,
                 )
 
             # Atomically rename the temporary file to the history file
@@ -191,11 +197,11 @@ class HistoryManager:
         user_input: str,
         plugin_id: str,
         item_id: str,
-        timestamp: float = None,
-        actual_command_string: str = None,
-        result_name: str = None,
-        description: str = None,
-        icon_spec: str = None,
+        timestamp: Optional[float] = None,
+        actual_command_string: Optional[str] = None,
+        result_name: Optional[str] = None,
+        description: Optional[str] = None,
+        icon_spec: Optional[str] = None,
         original_metadata: Optional[Dict[str, Any]] = None,  # New parameter
     ) -> None:
         """
@@ -236,7 +242,7 @@ class HistoryManager:
         self._add_and_limit_history(entry)
 
     def _process_existing_entries(
-        self, user_input: str, plugin_id: str, actual_command_string: str
+        self, user_input: str, plugin_id: str, actual_command_string: Optional[str]
     ) -> int:
         """Process existing entries for duplicates and merging"""
         current_usage_count = 0
@@ -265,7 +271,9 @@ class HistoryManager:
         """Check if entry is an exact duplicate of user input"""
         return entry.get("user_input", "").lower() == user_input.lower()
 
-    def _should_merge_commands(self, entry: dict, normalized_new_command: str) -> bool:
+    def _should_merge_commands(
+        self, entry: dict, normalized_new_command: Optional[str]
+    ) -> bool:
         """Check if entry should be merged based on normalized command"""
         if not normalized_new_command or not entry.get("actual_command"):
             return False
@@ -287,11 +295,11 @@ class HistoryManager:
         plugin_id: str,
         item_id: str,
         timestamp: float,
-        actual_command_string: str,
-        result_name: str,
-        description: str,
+        actual_command_string: Optional[str],
+        result_name: Optional[str],
+        description: Optional[str],
         usage_count: int,
-        icon_spec: str,
+        icon_spec: Optional[str],
         original_metadata: Optional[Dict[str, Any]] = None,  # New parameter
     ) -> dict:
         """Create a new history entry"""
@@ -481,7 +489,7 @@ class HistoryManager:
         return True
 
     def increment_usage_count(
-        self, plugin_id: str, item_id: str, user_input: str = None
+        self, plugin_id: str, item_id: str, user_input: Optional[str] = None
     ) -> bool:
         """
         Increment usage count for an existing history entry.
@@ -515,7 +523,7 @@ class HistoryManager:
             return False
 
     def _validate_increment_inputs(
-        self, plugin_id: str, item_id: str, user_input: str = None
+        self, plugin_id: str, item_id: str, user_input: Optional[str] = None
     ) -> bool:
         """Validate inputs for increment usage count"""
         if not plugin_id:
@@ -556,7 +564,7 @@ class HistoryManager:
         return True
 
     def _find_and_increment_entry(
-        self, plugin_id: str, item_id: str, user_input: str = None
+        self, plugin_id: str, item_id: str, user_input: Optional[str] = None
     ) -> bool:
         """Find and increment matching history entry"""
         entries_checked = 0
@@ -591,7 +599,7 @@ class HistoryManager:
             return False
         return True
 
-    def _extract_entry_data(self, entry: dict, index: int) -> dict:
+    def _extract_entry_data(self, entry: dict, index: int) -> Optional[dict]:
         """Extract and validate entry data"""
         try:
             entry_plugin_id = entry.get("plugin_id")
@@ -619,7 +627,7 @@ class HistoryManager:
         entry_data: dict,
         plugin_id: str,
         item_id: str,
-        user_input: str,
+        user_input: Optional[str],
         index: int,
     ) -> bool:
         """Check if entry matches search criteria"""
@@ -721,10 +729,10 @@ class HistoryManager:
         self,
         plugin_id: str,
         item_id: str,
-        history_entry: Dict[str, Any] = None,
+        history_entry: Optional[Dict[str, Any]] = None,
         plugin_manager=None,
         icon_size: int = 48,
-    ):
+    ) -> Optional[Any]:
         """Try to get the actual result object for a history entry to access current icon."""
         if not plugin_manager:
             return None
