@@ -20,7 +20,7 @@ class TimezonePlugin(Plugin):
         re.compile(r"\d{1,2}am"),  # 5am format
         re.compile(r"\d{1,2}pm"),  # 5pm format
         re.compile(r"\d{3,4}"),  # 1300, 0800 format
-        re.compile(r"\d{1,2}\s+[a-z]+"),  # 5 pst format
+        re.compile(r"\d{1,2}\s*[a-z]+"),  # 5pst format (space optional)
         re.compile(r"now"),  # now keyword
     ]
 
@@ -28,7 +28,7 @@ class TimezonePlugin(Plugin):
         re.compile(r"(\d{1,2}:\d{2})\s*([a-z]+)", re.IGNORECASE),  # 5:30 PDT
         re.compile(r"(\d{1,2})(am|pm)\s*([a-z]+)", re.IGNORECASE),  # 5am PDT
         re.compile(r"(\d{3,4})\s*([a-z]+)", re.IGNORECASE),  # 1300 JST
-        re.compile(r"(\d{1,2})\s+([a-z]+)", re.IGNORECASE),  # 5 pst
+        re.compile(r"(\d{1,2})\s*([a-z]+)", re.IGNORECASE),  # 5pst (no space required)
     ]
 
     def __init__(self):

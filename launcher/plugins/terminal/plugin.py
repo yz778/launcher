@@ -36,8 +36,6 @@ class TerminalPlugin(Plugin):
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         super().initialize(config, config_manager)
-
-        # Get configuration using helpers
         self.prefix = self.get_config_value("prefix")
         return True
 
@@ -50,10 +48,13 @@ class TerminalPlugin(Plugin):
             if not command:
                 return []
 
+            # Extract base command for display name
+            base_command = command.split()[0] if command else command
+
             result = SearchResult(
                 plugin_id=self.get_id(),
                 item_id=command,
-                name=command,
+                name=base_command,
                 description="Execute in terminal",
                 icon_spec="https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png",
                 score=calculate_match_score(query, command, is_name=True),

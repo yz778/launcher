@@ -409,13 +409,15 @@ class HistoryPlugin(Plugin):
                 if len(user_parts) > 1:
                     # User input has arguments, use canonical name + args
                     args = " ".join(user_parts[1:])
-                    return f"{result_name} {args}"
+                    display_name = f"{result_name} {args}"
                 else:
                     # No arguments, just use canonical name
-                    return result_name
+                    display_name = result_name
             else:
                 # No result_name available, use original input
-                return user_input
+                display_name = user_input
+
+            return display_name
 
         except Exception as e:
             logger.warning(

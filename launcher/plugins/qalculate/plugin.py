@@ -267,7 +267,6 @@ class QalculatePlugin(Plugin):
                             self._start_cooldown_timer()
                             return result
 
-                logger.warning(f"No result received for expression: {expression}")
                 return None
 
             except Exception as e:
