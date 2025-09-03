@@ -246,6 +246,28 @@ class PluginManager:
                 finished_callback,
             )
 
+    def _find_matching_prefix(self, query: str) -> Optional[str]:
+        """
+        Find the longest matching prefix for the given query.
+
+        Sorts prefixes by length in descending order to ensure the most specific
+        (longest) prefix is matched first, avoiding non-deterministic behavior
+        when one prefix is a substring of another.
+
+        Args:
+            query: The search query
+
+        Returns:
+            The longest matching prefix or None if no prefix matches
+        """
+        # Sort prefixes by length in descending order to match longest first
+        sorted_prefixes = sorted(self.prefix_registry.keys(), key=len, reverse=True)
+
+        for prefix in sorted_prefixes:
+            if query.startswith(prefix):
+                return prefix
+        return None
+
     def _get_plugin_for_prefix(self, query: str) -> Optional[str]:
         """
         Get the plugin ID that should handle this query based on prefix matching.
@@ -256,10 +278,8 @@ class PluginManager:
         Returns:
             Plugin ID if query matches a registered prefix, None otherwise
         """
-        for prefix, plugin_id in self.prefix_registry.items():
-            if query.startswith(prefix):
-                return plugin_id
-        return None
+        matching_prefix = self._find_matching_prefix(query)
+        return self.prefix_registry.get(matching_prefix) if matching_prefix else None
 
     def _query_matches_any_prefix(self, query: str) -> bool:
         """
@@ -271,7 +291,7 @@ class PluginManager:
         Returns:
             True if query matches any prefix, False otherwise
         """
-        return any(query.startswith(prefix) for prefix in self.prefix_registry.keys())
+        return self._find_matching_prefix(query) is not None
 
     def get_prefix_for_query(self, query: str) -> Optional[str]:
         """
@@ -283,10 +303,7 @@ class PluginManager:
         Returns:
             The matching prefix or None if no prefix matches
         """
-        for prefix in self.prefix_registry.keys():
-            if query.startswith(prefix):
-                return prefix
-        return None
+        return self._find_matching_prefix(query)
 
     def execute(self, result: SearchResult) -> bool:
         """Execute an action for the given search result"""
