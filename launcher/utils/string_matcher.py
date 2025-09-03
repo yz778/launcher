@@ -55,34 +55,18 @@ class StringMatcher(Generic[T]):
 
     def _calculate_score(self, query: str, item: T) -> float:
         """
-        Calculate match score between query and item using prioritized scoring system
+        Calculate match score between query and item using simplified scoring system
 
         Args:
             query: The normalized query string (lowercase)
             item: The item to score
 
         Returns:
-            Score using prioritized scoring system (higher is better)
+            Score using simplified scoring system (higher is better)
         """
-        from launcher.utils.scoring_system import (
-            calculate_exact_name_match_score,
-            calculate_match_score,
-            apply_history_boost,
-        )
+        from launcher.utils.scoring_system import calculate_match_score
 
         key = self.key_func(item)
 
-        # Priority 1: Check for exact name match first
-        exact_score = calculate_exact_name_match_score(query, key)
-        if exact_score > 0:
-            return exact_score
-
-        # Priority 3: Fuzzy name matching (non-history items)
-        # History items will be handled separately by history plugin
-        base_score = calculate_match_score(query, key, is_name=True, is_history=False)
-
-        # Apply history boost if item is in history (moves to priority 2 range)
-        if self.history and item in self.history:
-            return apply_history_boost(base_score)
-
-        return base_score
+        # Use simplified scoring system - all plugins get equal treatment for name matches
+        return calculate_match_score(query, key, is_name=True)

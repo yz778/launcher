@@ -61,7 +61,7 @@ class SearchResult:
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
-    __slots__ = ("config", "config_manager")
+    __slots__ = ("config", "config_manager", "prefix")
 
     @abstractmethod
     def get_id(self) -> str:
@@ -79,6 +79,25 @@ class Plugin(ABC):
         """Initialize the plugin base class"""
         self.config: Dict[str, Any] = {}
         self.config_manager = None
+        self.prefix: Optional[str] = None
+
+    def get_prefix(self) -> Optional[str]:
+        """
+        Get the prefix for this plugin, if any.
+
+        Returns:
+            The prefix string (e.g., ">") or None if no prefix is used
+        """
+        return self.prefix
+
+    def has_prefix(self) -> bool:
+        """
+        Check if this plugin uses a prefix.
+
+        Returns:
+            True if plugin has a prefix, False otherwise
+        """
+        return self.prefix is not None and self.prefix != ""
 
     def get_general_config(self, key: str, default: Any = None) -> Any:
         """Helper to get a value from the [general] config section."""

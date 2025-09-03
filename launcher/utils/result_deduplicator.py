@@ -15,13 +15,13 @@ class ResultDeduplicator:
 
     def deduplicate_results(self, results: List[SearchResult]) -> List[SearchResult]:
         """
-        Remove history results if the same actual command exists from other plugins.
+        Deduplicate results by keeping the highest-scored version of each item.
 
         Args:
             results: List of search results to deduplicate
 
         Returns:
-            List of deduplicated results
+            List of deduplicated results with highest-scored versions
         """
         if not results:
             return results
@@ -39,24 +39,25 @@ class ResultDeduplicator:
         if not history_results or not other_results:
             return results
 
-        deduplicated_results = []
-        seen_keys = set()
+        # Create a mapping of (original_plugin_id, original_item_id) -> best_result
+        best_results = {}
 
-        # Prioritize non-history results
+        # First, add all live plugin results
         for result in other_results:
             key = (result.plugin_id, result.item_id)
-            if key not in seen_keys:
-                deduplicated_results.append(result)
-                seen_keys.add(key)
+            best_results[key] = result
 
-        # Add history results only if the original item hasn't been seen from a live plugin
+        # Then, check history results and keep them if they have higher scores
         for history_result in history_results:
             original_plugin_id = history_result.metadata.get("original_plugin_id")
             original_item_id = history_result.metadata.get("original_item_id")
             key = (original_plugin_id, original_item_id)
 
-            if key not in seen_keys:
-                deduplicated_results.append(history_result)
-                seen_keys.add(key)
+            if key in best_results:
+                live_result = best_results[key]
+                if history_result.score > live_result.score:
+                    best_results[key] = history_result
+            else:
+                best_results[key] = history_result
 
-        return deduplicated_results
+        return list(best_results.values())
