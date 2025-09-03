@@ -240,6 +240,10 @@ class LauncherWindow(Gtk.Window):
         self._search_timeout_id = None
         self._search_delay_ms = 50
 
+        # Result update stabilization
+        self._result_update_timeout_id = None
+        self._result_update_delay_ms = 100  # Delay to stabilize result updates
+
         # Track if user is navigating with keys
         self.user_navigating = False
 
@@ -482,26 +486,46 @@ class LauncherWindow(Gtk.Window):
         if search_id != self.active_search_id:
             return
 
-        # No need to handle highlighting here - UI layer will handle it based on current query
+        # Add results to current collection
         self.current_results.extend(plugin_results)
 
-        # Apply deduplication: remove history results if exact match exists from other plugins
+        # Process and update UI with stabilization delay
+        self._schedule_result_update(search_id)
+
+    def _schedule_result_update(self, search_id: int):
+        """Schedule a result update with stabilization delay to prevent flickering."""
+        # Check if we have any high-priority results that should be shown immediately
+        has_high_priority = any(result.score >= 1000 for result in self.current_results)
+
+        if has_high_priority:
+            # Show high-priority results immediately (exact matches)
+            if self._result_update_timeout_id:
+                GLib.source_remove(self._result_update_timeout_id)
+                self._result_update_timeout_id = None
+            self._perform_result_update(search_id)
+        else:
+            # Use stabilization delay for lower-priority results
+            if self._result_update_timeout_id:
+                GLib.source_remove(self._result_update_timeout_id)
+
+            # Schedule new update
+            self._result_update_timeout_id = GLib.timeout_add(
+                self._result_update_delay_ms,
+                lambda: self._perform_result_update(search_id),
+            )
+
+    def _perform_result_update(self, search_id: int) -> bool:
+        """Actually update the UI with current results (called after stabilization delay)."""
+        self._result_update_timeout_id = None  # Clear timeout ID
+
+        if search_id != self.active_search_id:
+            return False  # Ignore stale updates
+
+        # First, adjust scores based on history for all current results
+        # Apply deduplication based on plugin scores (no double scoring needed)
         self.current_results = self.result_deduplicator.deduplicate_results(
             self.current_results
         )
-
-        # Adjust scores based on history for all current results
-        for result in self.current_results:
-            if (
-                "history_count" not in result.metadata
-            ):  # Avoid re-processing if called multiple times
-                count = self.history_manager.get_usage_count(
-                    result.plugin_id, result.item_id
-                )
-                result.score = self.history_manager.adjust_score(
-                    result.plugin_id, result.item_id, result.score
-                )
-                result.metadata["history_count"] = count
 
         # Sort by score only - history plugin already has prioritized scores
         self.current_results.sort(key=lambda r: r.score, reverse=True)
@@ -514,11 +538,20 @@ class LauncherWindow(Gtk.Window):
         self.current_results = self.current_results[: self._cached_max_results]
 
         self._populate_list_box(self.current_results)
+        return False  # Remove from timeout queue
 
     def handle_search_finished(self, search_id: int):
         """Callback for when all plugins have finished searching."""
         if search_id != self.active_search_id:
             return
+
+        # Cancel any pending result update and perform final update immediately
+        if self._result_update_timeout_id:
+            GLib.source_remove(self._result_update_timeout_id)
+            self._result_update_timeout_id = None
+
+        # Perform final result processing and UI update
+        self._perform_result_update(search_id)
 
         # Always show dropdown if user has typed something, even if no results
         query_text = self.entry.get_text().strip()
@@ -540,6 +573,11 @@ class LauncherWindow(Gtk.Window):
     def _perform_search(self) -> bool:
         """Actually perform the search (called after debounce delay)"""
         self._search_timeout_id = None  # Clear timeout ID
+
+        # Cancel any pending result updates from previous search
+        if self._result_update_timeout_id:
+            GLib.source_remove(self._result_update_timeout_id)
+            self._result_update_timeout_id = None
 
         self.user_navigating = False  # Reset navigation state
         query = self.entry.get_text().strip()

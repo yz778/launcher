@@ -3,7 +3,6 @@
 from ..base import Plugin, SearchResult
 from typing import List, Dict, Any
 import logging
-import time
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +68,6 @@ class HistoryPlugin(Plugin):
             "enabled": True,
             "max_results": 10,
             "min_query_length": 2,
-            "boost_recent": True,
-            "boost_frequent": True,
         }
 
     def initialize(self, config: Dict[str, Any], config_manager=None) -> bool:
@@ -147,8 +144,7 @@ class HistoryPlugin(Plugin):
 
             best_score = self._calculate_best_match_score(query, entry_data)
             if best_score > 0:
-                final_score = self._apply_boosts(entry, best_score)
-                result = self._create_history_result(entry, final_score, query)
+                result = self._create_history_result(entry, best_score, query)
                 if result:
                     results.append(result)
 
@@ -183,42 +179,60 @@ class HistoryPlugin(Plugin):
     def _calculate_best_match_score(
         self, query: str, entry_data: Dict[str, str]
     ) -> float:
-        """Calculate the best match score from all searchable fields using prioritized scoring"""
         from launcher.utils.scoring_system import calculate_match_score
 
-        # History items get priority 2 scoring (500-999 points)
-        # Name matches (user input, result name, and actual command)
-        user_input_score = calculate_match_score(
-            query, entry_data["user_input"], is_name=True, is_history=True
+        # Check if user input has arguments (spaces) - this gets priority
+        user_input = entry_data["user_input"]
+        user_input_with_args = user_input if " " in user_input.strip() else None
+
+        # Priority 1: History with user arguments match
+        if user_input_with_args:
+            args_score = calculate_match_score(
+                query,
+                entry_data["user_input"],
+                is_name=True,
+                user_input_with_args=user_input_with_args,
+            )
+            if args_score > 0:
+                return args_score
+
+        # Priority 2: Name matches (user input, result name, actual command)
+        name_scores = []
+        name_scores.append(
+            calculate_match_score(query, entry_data["user_input"], is_name=True)
         )
 
-        result_name_score = 0
+        # Result name (if different from user input)
         if (
             entry_data["result_name"]
             and entry_data["result_name"] != entry_data["user_input"]
         ):
-            result_name_score = calculate_match_score(
-                query, entry_data["result_name"], is_name=True, is_history=True
+            name_scores.append(
+                calculate_match_score(query, entry_data["result_name"], is_name=True)
             )
 
-        actual_command_score = 0
+        # Actual command (if different from user input)
         if (
             entry_data["actual_command"]
             and entry_data["actual_command"] != entry_data["user_input"]
         ):
-            actual_command_score = calculate_match_score(
-                query, entry_data["actual_command"], is_name=True, is_history=True
+            name_scores.append(
+                calculate_match_score(query, entry_data["actual_command"], is_name=True)
             )
 
-        # Description match (still gets lower scoring within history tier)
+        # Priority 3: Description match
         description_score = 0
         if entry_data["description"]:
             description_score = calculate_match_score(
-                query, entry_data["description"], is_name=False, is_history=True
+                query, entry_data["description"], is_name=False
             )
 
-        best_score = max(
-            user_input_score, result_name_score, actual_command_score, description_score
+        # Return the best score
+        all_scores = name_scores + [description_score]
+        best_score = (
+            max(score for score in all_scores if score > 0)
+            if any(score > 0 for score in all_scores)
+            else 0
         )
 
         # Apply argument mismatch penalty
@@ -231,33 +245,6 @@ class HistoryPlugin(Plugin):
         max_results = self.get_config_value("max_results", 10)
         results.sort(key=lambda r: r.score, reverse=True)
         return results[:max_results]
-
-    def _apply_boosts(self, entry: Dict[str, Any], base_score: float) -> float:
-        """Apply boosts based on recency and frequency"""
-        from launcher.utils.scoring_system import (
-            apply_history_boost,
-            apply_usage_boost,
-            apply_recency_boost,
-        )
-
-        score = base_score
-
-        # Apply history boost (this is a history plugin, so always boost)
-        score = apply_history_boost(score)
-
-        # Boost for frequency (usage count)
-        if self.get_config_value("boost_frequent", True):
-            usage_count = entry.get("usage_count", 1)
-            score = apply_usage_boost(score, usage_count)
-
-        # Boost for recency
-        if self.get_config_value("boost_recent", True):
-            timestamp = entry.get("timestamp", 0)
-            current_time = time.time()
-            age_hours = (current_time - timestamp) / 3600
-            score = apply_recency_boost(score, age_hours)
-
-        return score
 
     def _validate_original_plugin_id(self, entry: Dict[str, Any]) -> str:
         """Validate and return original plugin ID with fallback behavior"""
