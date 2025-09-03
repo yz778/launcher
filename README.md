@@ -6,7 +6,6 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
 
 - **Plugin Architecture**: Easily extend with new search sources
 - **Core Plugins**:
-  - **Calculator Plugin**: Evaluate mathematical expressions with SymPy
   - **Desktop File Plugin**: Launch applications from .desktop files
   - **Executable Plugin**: Launch executables from custom directories
   - **QCalculate Plugin**: Advanced calculator with Qalculate! engine
@@ -33,15 +32,10 @@ Example configuration:
 
 ```json
 {
-"general": {
-  "max_results": 15,
-  "icon_size": 32
-},
-"plugins": {
-  "calculator": {
-    "precision": 5
+  "general": {
+    "max_results": 15,
+    "icon_size": 32
   }
-}
 }
 ```
 
