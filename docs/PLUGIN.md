@@ -12,10 +12,10 @@ Each plugin is organized in its own directory with a standardized structure:
 launcher/plugins/
 ├── base.py                    # Base plugin classes and interfaces
 ├── my_plugin/                 # Individual plugin directory
-│   ├── plugin.py             # Main plugin implementation (required)
-│   ├── config.yaml           # Plugin-specific configuration (optional)
-│   ├── assets/               # Plugin assets like icons (optional)
-│   └── helpers/              # Additional helper modules (optional)
+│   ├── plugin.py              # Main plugin implementation (required)
+│   ├── config.json            # Plugin-specific configuration (optional)
+│   ├── assets/                # Plugin assets like icons (optional)
+│   └── helpers/               # Additional helper modules (optional)
 └── another_plugin/
     └── plugin.py
 ```

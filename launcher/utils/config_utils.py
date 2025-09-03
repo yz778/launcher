@@ -4,7 +4,7 @@ from ..ui.css_manager import CssManager
 import argparse
 import logging
 import os
-import yaml
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def arg_parser():
         "--config",
         "-c",
         help="Path to configuration file",
-        default="~/.config/launcher/config.yaml",
+        default="~/.config/launcher/config.json",
     )
     parser.add_argument(
         "--create-config",
@@ -55,13 +55,14 @@ def create_default_config_file(
     base_name = os.path.basename(expanded_config_path)
     name_parts = os.path.splitext(base_name)
 
-    default_config_filename = f"{name_parts[0]}.default{name_parts[1]}"
+    # Force .json extension for defaults
+    default_config_filename = f"{name_parts[0]}.default.json"
     default_config_filepath = os.path.join(config_dir, default_config_filename)
 
     try:
         os.makedirs(os.path.dirname(default_config_filepath), exist_ok=True)
         with open(default_config_filepath, "w") as f:
-            yaml.dump(default_config_data, f, default_flow_style=False)
+            json.dump(default_config_data, f, indent=2, sort_keys=True)
         logger.info(f"Created default configuration file: {default_config_filepath}")
         return True
     except Exception as e:

@@ -96,9 +96,6 @@ class AppListItem(Gtk.ListBoxRow):
         hbox.pack_start(vbox, True, True, 0)
         self.add(hbox)
 
-        if result.description:
-            self.set_tooltip_text(result.description)
-
     def _load_result_icon(self, result: SearchResult, size: int):
         """Load icon for a search result using icon_spec"""
         if result.icon_spec:

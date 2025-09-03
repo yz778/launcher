@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
 
-from launcher.plugins.base import SearchResult
-
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.icon_utils import load_theme_icon
 from typing import Dict, Any, List, Optional
 import logging
 import math
 import os
 import time
-import pickle
+import json
 import tempfile
 
 logger = logging.getLogger(__name__)
@@ -43,9 +43,9 @@ class HistoryManager:
 
         if os.path.isfile(self.history_file):
             try:
-                with open(self.history_file, "rb") as f:
-                    data = pickle.load(f)
-                    self.user_input_history = data if data is not None else []
+                with open(self.history_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.user_input_history = data if isinstance(data, list) else []
 
                 logger.info(f"Loaded history from {self.history_file}")
             except Exception as e:
@@ -71,8 +71,14 @@ class HistoryManager:
             fd, temp_path = tempfile.mkstemp(
                 dir=os.path.dirname(self.history_file), suffix=".tmp"
             )
-            with os.fdopen(fd, "wb") as f:
-                pickle.dump(self.user_input_history, f)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(
+                    self.user_input_history,
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                    default=str,
+                )
 
             # Atomically rename the temporary file to the history file
             os.replace(temp_path, self.history_file)
@@ -708,7 +714,6 @@ class HistoryManager:
         Returns:
             True if entry is valid, False otherwise
         """
-        from launcher.plugins.base import Plugin
 
         return Plugin.is_structurally_valid(entry, plugin_manager)
 
@@ -779,8 +784,6 @@ class HistoryManager:
 
     def get_fallback_history_icon(self, icon_size: int = 48):
         """Get fallback icon for history items"""
-        from launcher.utils.icon_utils import load_theme_icon
-
         fallback_names = ["document-open-recent"]
         return load_theme_icon("accessories-history", icon_size, fallback_names)
 
