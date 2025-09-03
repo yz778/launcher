@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 
-from launcher.plugins.base import SearchResult
-
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.icon_utils import load_theme_icon
 from typing import Dict, Any, List, Optional
 import logging
 import math
@@ -714,7 +714,6 @@ class HistoryManager:
         Returns:
             True if entry is valid, False otherwise
         """
-        from launcher.plugins.base import Plugin
 
         return Plugin.is_structurally_valid(entry, plugin_manager)
 
@@ -785,8 +784,6 @@ class HistoryManager:
 
     def get_fallback_history_icon(self, icon_size: int = 48):
         """Get fallback icon for history items"""
-        from launcher.utils.icon_utils import load_theme_icon
-
         fallback_names = ["document-open-recent"]
         return load_theme_icon("accessories-history", icon_size, fallback_names)
 

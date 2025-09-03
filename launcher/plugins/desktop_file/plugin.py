@@ -5,6 +5,7 @@ from launcher.utils.string_matcher import StringMatcher
 from typing import Dict, List, Any
 from xdg_base_dirs import xdg_data_home, xdg_data_dirs
 from xdg.DesktopEntry import DesktopEntry
+from launcher.utils.process_manager import process_manager
 import glob
 import json
 import logging
@@ -435,8 +436,6 @@ class DesktopFilePlugin(Plugin):
         )
 
         try:
-            from launcher.utils.process_manager import launch_detached_process
-
             if desktop_file.terminal:
                 terminal_command = self.get_terminal_command()
                 cmd_parts = terminal_command.split() + cmd_parts
@@ -444,15 +443,13 @@ class DesktopFilePlugin(Plugin):
             # Store the actual executed command in metadata for history tracking
             actual_executed_command = " ".join(cmd_parts)
             result.metadata["actual_executed_command"] = actual_executed_command
-
             logger.info(f"Executing command: {actual_executed_command}")
 
             # Create a copy of the environment and remove GDK_BACKEND
             env = os.environ.copy()
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
-
-            success = launch_detached_process(cmd_parts, env=env)
+            success = process_manager.launch_detached(cmd_parts, env)
             return success
 
         except Exception as e:
