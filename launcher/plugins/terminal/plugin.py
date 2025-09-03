@@ -2,6 +2,7 @@
 
 from ..base import Plugin, SearchResult
 from launcher.utils.scoring_system import calculate_match_score
+from launcher.utils.process_manager import process_manager
 from typing import Dict, Any, List
 import logging
 import os
@@ -75,8 +76,6 @@ class TerminalPlugin(Plugin):
             return False
 
         try:
-            from launcher.utils.process_manager import launch_detached_process
-
             terminal_command = self.get_terminal_command()
             cmd_parts = terminal_command.split() + shlex.split(command)
 
@@ -87,7 +86,7 @@ class TerminalPlugin(Plugin):
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
 
-            success = launch_detached_process(cmd_parts, env=env)
+            success = process_manager.launch_detached(cmd_parts, env)
             return success
 
         except Exception as e:

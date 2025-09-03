@@ -102,10 +102,7 @@ class ProcessManager:
                 del self._active_processes[pid]
 
     def launch_detached(
-        self,
-        cmd_parts: List[str],
-        env: Optional[Dict[str, str]] = None,
-        cwd: Optional[str] = None,
+        self, cmd_parts: List[str], env: Optional[Dict[str, str]] = None
     ) -> bool:
         """
         Launch a process completely detached from the parent.
@@ -254,40 +251,4 @@ class ProcessManager:
         logger.info("Process manager cleanup completed")
 
 
-# Global instance
-_process_manager = None
-
-
-def get_process_manager() -> ProcessManager:
-    """Get the global ProcessManager instance."""
-    global _process_manager
-    if _process_manager is None:
-        _process_manager = ProcessManager()
-    return _process_manager
-
-
-def launch_detached_process(
-    cmd_parts: List[str],
-    env: Optional[Dict[str, str]] = None,
-    cwd: Optional[str] = None,
-) -> bool:
-    """
-    Convenience function to launch a detached process.
-
-    This is the recommended way to launch GUI applications and long-running
-    processes that should not become zombies.
-    """
-    return get_process_manager().launch_detached(cmd_parts, env, cwd)
-
-
-def launch_tracked_process(
-    cmd_parts: List[str],
-    env: Optional[Dict[str, str]] = None,
-    cwd: Optional[str] = None,
-) -> Optional[subprocess.Popen]:
-    """
-    Convenience function to launch a tracked process.
-
-    Use this for processes you might want to monitor or clean up later.
-    """
-    return get_process_manager().launch_tracked(cmd_parts, env, cwd)
+process_manager = ProcessManager()
