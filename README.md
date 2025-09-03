@@ -15,7 +15,7 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
 - **Intelligent Search**: Multiple matching strategies (exact, prefix, word boundary, fuzzy)
 - **Smart Highlighting**: Visual feedback with different styles for different match types
 - **History Tracking**: Learns from usage patterns to prioritize frequently used items
-- **Customizable**: Configure through YAML configuration file
+- **Customizable**: Configure through JSON configuration file
 - **Theming**: Full CSS-based styling system with extensible highlight styles
 
 ## Configuration
@@ -23,7 +23,7 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
 The launcher uses a layered configuration approach:
 
 1. **Default Configuration**: Built-in defaults are always applied first
-2. **User Configuration**: Custom settings in `~/.config/launcher/config.yaml`
+2. **User Configuration**: Custom settings in `~/.config/launcher/config.json`
    override defaults
 
 Configuration is loaded recursively, so you only need to specify the values you
@@ -31,13 +31,18 @@ want to change.
 
 Example configuration:
 
-```yaml
-general:
-   max_results: 15
-   icon_size: 32
-plugins:
-   calculator:
-      precision: 5
+```json
+{
+"general": {
+  "max_results": 15,
+  "icon_size": 32
+},
+"plugins": {
+  "calculator": {
+    "precision": 5
+  }
+}
+}
 ```
 
 ## Styling

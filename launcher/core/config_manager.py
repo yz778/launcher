@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_state_home
 import logging
 import os
-import yaml
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class ConfigManager:
         "item_height": 50,
         "border_width": 10,
         "padding": 20,
-        "history_file": str(xdg_state_home() / "launcher/history.pkl"),
+        "history_file": str(xdg_state_home() / "launcher/history.json"),
         "css_file": str(xdg_config_home() / "launcher/launcher.css"),
         "cache_dir": str(xdg_cache_home() / "launcher"),
         "window_position_vertical_percent": 25,
@@ -93,7 +93,7 @@ class ConfigManager:
             if os.path.isfile(expanded_path):
                 try:
                     with open(expanded_path, "r") as f:
-                        user_config = yaml.safe_load(f)
+                        user_config = json.load(f)
 
                     if user_config:
                         self._merge_config(config, user_config)

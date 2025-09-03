@@ -12,7 +12,5 @@ pytz==2025.2
     # via -r requirements.txt
 pyxdg==0.28
     # via -r requirements.txt
-pyyaml==6.0.2
-    # via -r requirements.txt
 xdg-base-dirs==6.0.2
     # via -r requirements.txt
