@@ -6,6 +6,10 @@ from typing import Dict, List, Any, Optional
 import logging
 import pyperclip
 import subprocess
+import re
+import threading
+import time
+import queue
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +20,15 @@ class QalculatePlugin(Plugin):
     def __init__(self):
         super().__init__()
         self._last_valid_result = None
+        self._active_processes = set()
+        self._qalc_process = None
+        self._process_lock = threading.Lock()
+        self._output_queue = queue.Queue()
+        self._reader_thread = None
+        self._cooldown_timer = None
+        self._cooldown_seconds = 10
+        self._qalc_timeout_seconds = 0.5
+        self._qalc_response_seconds = 0.2
 
     def get_id(self) -> str:
         return "qalculate"
@@ -39,16 +52,136 @@ class QalculatePlugin(Plugin):
         # Check if qalc is available before proceeding with initialization
         try:
             subprocess.run(
-                ["qalc", "--version"], check=True, capture_output=True, text=True
+                ["qalc", "--version"],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            logger.warning("qalc command not found. Qalculate plugin will be disabled.")
+        except (
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+        ):
+            logger.warning(
+                "qalc command not found or timed out. Qalculate plugin will be disabled."
+            )
             return False
 
         return True
 
     def start(self) -> bool:
+        """Plugin start - qalc session will be started lazily on first calculation"""
         return True
+
+    def cleanup(self):
+        """Cleanup method called during application shutdown"""
+        self._cancel_cooldown_timer()
+        self._stop_qalc_session()
+
+    def __del__(self):
+        """Destructor to ensure cleanup happens even if not explicitly called"""
+        try:
+            self.cleanup()
+        except Exception:
+            pass  # Ignore errors during destruction
+
+    def _output_reader(self):
+        """Thread function to read output from qalc process"""
+        while self._qalc_process and self._qalc_process.poll() is None:
+            try:
+                line = self._qalc_process.stdout.readline()
+                if line:
+                    self._output_queue.put(line)
+                else:
+                    time.sleep(0.01)
+            except Exception as e:
+                logger.error(f"Error reading qalc output: {e}")
+                break
+
+    def _start_cooldown_timer(self):
+        """Start or restart the cooldown timer"""
+        self._cancel_cooldown_timer()
+        self._cooldown_timer = threading.Timer(
+            self._cooldown_seconds, self._on_cooldown_expired
+        )
+        self._cooldown_timer.start()
+
+    def _cancel_cooldown_timer(self):
+        """Cancel the current cooldown timer if it exists"""
+        if self._cooldown_timer is not None:
+            self._cooldown_timer.cancel()
+            self._cooldown_timer = None
+
+    def _on_cooldown_expired(self):
+        """Called when the cooldown timer expires"""
+        self._stop_qalc_session()
+
+    def _start_qalc_session(self):
+        """Start an interactive qalc session"""
+        if self._qalc_process is None or self._qalc_process.poll() is not None:
+            try:
+                self._qalc_process = subprocess.Popen(
+                    ["qalc", "-t", "-i"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    bufsize=1,  # Line buffered
+                    universal_newlines=True,
+                )
+
+                # Start the output reader thread
+                self._reader_thread = threading.Thread(
+                    target=self._output_reader, daemon=True
+                )
+                self._reader_thread.start()
+
+                # Wait a moment for qalc to start up
+                time.sleep(self._qalc_response_seconds)
+
+                # Clear any startup messages
+                while not self._output_queue.empty():
+                    try:
+                        self._output_queue.get_nowait()
+                    except queue.Empty:
+                        break
+
+                logger.info("Started interactive qalc session")
+            except Exception as e:
+                logger.error(f"Failed to start qalc session: {e}")
+                self._qalc_process = None
+
+    def _stop_qalc_session(self):
+        """Stop the interactive qalc session"""
+        self._cancel_cooldown_timer()
+        with self._process_lock:
+            if self._qalc_process is not None:
+                try:
+                    # Try graceful termination first
+                    self._qalc_process.terminate()
+                    try:
+                        self._qalc_process.wait(timeout=0.5)
+                    except subprocess.TimeoutExpired:
+                        # Force kill if graceful termination fails
+                        self._qalc_process.kill()
+                        self._qalc_process.wait(timeout=1.0)
+                except Exception as e:
+                    logger.debug(f"Error stopping qalc session: {e}")
+                finally:
+                    self._qalc_process = None
+                    self._reader_thread = None
+                    # Clear the output queue
+                    while not self._output_queue.empty():
+                        try:
+                            self._output_queue.get_nowait()
+                        except queue.Empty:
+                            break
+
+    def _strip_ansi_codes(self, text: str) -> str:
+        """Remove ANSI color codes from text"""
+        ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        return ansi_escape.sub("", text)
 
     def _is_calculation(self, query: str) -> bool:
         """Check if the query looks like a calculation using simple heuristics"""
@@ -78,32 +211,69 @@ class QalculatePlugin(Plugin):
 
     def _calculate(self, expression: str) -> Optional[str]:
         """
-        Calculate the result of the expression using qalc CLI
+        Calculate the result of the expression using interactive qalc session
 
         Returns None if calculation fails
-        Kills qalc if it runs longer than 5 seconds.
         """
         # Strip leading = if present
         if expression.startswith("="):
             expression = expression[1:].strip()
 
-        try:
-            # Use qalc for calculation with a timeout
-            process = subprocess.run(
-                ["qalc", "-t", expression],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=5,
-            )
-            result = process.stdout.strip()
-            return result
+        with self._process_lock:
+            # Ensure we have a running qalc session
+            if self._qalc_process is None or self._qalc_process.poll() is not None:
+                self._start_qalc_session()
 
-        except subprocess.TimeoutExpired:
-            logger.warning("qalc process timed out and was killed after 5 seconds")
-            return None
-        except Exception:
-            return None
+            if self._qalc_process is None:
+                logger.error("Failed to start qalc session")
+                return None
+
+            try:
+                # Clear any pending output
+                while not self._output_queue.empty():
+                    try:
+                        self._output_queue.get_nowait()
+                    except queue.Empty:
+                        break
+
+                # Send expression to qalc
+                self._qalc_process.stdin.write(f"{expression}\n")
+                self._qalc_process.stdin.flush()
+
+                # Read the result with timeout
+                start_time = time.time()
+                result_lines = []
+
+                while time.time() - start_time < self._qalc_timeout_seconds:
+                    try:
+                        line = self._output_queue.get(
+                            timeout=self._qalc_response_seconds
+                        )
+                        clean_line = self._strip_ansi_codes(line.strip())
+
+                        # Skip empty lines and prompt lines (lines starting with >)
+                        if clean_line and not clean_line.startswith(">"):
+                            result_lines.append(clean_line)
+                            # Got a result, break out
+                            break
+
+                    except queue.Empty:
+                        continue
+
+                if result_lines:
+                    for line in result_lines:
+                        if line and line.strip():
+                            result = line.strip()
+                            self._start_cooldown_timer()
+                            return result
+
+                logger.warning(f"No result received for expression: {expression}")
+                return None
+
+            except Exception as e:
+                logger.error(f"Error calculating with qalc: {e}")
+                self._stop_qalc_session()
+                return None
 
     def search(self, query: str) -> List[SearchResult]:
         """Search for calculations matching the query"""
@@ -168,7 +338,13 @@ class QalculatePlugin(Plugin):
             else:
                 expression = query.strip()
 
-            subprocess.Popen(["qalculate-gtk", expression])
+            # Use start_new_session to detach from parent process
+            subprocess.Popen(
+                ["qalculate-gtk", expression],
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             logger.info(f"Launched qalculate-gtk with expression: {expression}")
             return True
 
