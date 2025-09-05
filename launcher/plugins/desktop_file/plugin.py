@@ -115,8 +115,7 @@ class DesktopFileScanner:
     def __init__(self):
         self.desktop_files: Dict[str, DesktopFile] = {}
         self.scan_locations = [
-            os.path.expanduser(loc)
-            for loc in DesktopFilePlugin().get_config_defaults()["locations"]
+            os.path.expanduser(loc) for loc in DesktopFilePlugin.defaults["locations"]
         ]
 
     def scan(self) -> None:
@@ -158,9 +157,16 @@ class DesktopFilePlugin(Plugin):
         "desktop_files",
         "locations",
         "matcher",
-        "general_config",
         "config_manager",
     ]
+
+    defaults = {
+        "locations": [
+            str(xdg_data_home() / "applications"),
+            *[str(path / "applications") for path in xdg_data_dirs()],
+        ],
+        "track_history": True,
+    }
 
     def __init__(self):
         super().__init__()
@@ -180,35 +186,16 @@ class DesktopFilePlugin(Plugin):
     def get_description(self) -> str:
         return "Search for applications from .desktop files"
 
-    def get_config_defaults(self) -> Dict[str, Any]:
-        """Get default configuration for this plugin"""
-        locations = [
-            str(xdg_data_home() / "applications"),
-            *[str(path / "applications") for path in xdg_data_dirs()],
-        ]
-        return {
-            "locations": locations,
-            "track_history": True,  # Track desktop applications in history
-        }
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
 
-        # Get general config
-        self.general_config = self.config_manager.get_config().get("general", {})
-        defaults = self.get_config_defaults()
-
         # Get locations from config
-        self.locations = [
-            os.path.expanduser(loc)
-            for loc in config.get("locations", defaults["locations"])
-        ]
+        self.locations = [os.path.expanduser(loc) for loc in config.get("locations")]
 
         # Initialize with empty data first
         self.desktop_files = {}
         self.matcher = StringMatcher(items=[], key_func=lambda df: df.name)
-
         self.cache_file = os.path.join(
             self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json"
         )
@@ -269,83 +256,6 @@ class DesktopFilePlugin(Plugin):
             f"Finished loading {len(self.desktop_files)} desktop files in background"
         )
 
-    def clean_invalid_history_entries(self, history_manager) -> int:
-        """
-        Clean invalid history entries for desktop files that no longer exist.
-
-        Args:
-            history_manager: The history manager instance
-
-        Returns:
-            Number of entries removed
-        """
-        if not history_manager or not hasattr(history_manager, "user_input_history"):
-            return 0
-
-        logger.info("Cleaning desktop file history entries...")
-
-        invalid_entries = []
-        for entry in history_manager.user_input_history:
-            if entry.get("plugin_id") == self.get_id():
-                if not self._is_valid_desktop_file_entry(entry):
-                    invalid_entries.append(entry)
-
-        if not invalid_entries:
-            return 0
-
-        removed_count = history_manager.remove_history_entries_by_ids(invalid_entries)
-        if removed_count > 0:
-            logger.info(
-                f"Desktop file plugin cleaned {removed_count} invalid history entries"
-            )
-
-        return removed_count
-
-    def _is_valid_desktop_file_entry(self, entry) -> bool:
-        """
-        Check if a desktop file history entry is still valid.
-
-        Args:
-            entry: History entry to validate
-
-        Returns:
-            True if entry is valid, False otherwise
-        """
-        try:
-            # Only validate entries for this plugin
-            if not isinstance(entry, dict) or entry.get("plugin_id") != self.get_id():
-                return True  # Let other plugins handle their own entries
-
-            # Use common structural validation
-            if not self.is_structurally_valid(entry):
-                return False
-
-            # Get the item_id (desktop file path) from the entry
-            item_id = entry.get("item_id", "")
-            if not item_id:
-                return False
-
-            # Check if the desktop file still exists
-            if not os.path.isfile(item_id):
-                return False
-
-            # Check if the desktop file is still valid
-            try:
-                desktop_file = DesktopFile(item_id)
-                if not desktop_file.is_visible():
-                    return False
-            except Exception:
-                return False
-
-            return True
-
-        except Exception:
-            return False
-
-    def get_scan_directories(self) -> List[str]:
-        """Get directories that should be watched for changes"""
-        return self.locations
-
     def _scan_desktop_files(self) -> None:
         """Scan for desktop files in the configured locations"""
         self.desktop_files = {}
@@ -366,15 +276,10 @@ class DesktopFilePlugin(Plugin):
         """Process a single desktop file"""
         try:
             desktop_file = DesktopFile(file_path)
-            if self._is_valid_desktop_file(desktop_file):
-                key = os.path.basename(file_path)
-                self.desktop_files[key] = desktop_file
+            key = os.path.basename(file_path)
+            self.desktop_files[key] = desktop_file
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
-
-    def _is_valid_desktop_file(self, desktop_file: DesktopFile) -> bool:
-        """Check if desktop file is valid and should be included"""
-        return desktop_file.name and desktop_file.exec_cmd and desktop_file.is_visible()
 
     def cleanup(self) -> None:
         """Clean up plugin resources"""
@@ -425,7 +330,14 @@ class DesktopFilePlugin(Plugin):
         if result.plugin_id != self.get_id():
             return False
 
-        desktop_file = result.metadata.get("desktop_file")
+        desktop_file_data = result.metadata.get("desktop_file")
+        if not desktop_file_data:
+            return False
+
+        if isinstance(desktop_file_data, dict):
+            desktop_file = DesktopFile.from_dict(desktop_file_data)
+        else:
+            desktop_file = desktop_file_data
 
         if not desktop_file.exec_cmd:
             return False
@@ -450,6 +362,8 @@ class DesktopFilePlugin(Plugin):
             if "GDK_BACKEND" in env:
                 del env["GDK_BACKEND"]
             success = process_manager.launch_detached(cmd_parts, env)
+            if success:
+                result.metadata["desktop_file"] = desktop_file.to_dict()
             return success
 
         except Exception as e:

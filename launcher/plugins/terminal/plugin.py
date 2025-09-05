@@ -5,7 +5,6 @@ from launcher.utils.scoring_system import calculate_match_score
 from launcher.utils.process_manager import process_manager
 from typing import Dict, Any, List
 import logging
-import os
 import shlex
 
 logger = logging.getLogger(__name__)
@@ -15,6 +14,11 @@ class TerminalPlugin(Plugin):
     """
     Launcher plugin to execute shell commands directly in a terminal.
     """
+
+    defaults = {
+        "prefix": ">",
+        "track_history": True,
+    }
 
     def __init__(self):
         super().__init__()
@@ -29,15 +33,9 @@ class TerminalPlugin(Plugin):
     def get_description(self) -> str:
         return "Execute shell commands directly."
 
-    def get_config_defaults(self) -> Dict[str, Any]:
-        return {
-            "prefix": ">",
-            "track_history": True,  # Track terminal commands in history
-        }
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         super().initialize(config, config_manager)
-        self.prefix = self.get_config_value("prefix")
+        self.prefix = config.get("prefix")
         return True
 
     def start(self) -> bool:
@@ -78,15 +76,8 @@ class TerminalPlugin(Plugin):
         try:
             terminal_command = self.get_terminal_command()
             cmd_parts = terminal_command.split() + shlex.split(command)
-
             logger.info(f"Executing command: {' '.join(cmd_parts)}")
-
-            # Create a copy of the environment and remove GDK_BACKEND
-            env = os.environ.copy()
-            if "GDK_BACKEND" in env:
-                del env["GDK_BACKEND"]
-
-            success = process_manager.launch_detached(cmd_parts, env)
+            success = process_manager.launch_detached(cmd_parts)
             return success
 
         except Exception as e:

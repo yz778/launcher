@@ -17,7 +17,6 @@ class PluginManager:
 
     __slots__ = (
         "plugins",
-        "enabled_plugins",
         "config",
         "config_manager",
         "active_search_threads",
@@ -28,15 +27,14 @@ class PluginManager:
     )
 
     def __init__(self, config_manager=None):
-        self.plugins: Dict[str, Plugin] = {}
-        self.enabled_plugins: Dict[str, bool] = {}
-        self.config: Dict[str, Any] = {}
+        self.plugins = {}
+        self.config = {}
         self.config_manager = config_manager
         self.active_search_threads = 0
         self.active_search_threads_lock = threading.Lock()
         self._executor = None
         self.plugins_dir = ""
-        self.prefix_registry: Dict[str, str] = {}  # prefix -> plugin_id mapping
+        self.prefix_registry = {}  # prefix -> plugin_id mapping
 
     def _get_executor(self):
         """Get or create thread pool executor"""
@@ -94,33 +92,28 @@ class PluginManager:
         try:
             plugin = plugin_class()
             plugin_id = plugin.get_id()
-
             plugins_config = config.get("plugins", {})
             plugin_specific_config = plugins_config.get(plugin_id, {})
             enabled = plugin_specific_config.get("enabled", True)
-
             if not enabled:
                 logger.info(
                     f"Plugin disabled: {plugin.get_name()} ({plugin_id}) - skipping registration"
                 )
                 return False
 
-            try:
-                plugin_defaults = plugin.get_config_defaults()
-                if self.config_manager:
-                    self.config_manager.register_plugin_defaults(
-                        plugin_id, plugin_defaults
-                    )
-            except Exception as e:
-                logger.error(
-                    f"Error getting config defaults for plugin {plugin_id}: {e}"
-                )
+            plugin_defaults = getattr(plugin_class, "defaults", {})
+            if self.config_manager:
+                self.config_manager.register_plugin_defaults(plugin_id, plugin_defaults)
 
-            if plugin.initialize(plugin_specific_config, self.config_manager):
+            final_config = (
+                self.config_manager.get_plugin_config(plugin_id, plugin_defaults)
+                if self.config_manager
+                else plugin_defaults.copy()
+            )
+
+            if plugin.initialize(final_config, self.config_manager):
                 self.plugins[plugin_id] = plugin
-                self.enabled_plugins[plugin_id] = True
 
-                # Register prefix if plugin has one
                 if plugin.has_prefix():
                     prefix = plugin.get_prefix()
                     if prefix in self.prefix_registry:
@@ -167,7 +160,6 @@ class PluginManager:
             except Exception as e:
                 logger.error(f"Error cleaning up plugin {plugin_id}: {e}")
 
-        self.enabled_plugins.pop(plugin_id, None)
         return True
 
     def search(
@@ -185,19 +177,15 @@ class PluginManager:
             GLib.idle_add(finished_callback, search_id)
             return
 
-        # Check if query starts with a registered prefix
         target_plugin_id = self._get_plugin_for_prefix(query)
 
         if target_plugin_id:
-            # Only search the plugin that owns this prefix
             if target_plugin_id in self.plugins:
                 plugins_to_search = [(target_plugin_id, self.plugins[target_plugin_id])]
             else:
-                # Plugin not found, return no results
                 GLib.idle_add(finished_callback, search_id)
                 return
         else:
-            # Search all plugins that don't have prefixes, or whose prefixes don't match
             plugins_to_search = [
                 (plugin_id, plugin_instance)
                 for plugin_id, plugin_instance in self.plugins.items()
@@ -260,9 +248,7 @@ class PluginManager:
         Returns:
             The longest matching prefix or None if no prefix matches
         """
-        # Sort prefixes by length in descending order to match longest first
         sorted_prefixes = sorted(self.prefix_registry.keys(), key=len, reverse=True)
-
         for prefix in sorted_prefixes:
             if query.startswith(prefix):
                 return prefix
@@ -315,7 +301,7 @@ class PluginManager:
                 logger.error(f"Error executing result with plugin {plugin_id}: {e}")
                 return False
         else:
-            logger.error(f"Plugin {plugin_id} not found or not enabled")
+            logger.error(f"Plugin {plugin_id} not found")
             return False
 
     def cleanup(self) -> None:
