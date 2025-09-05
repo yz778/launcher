@@ -21,7 +21,7 @@ class AppListItem(Gtk.ListBoxRow):
         self,
         result: SearchResult,
         icon_size: int,
-        launch_count: int = 0,
+        usage_count: int = 0,
         query: str = "",
     ):
         super().__init__()
@@ -67,9 +67,9 @@ class AppListItem(Gtk.ListBoxRow):
         self._apply_highlighting(name_label, result.name, self.query)
         name_box.pack_start(name_label, True, True, 0)
 
-        if launch_count > 0:
+        if usage_count > 0:
             count_label = Gtk.Label(
-                label=f"Used {launch_count} time{'s' if launch_count != 1 else ''}"
+                label=f"Used {usage_count} time{'s' if usage_count != 1 else ''}"
             )
             count_label.set_halign(Gtk.Align.END)
             count_label.get_style_context().add_class("dim-label")
@@ -281,7 +281,7 @@ class LauncherWindow(Gtk.Window):
             list_item = AppListItem(
                 result,
                 icon_size=self.icon_size or 48,
-                launch_count=history_count,
+                usage_count=history_count,
                 query=self.entry.get_text().strip(),
             )
 

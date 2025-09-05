@@ -95,7 +95,7 @@ class HistoryManager:
 
         existing_entry = self._get_entry(result)
         if existing_entry:
-            existing_entry["times_executed"] += 1
+            existing_entry["usage_count"] += 1
             existing_entry["last_execution_time"] = time.time()
         else:
             unique_id = int(time.time())
@@ -106,7 +106,7 @@ class HistoryManager:
                 ).strip(),
                 "result": result.to_dict(),
                 "last_execution_time": time.time(),
-                "times_executed": 1,
+                "usage_count": 1,
             }
             self.history.append(new_entry)
 
@@ -147,7 +147,7 @@ class HistoryManager:
                 and result.get("plugin_id") == plugin_id
                 and result.get("item_id") == item_id
             ):
-                return entry.get("times_executed", 0)
+                return entry.get("usage_count", 0)
 
         return 0
 

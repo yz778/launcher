@@ -69,6 +69,7 @@ class HistoryPlugin(Plugin):
             icon_spec=result["icon_spec"],
             score=score,
             metadata={
+                "usage_count": entry.get("usage_count"),
                 "original_result": result,
                 "track_history": True,
             },
@@ -124,7 +125,7 @@ class HistoryPlugin(Plugin):
             list_item = AppListItem(
                 history_result,
                 icon_size=launcher_window.icon_size or 48,
-                launch_count=entry.get("times_executed", 0),
+                usage_count=entry.get("usage_count", 0),
                 query="",
             )
             list_item.set_name("history-item")
