@@ -2,6 +2,7 @@
 
 
 from launcher.plugins.base import SearchResult
+from launcher.utils.scoring_system import calculate_match_score
 from typing import Dict, Any, List, Optional
 import logging
 import math
@@ -14,6 +15,51 @@ logger = logging.getLogger(__name__)
 
 
 class HistoryManager:
+    def make_search_result(self, entry, query):
+        """
+        Create a SearchResult from a history entry
+        """
+        result = entry.get("result")
+        if not result:
+            return None
+
+        score = 0
+
+        if query is None:
+            score = entry.get("last_execution_time")
+        else:
+            name_l = entry.get("name").lower()
+            desc_l = result["description"].lower()
+            score = calculate_match_score(query, name_l, is_name=True)
+            if desc_l and query in desc_l:
+                score = max(score, calculate_match_score(query, desc_l, is_name=False))
+
+        return SearchResult(
+            plugin_id="history",
+            item_id=entry.get("item_id"),
+            name=entry.get("name"),
+            description=result["description"],
+            icon_spec=result["icon_spec"],
+            score=score,
+            metadata={
+                "usage_count": entry.get("usage_count"),
+                "original_result": result,
+                "track_history": True,
+            },
+        )
+
+    def get_recent_results(self, max_results: int = 10) -> List[SearchResult]:
+        """
+        Return a list of SearchResult objects for the most recent history entries.
+        """
+        results = []
+        for entry in self.history:
+            history_result = self.make_search_result(entry, None)
+            if history_result:
+                results.append(history_result)
+
+        return results[:max_results]
+
     """Manager for tracking and persisting launch history"""
 
     __slots__ = ("history", "history_file")

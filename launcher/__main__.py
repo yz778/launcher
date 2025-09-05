@@ -2,6 +2,7 @@
 
 from .singleton import SingletonManager
 from .utils.config_utils import arg_parser
+import services
 import logging
 import os
 import signal
@@ -22,80 +23,42 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# Global variables for singleton behavior
-singleton_manager = None
-launcher_window = None
 
-# Global references for plugins to access
-_history_manager = None
-_plugin_manager = None
-
-# Shutdown coordination
-_quit_requested = False
-
-
-def request_app_quit(reason: str = ""):
-    """Request a graceful application shutdown in a centralized, idempotent way.
-
-    This will:
-    - Log the quit request once
-    - Set a flag so the Gtk main loop exit can be scheduled by the launcher window
-    - Avoid duplicate cleanup calls
-    """
-
-    global _quit_requested
-
-    if _quit_requested:
-        return
-
-    _quit_requested = True
+def shutdown(reason: str = ""):
+    global services
 
     if reason:
         logger.info(f"Quit requested: {reason}")
     else:
         logger.info("Quit requested")
 
-    try:
-        global launcher_window
-        if launcher_window and hasattr(launcher_window, "request_quit"):
-            launcher_window.request_quit(reason)
-    except Exception as e:
-        logger.debug(f"Launcher window quit request failed: {e}")
+    if services.launcher_window:
+        services.launcher_window.shutdown()
+
+    if services.plugin_manager:
+        services.plugin_manager.cleanup()
+
+    if services.history_manager:
+        services.history_manager.cleanup()
+
+    if services.singleton_manager:
+        services.singleton_manager.stop_server()
 
 
 def show_window():
     """Callback to show the launcher window"""
-    global launcher_window
-    if launcher_window:
-        launcher_window.show_and_focus()
-
-
-def cleanup_resources():
-    """Clean up all resources including process manager, singleton, and plugin managers"""
-    global singleton_manager, launcher_window, _history_manager
-
-    # Always clean up singleton server
-    if singleton_manager:
-        singleton_manager.stop_server()
-
-    # Clean up plugin manager resources
-    if launcher_window and launcher_window.plugin_manager:
-        launcher_window.plugin_manager.cleanup()
-
-    # Clean up history manager resources
-    if _history_manager:
-        _history_manager.cleanup()
+    global services
+    if services.launcher_window:
+        services.launcher_window.show_and_focus()
 
 
 def signal_handler(signum, frame):
     """Handle termination signals"""
-    request_app_quit(reason=f"signal {signum}")
+    shutdown(reason=f"signal {signum}")
 
 
 def main() -> int:
     """Run the launcher application"""
-    global singleton_manager, launcher_window
-
     os.chdir(os.path.expanduser("~"))  # Change to home directory at startup
 
     args = arg_parser()
@@ -131,100 +94,70 @@ def main() -> int:
 
     if not args.foreground:
         logger.info("Running in singleton mode")
-        singleton_manager = SingletonManager("launcher")
+        services.singleton_manager = SingletonManager("launcher")
 
-        if singleton_manager.is_running():
+        if services.singleton_manager.is_running():
             logger.info("Another instance is already running, sending show command...")
-            if singleton_manager.send_show_command():
+            if services.singleton_manager.send_show_command():
                 return 0
             else:
                 logger.warning(
                     "Failed to communicate with existing instance, starting new one..."
                 )
 
-        if not singleton_manager.start_server(show_window):
+        if not services.singleton_manager.start_server(show_window):
             logger.error("Failed to start singleton server")
             return 1
     else:
         logger.info("Running in foreground mode (singleton disabled)")
 
-    # Only import heavy modules when we actually need to start the GUI
+    # Start up the launcher
     from .core.config_manager import ConfigManager
     from .ui.launcher_window import LauncherWindow
     from .ui import run_main_loop, process_pending_events, idle_add
 
-    config_manager = ConfigManager()
-    plugins_dir = os.path.join(current_dir, "plugins")
-    config = {"general": config_manager.defaults.copy()}
+    services.config_manager = ConfigManager()
+    services.config = services.config_manager.get_config(args.config)
 
     try:
-        launcher_window = LauncherWindow(
-            None, None, config, foreground_mode=args.foreground
-        )
-
-        launcher_window.show_and_focus()
+        services.launcher_window = LauncherWindow(foreground_mode=args.foreground)
+        services.launcher_window.show_and_focus()
         process_pending_events()
-        idle_add(
-            lambda: complete_initialization(
-                launcher_window, config_manager, plugins_dir, args
-            )
-        )
-
-        if _quit_requested:
-            return 0
-
+        plugins_dir = os.path.join(current_dir, "plugins")
+        idle_add(lambda: complete_initialization(plugins_dir, args))
         run_main_loop()
 
     finally:
-        cleanup_resources()
+        shutdown()
 
     return 0
 
 
 def complete_initialization(
-    win,
-    config_manager,
     plugins_dir: str,
     args,
 ) -> bool:
     """Finish async initialization tasks after UI is visible"""
-    logger.info("Process manager initialized")
 
     # Lazy import heavy modules
     from .ui.css_manager import CssManager
     from .core.plugin_manager import PluginManager
     from .core.history_manager import HistoryManager
 
-    config = config_manager.get_config(args.config)
-    plugin_manager = PluginManager(config_manager)
-    history_manager = HistoryManager(config)
+    global services
+    services.history_manager = HistoryManager(services.config)
+    services.plugin_manager = PluginManager(services.config_manager)
+    services.plugin_manager.load_plugins(plugins_dir, services.config)
 
-    # Set global references for plugins to access
-    global _history_manager, _plugin_manager
-    _history_manager = history_manager
-    _plugin_manager = plugin_manager
-
-    plugin_manager.load_plugins(plugins_dir, config)
-
-    # Set managers on history plugin if it was loaded
-    if "history" in plugin_manager.plugins:
-        history_plugin = plugin_manager.plugins["history"]
-        history_plugin.set_managers(history_manager, plugin_manager)
-        history_plugin.register_with_launcher()
-
-    # Load CSS
-    CssManager.load_css(config, plugin_manager.plugins)
-
-    # Update the window with the full configuration and managers
-    win.update_with_full_config(plugin_manager, history_manager, config)
-    start_plugins(plugin_manager)
+    CssManager.load_css(services.config, services.plugin_manager.plugins)
+    services.launcher_window.start()
+    start_plugins(services.plugin_manager)
     logger.info("Background initialization completed")
     return False  # Remove from idle queue
 
 
 def start_plugins(plugin_manager) -> bool:
     """Initialize all enabled plugins"""
-    # Lazy import threading only when needed
     import threading
 
     logger.info("Starting plugins in parallel...")
@@ -237,7 +170,6 @@ def start_plugins(plugin_manager) -> bool:
         except Exception as e:
             logger.error(f"Error starting plugin {plugin_id}: {e}")
 
-    # Start each plugin in plugin_manager.plugins.
     threads = []
     for plugin_id, plugin in plugin_manager.plugins.items():
         thread = threading.Thread(target=start_plugin_thread, args=(plugin_id, plugin))

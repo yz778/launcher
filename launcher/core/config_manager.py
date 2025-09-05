@@ -10,19 +10,14 @@ logger = logging.getLogger(__name__)
 
 
 class ConfigManager:
-    """Manager for loading and managing configuration"""
-
-    # Global defaults for the launcher itself
     defaults = {
         "max_results": 15,
         "icon_size": 48,
-        "terminal_command": "footclient",
+        "terminal_command": "foot",
         "window_width": 600,
-        "window_height": 300,
-        "window_height_results": 300,
+        "window_height": 400,
         "item_height": 50,
         "border_width": 10,
-        "padding": 20,
         "history_file": str(xdg_state_home() / "launcher/history.json"),
         "css_file": str(xdg_config_home() / "launcher/launcher.css"),
         "cache_dir": str(xdg_cache_home() / "launcher"),
@@ -37,7 +32,6 @@ class ConfigManager:
         self.plugin_defaults: Dict[str, Dict[str, Any]] = {}
 
     def load_user_config(self, config_file: Optional[str] = None) -> None:
-        """Load user configuration from file"""
         if not config_file:
             self.user_config = {}
             return
@@ -59,7 +53,6 @@ class ConfigManager:
         self.config_file = expanded_path
 
     def get_general_config(self) -> Dict[str, Any]:
-        """Get the general launcher configuration (defaults + user overrides)"""
         config = self.defaults.copy()
         user_general = self.user_config.get("general", {})
         config.update(user_general)
@@ -68,23 +61,12 @@ class ConfigManager:
     def get_plugin_config(
         self, plugin_id: str, plugin_defaults: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Get merged configuration for a plugin (plugin defaults + user overrides)
-
-        Args:
-            plugin_id: ID of the plugin
-            plugin_defaults: Default configuration dictionary for the plugin
-
-        Returns:
-            Merged configuration dictionary
-        """
         config = plugin_defaults.copy()
         user_plugin_config = self.user_config.get("plugins", {}).get(plugin_id, {})
         config.update(user_plugin_config)
         return config
 
     def get_cache_dir(self) -> str:
-        """Get the cache directory, creating it if it doesn't exist"""
         cache_dir = self.get_general_config()["cache_dir"]
         cache_dir = os.path.expanduser(cache_dir)
         os.makedirs(cache_dir, exist_ok=True)
@@ -93,11 +75,9 @@ class ConfigManager:
     def register_plugin_defaults(
         self, plugin_id: str, defaults: Dict[str, Any]
     ) -> None:
-        """Register plugin defaults for template generation"""
         self.plugin_defaults[plugin_id] = defaults
 
     def build_default_config(self) -> Dict[str, Any]:
-        """Build complete default config structure for template generation"""
         default_config = {
             "general": self.defaults.copy(),
             "plugins": {},
@@ -111,7 +91,6 @@ class ConfigManager:
         return default_config
 
     def get_config(self, config_file: Optional[str] = None) -> Dict[str, Any]:
-        """Load config and return complete structure (used by main app and template generation)"""
         self.load_user_config(config_file)
         config = self.build_default_config()
         if self.user_config:
@@ -120,7 +99,6 @@ class ConfigManager:
         return config
 
     def _merge_config(self, base: Dict[str, Any], override: Dict[str, Any]) -> None:
-        """Recursively merge override configuration into base configuration"""
         for key, value in override.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
                 self._merge_config(base[key], value)

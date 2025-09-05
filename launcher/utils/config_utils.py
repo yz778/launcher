@@ -84,7 +84,6 @@ def create_default_css_file(
     name_parts = os.path.splitext(base_name)
     default_name = f"{name_parts[0]}.default{name_parts[1]}"
     default_css_path = os.path.join(os.path.dirname(css_path), default_name)
-
     css_content = CssManager.get_css(default_plugin_manager.plugins)
 
     try:
