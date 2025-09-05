@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 class QalculatePlugin(Plugin):
     """Plugin for calculating mathematical expressions"""
 
+    defaults = {
+        "track_history": True,
+    }
+
     def __init__(self):
         super().__init__()
         self._last_valid_result = None
@@ -38,12 +42,6 @@ class QalculatePlugin(Plugin):
 
     def get_description(self) -> str:
         return "Calculate expressions with Qalculate"
-
-    def get_config_defaults(self) -> Dict[str, Any]:
-        """Get default configuration for this plugin"""
-        return {
-            "track_history": True,  # Track calculator results in history
-        }
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""

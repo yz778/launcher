@@ -133,6 +133,23 @@ class ExecutablePlugin(Plugin):
         "matcher",
     )
 
+    defaults = {
+        "locations": [
+            "~/bin",
+            "~/.local/bin",
+        ],
+        "include": [
+            ".*",  # Match all files
+        ],
+        "exclude": [
+            "^\\..*",  # Exclude hidden files
+            ".*~$",  # Exclude backup files
+            ".*\\.bak$",  # Exclude .bak files
+        ],
+        "cache_icons": True,  # Cache loaded icons for better performance
+        "track_history": True,  # Track executable commands in history
+    }
+
     def __init__(self):
         super().__init__()
         self._matcher_lock = threading.Lock()
@@ -153,43 +170,20 @@ class ExecutablePlugin(Plugin):
     def get_description(self) -> str:
         return "Search for executable files in custom directories with support for custom icons (file paths, URLs, or theme names)"
 
-    def get_config_defaults(self) -> Dict[str, Any]:
-        """Get default configuration for this plugin"""
-        return {
-            "locations": [
-                "~/bin",
-                "~/.local/bin",
-            ],
-            "include": [
-                ".*",  # Match all files
-            ],
-            "exclude": [
-                "^\\..*",  # Exclude hidden files
-                ".*~$",  # Exclude backup files
-                ".*\\.bak$",  # Exclude .bak files
-            ],
-            "cache_icons": True,  # Cache loaded icons for better performance
-            "track_history": True,  # Track executable commands in history
-        }
-
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
         """Initialize the plugin with the given configuration"""
         super().initialize(config, config_manager)
 
-        # Get locations from config using helper
-        locations = self.get_config_value("locations")
+        locations = config.get("locations")
         self.locations = [os.path.expanduser(loc) for loc in locations]
 
-        # Get include patterns from config using helper
-        include_patterns = self.get_config_value("include")
+        include_patterns = config.get("include")
         self.include_patterns = [re.compile(pattern) for pattern in include_patterns]
 
-        # Get exclude patterns from config using helper
-        exclude_patterns = self.get_config_value("exclude")
+        exclude_patterns = config.get("exclude")
         self.exclude_patterns = [re.compile(pattern) for pattern in exclude_patterns]
 
-        # Get cache icons setting using helper
-        self.cache_icons = self.get_config_value("cache_icons")
+        self.cache_icons = config.get("cache_icons")
 
         self.cache_file = os.path.join(
             self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json"
@@ -255,83 +249,6 @@ class ExecutablePlugin(Plugin):
         logger.info(
             f"Finished loading {len(self.executables)} executable files in background"
         )
-
-    def clean_invalid_history_entries(self, history_manager) -> int:
-        """
-        Clean invalid history entries for executable files that no longer exist or are no longer executable.
-
-        Args:
-            history_manager: The history manager instance
-
-        Returns:
-            Number of entries removed
-        """
-        if not history_manager or not hasattr(history_manager, "user_input_history"):
-            return 0
-
-        valid_entries = []
-        removed_count = 0
-
-        logger.info("Cleaning executable file history entries...")
-
-        for entry in history_manager.user_input_history:
-            if self._is_valid_executable_entry(entry):
-                valid_entries.append(entry)
-            else:
-                if entry.get("plugin_id") == self.get_id():
-                    removed_count += 1
-                else:
-                    # Keep entries from other plugins
-                    valid_entries.append(entry)
-
-        history_manager.user_input_history = valid_entries
-
-        return removed_count
-
-    def _is_valid_executable_entry(self, entry) -> bool:
-        """
-        Check if an executable history entry is still valid.
-
-        Args:
-            entry: History entry to validate
-
-        Returns:
-            True if entry is valid, False otherwise
-        """
-        try:
-            # Only validate entries for this plugin
-            if not isinstance(entry, dict) or entry.get("plugin_id") != self.get_id():
-                return True  # Let other plugins handle their own entries
-
-            # Use common structural validation
-            if not self.is_structurally_valid(entry):
-                return False
-
-            # Get the item_id (executable file path) from the entry
-            item_id = entry.get("item_id", "")
-            if not item_id:
-                return False
-
-            # Check if the executable file still exists
-            if not os.path.isfile(item_id):
-                return False
-
-            # Check if the file is still executable
-            try:
-                st = os.stat(item_id)
-                if not (st.st_mode & stat.S_IXUSR):
-                    return False
-            except Exception:
-                return False
-
-            return True
-
-        except Exception:
-            return False
-
-    def get_scan_directories(self) -> List[str]:
-        """Get directories that should be watched for changes"""
-        return self.locations
 
     def _scan_executables(self) -> None:
         """Scan for executable files in the configured locations"""
@@ -443,12 +360,7 @@ class ExecutablePlugin(Plugin):
             actual_executed_command = " ".join(cmd_parts)
             result.metadata["actual_executed_command"] = actual_executed_command
             logger.info(f"Executing command: {actual_executed_command}")
-
-            # Create a copy of the environment and remove GDK_BACKEND
-            env = os.environ.copy()
-            if "GDK_BACKEND" in env:
-                del env["GDK_BACKEND"]
-            success = process_manager.launch_detached(cmd_parts, env)
+            success = process_manager.launch_detached(cmd_parts)
             return success
 
         except Exception as e:
