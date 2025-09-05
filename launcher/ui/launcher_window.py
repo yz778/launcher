@@ -9,10 +9,8 @@ from launcher.utils.text_highlighter import TextHighlighter
 from plugins.base import SearchResult, Plugin
 from typing import Dict, Any, List
 from ui.css_manager import CssManager
-import gi
 import logging
 
-gi.require_version("Gtk", "3.0")
 logger = logging.getLogger(__name__)
 
 
@@ -23,7 +21,7 @@ class AppListItem(Gtk.ListBoxRow):
         self,
         result: SearchResult,
         icon_size: int,
-        launch_count: int = 0,
+        usage_count: int = 0,
         query: str = "",
     ):
         super().__init__()
@@ -69,9 +67,9 @@ class AppListItem(Gtk.ListBoxRow):
         self._apply_highlighting(name_label, result.name, self.query)
         name_box.pack_start(name_label, True, True, 0)
 
-        if launch_count > 0:
+        if usage_count > 0:
             count_label = Gtk.Label(
-                label=f"Used {launch_count} time{'s' if launch_count != 1 else ''}"
+                label=f"Used {usage_count} time{'s' if usage_count != 1 else ''}"
             )
             count_label.set_halign(Gtk.Align.END)
             count_label.get_style_context().add_class("dim-label")
@@ -283,7 +281,7 @@ class LauncherWindow(Gtk.Window):
             list_item = AppListItem(
                 result,
                 icon_size=self.icon_size or 48,
-                launch_count=history_count,
+                usage_count=history_count,
                 query=self.entry.get_text().strip(),
             )
 
@@ -560,22 +558,12 @@ class LauncherWindow(Gtk.Window):
                 if selected_rows:
                     for row in selected_rows:
                         if hasattr(row, "result") and row.result.plugin_id == "history":
-                            original_result = row.result.metadata.get("original_result")
-                            if original_result:
-                                command = original_result.get("metadata", {}).get(
-                                    "actual_executed_command"
-                                )
-                                if command:
-                                    self.history_manager.remove_history_entry(command)
-
-                    # If no query text, we're showing recent history; otherwise refresh search
-                    if not self.entry.get_text().strip():
-                        Plugin.call_global_empty_input_handlers(self)
-                    else:
-                        # Refresh the current search to update results
-                        self.on_entry_changed(self.entry)
+                            self.history_manager.remove_history_entry(
+                                row.result.item_id
+                            )
+                            self.list_box.remove(row)
                     return True
-                return False  # Allow other handlers if no selection
+                return False
 
         return False
 

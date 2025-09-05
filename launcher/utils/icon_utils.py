@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 
-
 from gi.repository import Gtk, GdkPixbuf
 from typing import Optional, List, Dict
+from xdg_base_dirs import xdg_cache_home
+from xdg.IconTheme import getIconPath
 import hashlib
 import logging
 import os
 import urllib.parse
 import urllib.request
 
+
 logger = logging.getLogger(__name__)
 
-# Common image file extensions supported for icons
 SUPPORTED_IMAGE_EXTENSIONS = (
     ".png",
     ".svg",
@@ -94,28 +95,21 @@ def load_custom_icon(
     try:
         # Handle URI schemes
         if icon_spec.startswith("desktop://"):
-            # Desktop file icon: desktop://icon_name
-            icon_name = icon_spec[10:]  # Remove "desktop://" prefix
+            icon_name = icon_spec[10:]
             loaded_icon = load_desktop_file_icon(icon_name, size)
         elif icon_spec.startswith("theme://"):
-            # Theme icon: theme://icon_name
-            icon_name = icon_spec[8:]  # Remove "theme://" prefix
+            icon_name = icon_spec[8:]
             loaded_icon = _load_icon_from_theme(icon_name, size)
         elif icon_spec.startswith(("http://", "https://")):
-            # URL: http://example.com/icon.png
             loaded_icon = _load_icon_from_url(icon_spec, size, cache_dir)
         elif icon_spec.startswith("file://"):
-            # File URI: file:///path/to/icon
-            file_path = icon_spec[7:]  # Remove "file://" prefix
+            file_path = icon_spec[7:]
             loaded_icon = _load_icon_from_file(file_path, size)
-        # Check if it's a file path (contains / or common image extensions)
         elif "/" in icon_spec or icon_spec.endswith(SUPPORTED_IMAGE_EXTENSIONS):
             loaded_icon = _load_icon_from_file(icon_spec, size)
         else:
-            # Backward compatibility: treat as theme icon name
             loaded_icon = _load_icon_from_theme(icon_spec, size)
 
-        # Cache the result if cache is provided
         if cache is not None and loaded_icon is not None:
             cache[icon_spec] = loaded_icon
 
@@ -129,7 +123,6 @@ def _load_icon_from_file(icon_path: str, size: int) -> Optional[GdkPixbuf.Pixbuf
     """Load icon from file path with search in common directories"""
     expanded_path = os.path.expanduser(icon_path)
 
-    # If not absolute path, search in common icon directories
     if not os.path.isabs(expanded_path):
         search_paths = [
             os.path.join(os.path.expanduser("~/.local/share/icons"), expanded_path),
@@ -172,22 +165,16 @@ def _load_icon_from_url(
         Loaded icon pixbuf or None if loading fails
     """
     if not cache_dir:
-        # Use default cache directory if not provided
-        from xdg_base_dirs import xdg_cache_home
-
         cache_dir = os.path.join(xdg_cache_home(), "launcher", "url_icons")
 
-    # Create cache directory if it doesn't exist
     os.makedirs(cache_dir, exist_ok=True)
 
-    # Generate cache filename based on URL hash
     url_hash = hashlib.sha256(icon_url.encode()).hexdigest()[:16]
     parsed_url = urllib.parse.urlparse(icon_url)
     file_ext = os.path.splitext(parsed_url.path)[1].lower()
 
-    # Validate and normalize file extension
     if file_ext not in SUPPORTED_IMAGE_EXTENSIONS:
-        file_ext = ".png"  # Default to PNG if extension is unknown or unsupported
+        file_ext = ".png"
 
     cache_filename = f"{url_hash}{file_ext}"
     cache_path = os.path.join(cache_dir, cache_filename)
@@ -198,7 +185,6 @@ def _load_icon_from_url(
             return GdkPixbuf.Pixbuf.new_from_file_at_scale(cache_path, size, size, True)
         except Exception as e:
             logger.warning(f"Failed to load cached icon {cache_path}: {e}")
-            # Remove corrupted cache file
             try:
                 os.remove(cache_path)
             except Exception:
@@ -206,7 +192,6 @@ def _load_icon_from_url(
 
     # Download icon from URL
     try:
-        # Set a reasonable timeout and user agent
         request = urllib.request.Request(
             icon_url, headers={"User-Agent": "Launcher/1.0"}
         )
@@ -220,10 +205,8 @@ def _load_icon_from_url(
                     )
                     return None
 
-                # Read content with size limit (5MB max)
                 content = response.read(5 * 1024 * 1024)  # 5MB limit
 
-                # Determine correct file extension from content-type if possible
                 content_type_to_ext = {
                     "image/png": ".png",
                     "image/jpeg": ".jpg",
@@ -237,18 +220,15 @@ def _load_icon_from_url(
                     "image/webp": ".webp",
                 }
 
-                # Update cache path if we can determine a better extension from content-type
                 if content_type in content_type_to_ext:
                     correct_ext = content_type_to_ext[content_type]
                     if not cache_path.endswith(correct_ext):
                         cache_filename = f"{url_hash}{correct_ext}"
                         cache_path = os.path.join(cache_dir, cache_filename)
 
-                # Save to cache
                 with open(cache_path, "wb") as f:
                     f.write(content)
 
-                # Load and return the icon
                 return GdkPixbuf.Pixbuf.new_from_file_at_scale(
                     cache_path, size, size, True
                 )
@@ -261,7 +241,6 @@ def _load_icon_from_url(
         logger.error(f"Network error downloading icon from {icon_url}: {e}")
     except Exception as e:
         logger.error(f"Error downloading icon from {icon_url}: {e}")
-        # Clean up partial download
         try:
             if os.path.exists(cache_path):
                 os.remove(cache_path)
@@ -343,21 +322,17 @@ def load_desktop_file_icon(icon_spec: str, size: int) -> Optional[GdkPixbuf.Pixb
         return _get_desktop_fallback_icon(size)
 
     try:
-        # Try direct file path first
         if os.path.isfile(icon_spec):
             return GdkPixbuf.Pixbuf.new_from_file_at_size(icon_spec, size, size)
 
-        # Try XDG icon theme lookup
         pixbuf = _load_desktop_icon_from_xdg_theme(icon_spec, size)
         if pixbuf:
             return pixbuf
 
-        # Try GTK icon theme
         pixbuf = _load_desktop_icon_from_gtk_theme(icon_spec, size)
         if pixbuf:
             return pixbuf
 
-        # Fallback to default icon
         return _get_desktop_fallback_icon(size)
 
     except Exception as e:
@@ -370,11 +345,8 @@ def _load_desktop_icon_from_xdg_theme(
 ) -> Optional[GdkPixbuf.Pixbuf]:
     """Load desktop icon from XDG icon theme"""
     try:
-        from xdg.IconTheme import getIconPath
-
         icon_path = getIconPath(icon_name, size)
 
-        # Try without extension if not found
         if not icon_path and "." in icon_name:
             icon_name_no_ext = os.path.splitext(icon_name)[0]
             icon_path = getIconPath(icon_name_no_ext, size)
@@ -386,7 +358,6 @@ def _load_desktop_icon_from_xdg_theme(
                 pass
 
     except ImportError:
-        # xdg module not available
         pass
     except Exception:
         pass
@@ -401,14 +372,12 @@ def _load_desktop_icon_from_gtk_theme(
     try:
         icon_theme = Gtk.IconTheme.get_default()
 
-        # Try original icon name
         if icon_theme.has_icon(icon_name):
             try:
                 return icon_theme.load_icon(icon_name, size, 0)
             except Exception:
                 pass
 
-        # Try without extension
         if "." in icon_name:
             icon_name_no_ext = os.path.splitext(icon_name)[0]
             if icon_theme.has_icon(icon_name_no_ext):

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from launcher.utils.scoring_system import calculate_match_score
 from typing import List, Tuple, TypeVar, Generic, Callable
 
 T = TypeVar("T")
@@ -49,7 +50,6 @@ class StringMatcher(Generic[T]):
             if score > 0:
                 matches.append((item, score))
 
-        # Sort by score descending and limit results
         matches.sort(key=lambda x: x[1], reverse=True)
         return matches[:limit]
 
@@ -64,9 +64,6 @@ class StringMatcher(Generic[T]):
         Returns:
             Score using simplified scoring system (higher is better)
         """
-        from launcher.utils.scoring_system import calculate_match_score
-
         key = self.key_func(item)
 
-        # Use simplified scoring system - all plugins get equal treatment for name matches
         return calculate_match_score(query, key, is_name=True)
