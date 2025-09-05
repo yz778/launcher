@@ -114,7 +114,7 @@ class TextHighlighter:
                 merged[-1] = HighlightSegment(
                     last.start,
                     max(last.end, current.end),
-                    last.match_type,  # Keep the type of the first segment
+                    last.match_type,
                 )
             else:
                 merged.append(current)

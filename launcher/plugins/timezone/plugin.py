@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from ..base import Plugin, SearchResult
-from datetime import datetime
+from datetime import datetime, time
 from launcher.utils.scoring_system import calculate_match_score
 from typing import Dict, List, Any, Optional
 import logging
@@ -49,53 +49,34 @@ class TimezonePlugin(Plugin):
         return "Convert times between different timezones"
 
     def _build_timezone_aliases(self) -> Dict[str, str]:
-        """Build a mapping of common timezone abbreviations to pytz timezone names"""
+        """Build a mapping of common timezone abbreviations and city names to tz database IDs."""
+
+        # fmt: off
+        alias_groups = {
+            "America/Montreal": ["montreal"],
+            "America/Toronto": ["toronto"],
+            "Asia/Hong_Kong": ["hongkong", "hkt"],
+            "Asia/Kolkata": ["ist", "india", "mumbai", "delhi", "bangalore"],
+            "Asia/Shanghai": ["beijing", "shanghai"],
+            "Asia/Singapore": ["singapore"],
+            "Asia/Tokyo": ["tokyo", "japan", "jst"],
+            "Australia/Melbourne": ["melbourne"],
+            "Australia/Sydney": ["sydney", "aest", "aedt"],
+            "Europe/Berlin": ["berlin"],
+            "Europe/London": ["london"],
+            "Europe/Paris": ["paris"],
+            "US/Central": ["cdt", "cst", "chicago"],
+            "US/Eastern": ["edt", "est", "nyc", "ny", "toronto"],
+            "US/Pacific": ["pdt", "pst", "vancouver"],
+            "US/Mountain": ["mdt", "mst", "denver"],
+            "UTC": ["utc", "gmt"],
+        }
+        # fmt: on
+
         return {
-            # US/Canada
-            "pdt": "US/Pacific",
-            "pst": "US/Pacific",
-            "mdt": "US/Mountain",
-            "mst": "US/Mountain",
-            "cdt": "US/Central",
-            "cst": "US/Central",
-            "edt": "US/Eastern",
-            "est": "US/Eastern",
-            # Major cities/regions
-            "vancouver": "America/Vancouver",
-            "seattle": "America/Los_Angeles",
-            "portland": "America/Los_Angeles",
-            "sf": "America/Los_Angeles",
-            "la": "America/Los_Angeles",
-            "denver": "America/Denver",
-            "chicago": "America/Chicago",
-            "nyc": "America/New_York",
-            "ny": "America/New_York",
-            "toronto": "America/Toronto",
-            "montreal": "America/Montreal",
-            # International
-            "utc": "UTC",
-            "gmt": "GMT",
-            "london": "Europe/London",
-            "paris": "Europe/Paris",
-            "berlin": "Europe/Berlin",
-            "tokyo": "Asia/Tokyo",
-            "japan": "Asia/Tokyo",
-            "jst": "Asia/Tokyo",
-            "beijing": "Asia/Shanghai",
-            "shanghai": "Asia/Shanghai",
-            "hkt": "Asia/Hong_Kong",
-            "hongkong": "Asia/Hong_Kong",
-            "singapore": "Asia/Singapore",
-            "sydney": "Australia/Sydney",
-            "melbourne": "Australia/Melbourne",
-            "aest": "Australia/Sydney",
-            "aedt": "Australia/Sydney",
-            # India
-            "ist": "Asia/Kolkata",
-            "india": "Asia/Kolkata",
-            "mumbai": "Asia/Kolkata",
-            "delhi": "Asia/Kolkata",
-            "bangalore": "Asia/Kolkata",
+            alias.lower(): tz
+            for tz, aliases in alias_groups.items()
+            for alias in aliases
         }
 
     def initialize(self, config: Dict[str, Any], config_manager) -> bool:
@@ -185,8 +166,11 @@ class TimezonePlugin(Plugin):
         return None, None
 
     def _parse_timezone(self, tz_text: str) -> Optional[str]:
-        """Parse timezone from text"""
+        """Parse timezone from text, supporting 'local' as a special keyword"""
         tz_text = tz_text.strip().lower()
+
+        if tz_text == "local":
+            return "local"
 
         # Check aliases first
         if tz_text in self._timezone_aliases:
@@ -202,34 +186,37 @@ class TimezonePlugin(Plugin):
     def _convert_time(
         self, time_str: str, source_tz_name: str, target_tz_name: str
     ) -> Optional[str]:
-        """Convert time from source timezone to target timezone"""
+        """Convert time from source timezone to target timezone, supporting 'local' for both"""
         try:
-            # Validate target timezone
-            try:
-                target_tz = pytz.timezone(target_tz_name)
-            except pytz.UnknownTimeZoneError:
-                return None
-
-            # Handle "now" keyword
-            if time_str == "now":
-                if source_tz_name == "local":
-                    # Use local time - safely get timezone-aware datetime
-                    source_dt = datetime.now().astimezone()
-                    # Convert to target timezone
-                    target_dt = source_dt.astimezone(target_tz)
-                else:
-                    # Get current time in source timezone
-                    try:
-                        source_tz = pytz.timezone(source_tz_name)
-                    except pytz.UnknownTimeZoneError:
-                        return None
-                    source_dt = datetime.now(source_tz)
-                    target_dt = source_dt.astimezone(target_tz)
+            # Determine source timezone
+            if source_tz_name == "local":
+                source_tz = None  # Will use local timezone
             else:
                 try:
                     source_tz = pytz.timezone(source_tz_name)
                 except pytz.UnknownTimeZoneError:
                     return None
+
+            # Determine target timezone
+            if target_tz_name == "local":
+                target_tz = None  # Will use local timezone
+            else:
+                try:
+                    target_tz = pytz.timezone(target_tz_name)
+                except pytz.UnknownTimeZoneError:
+                    return None
+
+            # Handle "now" keyword
+            if time_str == "now":
+                if source_tz is None:
+                    source_dt = datetime.now().astimezone()
+                else:
+                    source_dt = datetime.now(source_tz)
+                if target_tz is None:
+                    target_dt = source_dt.astimezone()
+                else:
+                    target_dt = source_dt.astimezone(target_tz)
+            else:
                 now = datetime.now()
 
                 # Handle different time formats
@@ -245,28 +232,27 @@ class TimezonePlugin(Plugin):
                         time_str = "0" + time_str
                     hour = int(time_str[:2])
                     minute = int(time_str[2:])
-                    from datetime import time
-
                     time_obj = time(hour, minute)
                 elif time_str.isdigit() and 1 <= int(time_str) <= 24:
                     # Simple hour format (e.g., "5" means 5:00)
                     hour = int(time_str)
                     if hour == 24:
                         hour = 0
-                    from datetime import time
-
                     time_obj = time(hour, 0)
                 else:
                     return None
 
-                # Create datetime with today's date
                 source_dt = datetime.combine(now.date(), time_obj)
+                if source_tz is None:
+                    # Localize to local timezone
+                    source_dt = source_dt.astimezone()
+                else:
+                    source_dt = source_tz.localize(source_dt)
 
-                # Localize to source timezone
-                source_dt = source_tz.localize(source_dt)
-
-                # Convert to target timezone
-                target_dt = source_dt.astimezone(target_tz)
+                if target_tz is None:
+                    target_dt = source_dt.astimezone()
+                else:
+                    target_dt = source_dt.astimezone(target_tz)
 
             # Format the result
             target_time_12h = target_dt.strftime("%I:%M %p").lstrip("0")
@@ -279,7 +265,7 @@ class TimezonePlugin(Plugin):
             return None
 
     def search(self, query: str) -> List[SearchResult]:
-        """Search for timezone conversions matching the query"""
+        """Search for timezone conversions matching the query, supporting 'local' for both source and target"""
         if not self._is_timezone_query(query):
             return []
 
@@ -294,26 +280,20 @@ class TimezonePlugin(Plugin):
         if not result:
             return []
 
-        # Get timezone names for display
-        try:
-            target_tz_obj = pytz.timezone(parsed["target_tz"])
-        except pytz.UnknownTimeZoneError:
-            return []
-
-        if parsed["source_tz"] == "local":
-            source_tz_display = "Local"
-        else:
+        # Display logic for source and target timezones
+        def tz_display(tz_name):
+            if tz_name == "local":
+                return "Local"
             try:
-                source_tz_obj = pytz.timezone(parsed["source_tz"])
-                source_tz_display = source_tz_obj.zone
+                return pytz.timezone(tz_name).zone
             except pytz.UnknownTimeZoneError:
-                return []
+                return tz_name
 
-        description = f"{result} in {target_tz_obj.zone}"
+        source_tz_display = tz_display(parsed["source_tz"])
+        target_tz_display = tz_display(parsed["target_tz"])
 
-        # Give timezone queries a higher score since this is a specialized plugin
+        description = f"{result} in {target_tz_display}"
         base_score = calculate_match_score(query, query, is_name=True)
-        # Add bonus for timezone-specific queries to prioritize over generic calculation plugins
         timezone_bonus = 50
         final_score = base_score + timezone_bonus
 

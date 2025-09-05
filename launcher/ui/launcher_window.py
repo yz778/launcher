@@ -9,10 +9,8 @@ from launcher.utils.text_highlighter import TextHighlighter
 from plugins.base import SearchResult, Plugin
 from typing import Dict, Any, List
 from ui.css_manager import CssManager
-import gi
 import logging
 
-gi.require_version("Gtk", "3.0")
 logger = logging.getLogger(__name__)
 
 
@@ -560,22 +558,12 @@ class LauncherWindow(Gtk.Window):
                 if selected_rows:
                     for row in selected_rows:
                         if hasattr(row, "result") and row.result.plugin_id == "history":
-                            original_result = row.result.metadata.get("original_result")
-                            if original_result:
-                                command = original_result.get("metadata", {}).get(
-                                    "actual_executed_command"
-                                )
-                                if command:
-                                    self.history_manager.remove_history_entry(command)
-
-                    # If no query text, we're showing recent history; otherwise refresh search
-                    if not self.entry.get_text().strip():
-                        Plugin.call_global_empty_input_handlers(self)
-                    else:
-                        # Refresh the current search to update results
-                        self.on_entry_changed(self.entry)
+                            self.history_manager.remove_history_entry(
+                                row.result.item_id
+                            )
+                            self.list_box.remove(row)
                     return True
-                return False  # Allow other handlers if no selection
+                return False
 
         return False
 

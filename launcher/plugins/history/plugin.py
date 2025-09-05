@@ -3,6 +3,7 @@
 from ..base import Plugin, SearchResult
 from launcher.utils.scoring_system import calculate_match_score
 from typing import List, Dict, Any
+from ui.launcher_window import AppListItem
 import logging
 
 logger = logging.getLogger(__name__)
@@ -120,9 +121,6 @@ class HistoryPlugin(Plugin):
                 continue
 
             results.append(history_result)
-
-            from ui.launcher_window import AppListItem
-
             list_item = AppListItem(
                 history_result,
                 icon_size=launcher_window.icon_size or 48,

@@ -178,7 +178,7 @@ class HistoryManager:
 
         return matches
 
-    def remove_history_entry(self, command: str) -> bool:
+    def remove_history_entry(self, item_id: str) -> bool:
         """
         Remove a history entry by command.
 
@@ -188,16 +188,11 @@ class HistoryManager:
         Returns:
             True if an entry was removed, False otherwise.
         """
-        if not command:
+        if not item_id:
             return False
         original_length = len(self.history)
         self.history = [
-            entry
-            for entry in self.history
-            if entry.get("result", {})
-            .get("metadata", {})
-            .get("actual_executed_command")
-            != command
+            entry for entry in self.history if entry.get("item_id") != item_id
         ]
         return len(self.history) < original_length
 
