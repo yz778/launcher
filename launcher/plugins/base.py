@@ -281,18 +281,3 @@ class Plugin(ABC):
         """
 
     _empty_input_handlers = []
-
-    @classmethod
-    def register_global_empty_input_handler(cls, handler):
-        """Register a global handler for empty input population."""
-        cls._empty_input_handlers.append(handler)
-
-    @classmethod
-    def call_global_empty_input_handlers(cls, launcher_window):
-        for handler in cls._empty_input_handlers:
-            try:
-                handler(launcher_window)
-            except Exception as e:
-                logger.error(
-                    f"Error in global empty input handler: {handler.__name__} {e}"
-                )

@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 
-from core.history_manager import HistoryManager
-from core.plugin_manager import PluginManager
 from gi.repository import Gtk, Gdk, Pango, GLib
 from launcher.utils.icon_utils import load_custom_icon, get_fallback_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
 from launcher.utils.text_highlighter import TextHighlighter
-from plugins.base import SearchResult, Plugin
-from typing import Dict, Any, List
+from plugins.base import SearchResult
+from typing import List
 from ui.css_manager import CssManager
 import logging
+import services
 
 logger = logging.getLogger(__name__)
 
@@ -129,30 +128,23 @@ class AppListItem(Gtk.ListBoxRow):
 class LauncherWindow(Gtk.Window):
     """Main launcher window"""
 
-    _quit_scheduled = False
+    _shutdown_requested = False
 
     def __init__(
         self,
-        plugin_manager: PluginManager,
-        history_manager: HistoryManager,
-        config: Dict[str, Any],
         foreground_mode: bool = False,
     ):
         super().__init__(title="Launcher")
 
         CssManager.load_default_css()
 
-        self.plugin_manager = plugin_manager
-        self.history_manager = history_manager
-        self.result_deduplicator = ResultDeduplicator()
-        self.config = config
         self.foreground_mode = foreground_mode
+        self.result_deduplicator = ResultDeduplicator()
 
-        general_config = config.get("general", {})
+        general_config = services.config.get("general", {})
         self.icon_size = general_config.get("icon_size")
         self.window_width = general_config.get("window_width")
         self.window_height = general_config.get("window_height")
-        self.window_height_results = general_config.get("window_height_results")
 
         self.set_decorated(False)
         self.set_default_size(self.window_width, self.window_height)
@@ -160,11 +152,6 @@ class LauncherWindow(Gtk.Window):
         self.set_skip_taskbar_hint(True)
         self.set_skip_pager_hint(True)
         self.set_name("launcher-window")
-
-        # Connect signals
-        self.connect("delete-event", self.on_delete_event)
-        self.connect("key-press-event", self.on_key_press)
-        self.connect("focus-out-event", self.on_focus_out)
 
         # Keep a reference to the main loop quit function without leaking Gtk details to main
         self._schedule_quit = lambda reason=None: GLib.idle_add(Gtk.main_quit)
@@ -183,9 +170,6 @@ class LauncherWindow(Gtk.Window):
         self.entry.set_activates_default(True)
         self.entry.set_name("launcher-entry")
         self.entry.connect("key-press-event", self.on_entry_key_press)
-
-        # Store the signal handler ID for later connection/disconnection
-        self.entry_changed_handler_id = None
 
         entry_box.pack_start(self.entry, True, True, 0)
 
@@ -207,10 +191,6 @@ class LauncherWindow(Gtk.Window):
 
         # Set overlay scrolling to False to ensure scrollbar is always visible
         self.scrolled.set_overlay_scrolling(False)
-        self.scrolled.set_max_content_height(
-            self.window_height_results - self.window_height
-        )
-
         self.scrolled.set_propagate_natural_height(True)
 
         self.vbox.pack_start(self.scrolled, True, True, 5)
@@ -244,7 +224,8 @@ class LauncherWindow(Gtk.Window):
         # Make sure the scrolled window is hidden initially
         self.scrolled.hide()
 
-        self.entry.grab_focus()
+        self.connect("focus-out-event", self.on_focus_out)
+        self.connect("key-press-event", self.on_key_press)
 
     def _clear_list_box_and_hide(self):
         """Clears all items from the list box and hides the results area."""
@@ -316,9 +297,7 @@ class LauncherWindow(Gtk.Window):
             self.result_count_label.hide()
 
         # Calculate display height - always use results window height for consistency
-        display_height = self.window_height_results - self.window_height
-        self.resize(self.window_width, self.window_height_results)
-        self.scrolled.set_size_request(-1, display_height)
+        self.resize(self.window_width, self.window_height)
 
         # Set scrolling policy based on number of items
         if len(items) > 5:
@@ -385,7 +364,7 @@ class LauncherWindow(Gtk.Window):
 
         # Truncate results - cache max_results to avoid repeated config lookups
         if not hasattr(self, "_cached_max_results"):
-            self._cached_max_results = self.config.get("general", {}).get(
+            self._cached_max_results = services.config.get("general", {}).get(
                 "max_results", 15
             )
         self.current_results = self.current_results[: self._cached_max_results]
@@ -415,15 +394,12 @@ class LauncherWindow(Gtk.Window):
 
     def on_entry_changed(self, widget) -> None:
         """Handle text changes in the entry field with debouncing."""
-        # Cancel any pending search
         if self._search_timeout_id:
             GLib.source_remove(self._search_timeout_id)
 
-        self._search_timeout_id = GLib.timeout_add(
-            self._search_delay_ms, self._perform_search
-        )
+        self._search_timeout_id = GLib.timeout_add(self._search_delay_ms, self._search)
 
-    def _perform_search(self) -> bool:
+    def _search(self) -> bool:
         """Actually perform the search (called after debounce delay)"""
         self._search_timeout_id = None  # Clear timeout ID
 
@@ -441,17 +417,24 @@ class LauncherWindow(Gtk.Window):
 
         if not query:
             self._clear_list_box_and_hide()
-            Plugin.call_global_empty_input_handlers(self)
+            # Show recent history results directly from history_manager
+            if services.history_manager and hasattr(
+                services.history_manager, "get_recent_results"
+            ):
+                max_results = services.config.get("general", {}).get("max_results", 15)
+                results = services.history_manager.get_recent_results(max_results)
+                if results:
+                    self._populate_list_box(results)
+                else:
+                    self._clear_list_box_and_hide()
             return False
 
         # Check for autocomplete matches - cache history manager check
-        if self.history_manager:
-            self.autocomplete_matches = self.history_manager.get_matching_history(
-                query, 5
-            )
-
+        self.autocomplete_matches = services.history_manager.get_matching_history(
+            query, 5
+        )
         self.active_search_id += 1
-        self.plugin_manager.search(
+        services.plugin_manager.search(
             query,
             self.active_search_id,
             self.handle_plugin_results,
@@ -519,7 +502,7 @@ class LauncherWindow(Gtk.Window):
 
         # Handle Enter to execute
         if keyval == Gdk.KEY_Return:
-            if self.scrolled.get_visible() and self.plugin_manager is not None:
+            if self.scrolled.get_visible() and services.plugin_manager is not None:
                 selected_row = self.list_box.get_selected_row()
                 row = selected_row
                 if not row and self.list_box.get_children():
@@ -558,7 +541,7 @@ class LauncherWindow(Gtk.Window):
                 if selected_rows:
                     for row in selected_rows:
                         if hasattr(row, "result") and row.result.plugin_id == "history":
-                            self.history_manager.remove_history_entry(
+                            services.history_manager.remove_history_entry(
                                 row.result.item_id
                             )
                             self.list_box.remove(row)
@@ -579,7 +562,7 @@ class LauncherWindow(Gtk.Window):
 
         self._capture_modifier_state(result, event)
 
-        if self.plugin_manager.execute(result):
+        if services.plugin_manager.execute(result):
             result_to_track = result
             if result.plugin_id == "history":
                 original_result_dict = result.metadata.get("original_result")
@@ -591,7 +574,7 @@ class LauncherWindow(Gtk.Window):
 
     def _validate_managers(self) -> bool:
         """Validate that required managers are initialized"""
-        if self.history_manager is None or self.plugin_manager is None:
+        if services.history_manager is None or services.plugin_manager is None:
             logger.warning("Cannot execute result: managers not initialized yet")
             self.close_window()
             return False
@@ -616,54 +599,19 @@ class LauncherWindow(Gtk.Window):
         if not should_track:
             return
 
-        self.history_manager.add_history(result)
+        services.history_manager.add_history(result)
 
     def show_and_focus(self):
-        """Show window at consistent position and grab focus"""
-
-        # Clear entry and reset state
-        self.entry.set_text("")
-        self._clear_list_box_and_hide()
-
-        # Show history if managers are already initialized (e.g., when toggling existing instance)
-        if self.history_manager is not None:
-            Plugin.call_global_empty_input_handlers(self)
-
-        # Present window and grab focus
+        """Show window and grab focus"""
+        self.entry.select_region(0, -1)
         self.show_all()
         self.present()
-
-        # Use GLib.idle_add to ensure positioning and focus happen after window is mapped
-
-        GLib.idle_add(self._delayed_focus_and_position)
-
-    def _delayed_focus_and_position(self):
-        """Position window and grab focus after window is fully shown and mapped"""
-        try:
-            if not self.get_visible() or not self.get_mapped():
-                GLib.timeout_add(10, self._delayed_focus_and_position)
-                return False
-
-            if self.get_window():
-                self.get_window().raise_()
-                self.get_window().focus(0)
-
-            self.entry.grab_focus()
-            self.present()
-            self.activate_focus()
-
-        except Exception:
-            pass
-
-        return False
 
     def on_delete_event(self, widget, event):
         """Handle window delete event - hide or quit in foreground mode"""
         if self.foreground_mode:
-            # In foreground mode, closing the window should quit the app via GTK loop
-            self.request_quit("window delete")
+            self.shutdown("window delete")
         else:
-            # In singleton mode, just hide the window
             self.hide()
         return True
 
@@ -680,8 +628,7 @@ class LauncherWindow(Gtk.Window):
 
         if keyval == Gdk.KEY_q and state & Gdk.ModifierType.CONTROL_MASK:
             logger.info("Ctrl+Q pressed, quitting via launcher window")
-            # Route quit through launcher's quit logic
-            self.request_quit("Ctrl+Q")
+            self.shutdown("Ctrl+Q")
             return True
 
         if keyval == Gdk.KEY_Escape:
@@ -696,7 +643,6 @@ class LauncherWindow(Gtk.Window):
     def on_focus_out(self, widget, event) -> bool:
         """Close the launcher when it loses focus (only in singleton mode)"""
         if not self.foreground_mode:
-            # Only auto-hide in singleton mode
             self.close_window()
         return False
 
@@ -704,62 +650,40 @@ class LauncherWindow(Gtk.Window):
         """Hide the window or quit based on mode"""
         if self.foreground_mode:
             # Quit GTK loop through launcher's own method
-            self.request_quit("close_window")
+            self.shutdown("close_window")
         else:
             self.hide()
         return True
 
-    def request_quit(self, reason: str = ""):
+    def shutdown(self, reason: str = ""):
         """Schedule quitting the main loop once, allowing cleanup in finally blocks.
 
         This keeps GTK knowledge within the launcher window and avoids main importing Gtk.
         """
-        if LauncherWindow._quit_scheduled:
+        if LauncherWindow._shutdown_requested:
             return
-        LauncherWindow._quit_scheduled = True
-        logger.info(f"LauncherWindow requested quit: {reason}")
-        # Quit on idle to ensure signal handlers and UI events complete
+        LauncherWindow._shutdown_requested = True
+
         self._schedule_quit(reason)
 
-    def update_with_full_config(self, plugin_manager, history_manager, config):
+    def start(self):
         """Update the window with the full configuration after initialization"""
-        self.plugin_manager = plugin_manager
-        self.history_manager = history_manager
-        self.history_plugin = self.plugin_manager.plugins.get(
-            "history"
-        )  # Add this line
-        self.config = config
 
-        # Update window size if needed - cache general config
-        general_config = config.get("general", {})
-        self.window_width = general_config.get("window_width", self.window_width)
-        self.window_height = general_config.get("window_height", self.window_height)
-        self.window_height_results = general_config.get("window_height_results")
+        # Store the signal handler ID for later connection/disconnection
+        self.connect("delete-event", self.on_delete_event)
+        self.entry_changed_handler_id = self.entry.connect(
+            "changed", self.on_entry_changed
+        )
 
-        # Update icon size
-        self.icon_size = general_config.get("icon_size", self.icon_size)
+        self.history_plugin = services.plugin_manager.plugins.get("history")
+        if services.history_manager and hasattr(
+            services.history_manager, "get_recent_results"
+        ):
+            max_results = services.config.get("general", {}).get("max_results", 15)
+            results = services.history_manager.get_recent_results(max_results)
+            if results:
+                self._populate_list_box(results)
+            else:
+                self._clear_list_box_and_hide()
 
-        # Resize the window to match the full config
-        self.resize(self.window_width, self.window_height)
-
-        # Connect the entry's "changed" signal now that we have plugin_manager and history_manager
-        if self.entry_changed_handler_id is None:
-            self.entry_changed_handler_id = self.entry.connect(
-                "changed", self.on_entry_changed
-            )
-            logger.info("Connected entry changed signal after full initialization")
-
-        # Show recent history now that history_manager is available
-        # Only show if the entry is empty (initial launch state)
-        if not self.entry.get_text().strip():
-            Plugin.call_global_empty_input_handlers(self)
-
-    def _refresh_history_view_after_delete(self):
-        """
-        Refreshes the history view after items have been deleted.
-        This clears the current view and re-shows the updated recent history.
-        """
-        self.entry.set_text("")
-        self._clear_list_box_and_hide()
-        Plugin.call_global_empty_input_handlers(self)
         self.entry.grab_focus()
