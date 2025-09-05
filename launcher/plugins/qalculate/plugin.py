@@ -165,7 +165,7 @@ class QalculatePlugin(Plugin):
                         self._qalc_process.kill()
                         self._qalc_process.wait(timeout=1.0)
                 except Exception as e:
-                    logger.debug(f"Error stopping qalc session: {e}")
+                    logger.info(f"Error stopping qalc session: {e}")
                 finally:
                     self._qalc_process = None
                     self._reader_thread = None
