@@ -173,7 +173,7 @@ class Plugin(ABC):
                 "name",
                 "result",
                 "last_execution_time",
-                "times_executed",
+                "usage_count",
             ]
             for field in required_fields:
                 if field not in entry:
@@ -186,7 +186,7 @@ class Plugin(ABC):
             name = entry.get("name")
             result = entry.get("result")
             last_execution_time = entry.get("last_execution_time")
-            times_executed = entry.get("times_executed")
+            usage_count = entry.get("usage_count")
 
             if not isinstance(plugin_id, str) or not plugin_id.strip():
                 logger.debug(f"Invalid plugin_id: {plugin_id}")
@@ -211,8 +211,8 @@ class Plugin(ABC):
                 logger.debug(f"Invalid last_execution_time: {last_execution_time}")
                 return False
 
-            if not isinstance(times_executed, int) or times_executed <= 0:
-                logger.debug(f"Invalid times_executed: {times_executed}")
+            if not isinstance(usage_count, int) or usage_count <= 0:
+                logger.debug(f"Invalid usage_count: {usage_count}")
                 return False
 
             # Plugin existence validation (if plugin_manager provided)

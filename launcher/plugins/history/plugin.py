@@ -3,6 +3,7 @@
 from ..base import Plugin, SearchResult
 from launcher.utils.scoring_system import calculate_match_score
 from typing import List, Dict, Any
+from ui.launcher_window import AppListItem
 import logging
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,7 @@ class HistoryPlugin(Plugin):
             icon_spec=result["icon_spec"],
             score=score,
             metadata={
+                "usage_count": entry.get("usage_count"),
                 "original_result": result,
                 "track_history": True,
             },
@@ -120,13 +122,10 @@ class HistoryPlugin(Plugin):
                 continue
 
             results.append(history_result)
-
-            from ui.launcher_window import AppListItem
-
             list_item = AppListItem(
                 history_result,
                 icon_size=launcher_window.icon_size or 48,
-                launch_count=entry.get("times_executed", 0),
+                usage_count=entry.get("usage_count", 0),
                 query="",
             )
             list_item.set_name("history-item")

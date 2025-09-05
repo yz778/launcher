@@ -95,7 +95,7 @@ class HistoryManager:
 
         existing_entry = self._get_entry(result)
         if existing_entry:
-            existing_entry["times_executed"] += 1
+            existing_entry["usage_count"] += 1
             existing_entry["last_execution_time"] = time.time()
         else:
             unique_id = int(time.time())
@@ -106,7 +106,7 @@ class HistoryManager:
                 ).strip(),
                 "result": result.to_dict(),
                 "last_execution_time": time.time(),
-                "times_executed": 1,
+                "usage_count": 1,
             }
             self.history.append(new_entry)
 
@@ -147,7 +147,7 @@ class HistoryManager:
                 and result.get("plugin_id") == plugin_id
                 and result.get("item_id") == item_id
             ):
-                return entry.get("times_executed", 0)
+                return entry.get("usage_count", 0)
 
         return 0
 
@@ -178,7 +178,7 @@ class HistoryManager:
 
         return matches
 
-    def remove_history_entry(self, command: str) -> bool:
+    def remove_history_entry(self, item_id: str) -> bool:
         """
         Remove a history entry by command.
 
@@ -188,16 +188,11 @@ class HistoryManager:
         Returns:
             True if an entry was removed, False otherwise.
         """
-        if not command:
+        if not item_id:
             return False
         original_length = len(self.history)
         self.history = [
-            entry
-            for entry in self.history
-            if entry.get("result", {})
-            .get("metadata", {})
-            .get("actual_executed_command")
-            != command
+            entry for entry in self.history if entry.get("item_id") != item_id
         ]
         return len(self.history) < original_length
 

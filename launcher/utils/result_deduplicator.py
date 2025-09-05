@@ -15,13 +15,15 @@ class ResultDeduplicator:
 
     def deduplicate_results(self, results: List[SearchResult]) -> List[SearchResult]:
         """
-        Deduplicate results by keeping the highest-scored version of each item.
+        Deduplicate results by removing all results from other_results if history already captured it.
+        A history result is considered to have captured a result if its metadata contains
+        the original_plugin_id and original_item_id matching a live result's plugin_id and item_id.
 
         Args:
             results: List of search results to deduplicate
 
         Returns:
-            List of deduplicated results with highest-scored versions
+            List of deduplicated results
         """
         if not results:
             return results
@@ -36,28 +38,20 @@ class ResultDeduplicator:
             else:
                 other_results.append(result)
 
-        if not history_results or not other_results:
+        if not history_results:
             return results
 
-        # Create a mapping of (original_plugin_id, original_item_id) -> best_result
-        best_results = {}
-
-        # First, add all live plugin results
-        for result in other_results:
-            key = (result.plugin_id, result.item_id)
-            best_results[key] = result
-
-        # Then, check history results and keep them if they have higher scores
+        # Build a set of (original_plugin_id, original_item_id) from history results
+        history_keys = set()
         for history_result in history_results:
-            original_plugin_id = history_result.metadata.get("original_plugin_id")
-            original_item_id = history_result.metadata.get("original_item_id")
-            key = (original_plugin_id, original_item_id)
+            result = history_result.metadata.get("original_result")
+            plugin_id = result.get("plugin_id")
+            item_id = result.get("item_id")
+            history_keys.add((plugin_id, item_id))
 
-            if key in best_results:
-                live_result = best_results[key]
-                if history_result.score > live_result.score:
-                    best_results[key] = history_result
-            else:
-                best_results[key] = history_result
+        # Remove all other_results that are captured by history
+        filtered_other_results = [
+            r for r in other_results if (r.plugin_id, r.item_id) not in history_keys
+        ]
 
-        return list(best_results.values())
+        return history_results + filtered_other_results
