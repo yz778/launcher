@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 class TimezonePlugin(Plugin):
     """Plugin for converting times between timezones"""
 
+    defaults = {
+        "track_history": True,
+    }
+
     # Compiled regex patterns for performance
     _TIME_PATTERNS = [
         re.compile(r"\d{1,2}:\d{2}"),  # HH:MM format
@@ -43,12 +47,6 @@ class TimezonePlugin(Plugin):
 
     def get_description(self) -> str:
         return "Convert times between different timezones"
-
-    def get_config_defaults(self) -> Dict[str, Any]:
-        """Get default configuration for this plugin"""
-        return {
-            "track_history": True,
-        }
 
     def _build_timezone_aliases(self) -> Dict[str, str]:
         """Build a mapping of common timezone abbreviations to pytz timezone names"""

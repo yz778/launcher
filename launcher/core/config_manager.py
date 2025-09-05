@@ -12,9 +12,8 @@ logger = logging.getLogger(__name__)
 class ConfigManager:
     """Manager for loading and managing configuration"""
 
-    __slots__ = ("config", "config_file", "plugin_defaults")
-
-    DEFAULT_CONFIG = {
+    # Global defaults for the launcher itself
+    defaults = {
         "max_results": 15,
         "icon_size": 48,
         "terminal_command": "footclient",
@@ -33,13 +32,60 @@ class ConfigManager:
     }
 
     def __init__(self):
-        self.config: Dict[str, Any] = {}
+        self.user_config: Dict[str, Any] = {}
         self.config_file: Optional[str] = None
         self.plugin_defaults: Dict[str, Dict[str, Any]] = {}
 
+    def load_user_config(self, config_file: Optional[str] = None) -> None:
+        """Load user configuration from file"""
+        if not config_file:
+            self.user_config = {}
+            return
+
+        expanded_path = os.path.expanduser(config_file)
+        if not os.path.isfile(expanded_path):
+            logger.info("No user configuration file found, using defaults")
+            self.user_config = {}
+            return
+
+        try:
+            with open(expanded_path, "r") as f:
+                self.user_config = json.load(f) or {}
+            logger.info(f"Loaded user configuration from {expanded_path}")
+        except Exception as e:
+            logger.error(f"Error loading configuration from {expanded_path}: {e}")
+            self.user_config = {}
+
+        self.config_file = expanded_path
+
+    def get_general_config(self) -> Dict[str, Any]:
+        """Get the general launcher configuration (defaults + user overrides)"""
+        config = self.defaults.copy()
+        user_general = self.user_config.get("general", {})
+        config.update(user_general)
+        return config
+
+    def get_plugin_config(
+        self, plugin_id: str, plugin_defaults: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Get merged configuration for a plugin (plugin defaults + user overrides)
+
+        Args:
+            plugin_id: ID of the plugin
+            plugin_defaults: Default configuration dictionary for the plugin
+
+        Returns:
+            Merged configuration dictionary
+        """
+        config = plugin_defaults.copy()
+        user_plugin_config = self.user_config.get("plugins", {}).get(plugin_id, {})
+        config.update(user_plugin_config)
+        return config
+
     def get_cache_dir(self) -> str:
         """Get the cache directory, creating it if it doesn't exist"""
-        cache_dir = self.DEFAULT_CONFIG["cache_dir"]
+        cache_dir = self.get_general_config()["cache_dir"]
         cache_dir = os.path.expanduser(cache_dir)
         os.makedirs(cache_dir, exist_ok=True)
         return cache_dir
@@ -47,24 +93,13 @@ class ConfigManager:
     def register_plugin_defaults(
         self, plugin_id: str, defaults: Dict[str, Any]
     ) -> None:
-        """
-        Register default configuration for a plugin
-
-        Args:
-            plugin_id: ID of the plugin
-            defaults: Default configuration for the plugin
-        """
+        """Register plugin defaults for template generation"""
         self.plugin_defaults[plugin_id] = defaults
 
     def build_default_config(self) -> Dict[str, Any]:
-        """
-        Build the default configuration using registered plugin defaults
-
-        Returns:
-            Default configuration
-        """
+        """Build complete default config structure for template generation"""
         default_config = {
-            "general": self.DEFAULT_CONFIG.copy(),
+            "general": self.defaults.copy(),
             "plugins": {},
         }
 
@@ -76,84 +111,18 @@ class ConfigManager:
         return default_config
 
     def get_config(self, config_file: Optional[str] = None) -> Dict[str, Any]:
-        """
-        Get the full configuration including plugin defaults and user overrides
-        Always stores the configuration in the instance
-
-        Args:
-            config_file: Path to configuration file to load user overrides (optional)
-
-        Returns:
-            Complete configuration dictionary
-        """
+        """Load config and return complete structure (used by main app and template generation)"""
+        self.load_user_config(config_file)
         config = self.build_default_config()
-
-        if config_file:
-            expanded_path = os.path.expanduser(config_file)
-            if os.path.isfile(expanded_path):
-                try:
-                    with open(expanded_path, "r") as f:
-                        user_config = json.load(f)
-
-                    if user_config:
-                        self._merge_config(config, user_config)
-
-                    logger.info(f"Loaded user configuration from {expanded_path}")
-                except Exception as e:
-                    logger.error(
-                        f"Error loading configuration from {expanded_path}: {e}"
-                    )
-            else:
-                logger.info("Using default configuration")
-
-            self.config_file = expanded_path
-
-        self._expand_user_paths(config)
-        self.config = config
+        if self.user_config:
+            self._merge_config(config, self.user_config)
 
         return config
 
     def _merge_config(self, base: Dict[str, Any], override: Dict[str, Any]) -> None:
-        """
-        Recursively merge override configuration into base configuration
-
-        Args:
-            base: Base configuration to merge into
-            override: Override configuration to merge from
-        """
+        """Recursively merge override configuration into base configuration"""
         for key, value in override.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
                 self._merge_config(base[key], value)
             else:
                 base[key] = value
-
-    def _expand_user_paths(self, config: Dict[str, Any]) -> None:
-        """
-        Recursively expand user paths in the configuration for known path keys.
-        """
-
-        PATH_KEYS = {
-            "general": ["history_file", "css_file"],
-            "plugins": {"desktop_file": ["locations"], "executable": ["locations"]},
-        }
-
-        if "general" in config:
-            for key in PATH_KEYS["general"]:
-                if key in config["general"] and isinstance(config["general"][key], str):
-                    config["general"][key] = os.path.expanduser(config["general"][key])
-
-        if "plugins" in config:
-            for plugin_id, plugin_keys in PATH_KEYS["plugins"].items():
-                if plugin_id in config["plugins"]:
-                    for key in plugin_keys:
-                        if key in config["plugins"][plugin_id]:
-                            if isinstance(config["plugins"][plugin_id][key], str):
-                                config["plugins"][plugin_id][key] = os.path.expanduser(
-                                    config["plugins"][plugin_id][key]
-                                )
-                            elif isinstance(config["plugins"][plugin_id][key], list):
-                                config["plugins"][plugin_id][key] = [
-                                    os.path.expanduser(p)
-                                    for p in config["plugins"][plugin_id][key]
-                                    if isinstance(p, str)
-                                ]

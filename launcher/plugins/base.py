@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, asdict, field
 from typing import List, Any, Dict, Optional
 import logging
 import os
@@ -9,59 +10,43 @@ import sys
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class SearchResult:
     """Class representing a search result from any plugin"""
 
-    __slots__ = (
-        "plugin_id",
-        "item_id",
-        "name",
-        "description",
-        "icon_spec",
-        "score",
-        "metadata",
-    )
+    plugin_id: str
+    item_id: str
+    name: str
+    description: str = ""
+    icon_spec: Optional[str] = None
+    score: float = 0.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def __init__(
-        self,
-        plugin_id: str,
-        item_id: str,
-        name: str,
-        description: str = "",
-        icon_spec: str = None,
-        score: float = 0.0,
-        metadata: Optional[Dict[str, Any]] = None,
-    ):
-        """
-        Initialize a search result
+    def __post_init__(self):
+        """Handle icon_spec documentation"""
+        # Icon specification with URI scheme support:
+        # - theme://icon_name for theme icons
+        # - desktop://icon_name for desktop file icons
+        # - file:///path/to/icon for file paths
+        # - http://example.com/icon.png for URLs
+        # - Plain strings are treated as theme icons for backward compatibility
+        pass
 
-        Args:
-            plugin_id: ID of the plugin that provided this result
-            item_id: Unique ID for this item within the plugin
-            name: Display name of the result
-            description: Optional description
-            icon_spec: Icon specification with URI scheme support:
-                      - theme://icon_name for theme icons
-                      - desktop://icon_name for desktop file icons
-                      - file:///path/to/icon for file paths
-                      - http://example.com/icon.png for URLs
-                      - Plain strings are treated as theme icons for backward compatibility
-            score: Match score (0-100, higher is better)
-            metadata: Additional metadata specific to the plugin
-        """
-        self.plugin_id = plugin_id
-        self.item_id = item_id
-        self.name = name
-        self.description = description
-        self.icon_spec = icon_spec
-        self.score = score
-        self.metadata = metadata or {}
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert the SearchResult to a dictionary."""
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SearchResult":
+        """Create a SearchResult from a dictionary."""
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
     __slots__ = ("config", "config_manager", "prefix")
+    defaults = {}
 
     @abstractmethod
     def get_id(self) -> str:
@@ -114,16 +99,7 @@ class Plugin(ABC):
         Returns:
             True if executions should be tracked in history, False otherwise
         """
-        return self.config.get("track_history", True)
-
-    @abstractmethod
-    def get_config_defaults(self) -> Dict[str, Any]:
-        """
-        Get the default configuration for this plugin
-
-        Returns:
-            Dictionary containing default configuration values for this plugin
-        """
+        return self.config.get("track_history")
 
     def get_default_css(self) -> str:
         """Return the contents of 'default.css' from the plugin's directory, or an empty string if not found."""
@@ -149,7 +125,7 @@ class Plugin(ABC):
         Use the start() method for actual setup work that should be done after the GUI is started.
 
         Args:
-            config: Plugin-specific configuration
+            config: Final merged configuration dictionary (defaults + user overrides)
             config_manager: The central config manager instance
 
         Returns:
@@ -158,20 +134,6 @@ class Plugin(ABC):
         self.config = config
         self.config_manager = config_manager
         return True
-
-    def get_config_value(self, key: str, default: Any = None) -> Any:
-        """
-        Helper to get a plugin-specific configuration value with fallback to defaults
-
-        Args:
-            key: Configuration key to retrieve
-            default: Default value if key not found
-
-        Returns:
-            Configuration value or default
-        """
-        defaults = self.get_config_defaults()
-        return self.config.get(key, defaults.get(key, default))
 
     def get_icon_size(self) -> int:
         """
@@ -205,20 +167,26 @@ class Plugin(ABC):
                 return False
 
             # Required fields validation
-            required_fields = ["user_input", "plugin_id", "item_id", "timestamp"]
+            required_fields = [
+                "plugin_id",
+                "item_id",
+                "name",
+                "result",
+                "last_execution_time",
+                "times_executed",
+            ]
             for field in required_fields:
                 if field not in entry:
+                    logger.debug(f"Missing required field: {field}")
                     return False
 
             # Type validation
-            user_input = entry.get("user_input")
             plugin_id = entry.get("plugin_id")
             item_id = entry.get("item_id")
-            timestamp = entry.get("timestamp")
-
-            if not isinstance(user_input, str) or not user_input.strip():
-                logger.debug(f"Invalid user_input: {user_input}")
-                return False
+            name = entry.get("name")
+            result = entry.get("result")
+            last_execution_time = entry.get("last_execution_time")
+            times_executed = entry.get("times_executed")
 
             if not isinstance(plugin_id, str) or not plugin_id.strip():
                 logger.debug(f"Invalid plugin_id: {plugin_id}")
@@ -228,8 +196,23 @@ class Plugin(ABC):
                 logger.debug(f"Invalid item_id: {item_id}")
                 return False
 
-            if not isinstance(timestamp, (int, float)) or timestamp <= 0:
-                logger.debug(f"Invalid timestamp: {timestamp}")
+            if not isinstance(name, str):
+                logger.debug(f"Invalid name: {name}")
+                return False
+
+            if not isinstance(result, dict):
+                logger.debug(f"Invalid result: {result}")
+                return False
+
+            if (
+                not isinstance(last_execution_time, (int, float))
+                or last_execution_time <= 0
+            ):
+                logger.debug(f"Invalid last_execution_time: {last_execution_time}")
+                return False
+
+            if not isinstance(times_executed, int) or times_executed <= 0:
+                logger.debug(f"Invalid times_executed: {times_executed}")
                 return False
 
             # Plugin existence validation (if plugin_manager provided)
@@ -249,9 +232,9 @@ class Plugin(ABC):
         Helper to get the terminal command from general configuration
 
         Returns:
-            Terminal command string (default: "term")
+            Terminal command string
         """
-        return self.get_general_config("terminal_command", "term")
+        return self.get_general_config("terminal_command")
 
     def start(self) -> bool:
         """
@@ -296,20 +279,6 @@ class Plugin(ABC):
         This method is called when the plugin is being unloaded.
         Override this method to release any resources used by the plugin.
         """
-
-    def clean_invalid_history_entries(self, history_manager) -> int:
-        """
-        Clean invalid history entries for this plugin.
-
-        Args:
-            history_manager: The history manager instance
-
-        Returns:
-            Number of entries removed
-        """
-        # Default implementation does nothing
-        # Plugins that need history cleanup should override this
-        return 0
 
     _empty_input_handlers = []
 

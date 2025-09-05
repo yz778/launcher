@@ -74,14 +74,6 @@ def cleanup_resources():
     """Clean up all resources including process manager, singleton, and plugin managers"""
     global singleton_manager, launcher_window, _history_manager
 
-    try:
-        from .utils.process_manager import get_process_manager
-
-        process_manager = get_process_manager()
-        process_manager.cleanup_all()
-    except Exception as e:
-        logger.error(f"Error cleaning up process manager: {e}")
-
     # Always clean up singleton server
     if singleton_manager:
         singleton_manager.stop_server()
@@ -100,7 +92,7 @@ def signal_handler(signum, frame):
     request_app_quit(reason=f"signal {signum}")
 
 
-def main() -> None:
+def main() -> int:
     """Run the launcher application"""
     global singleton_manager, launcher_window
 
@@ -144,7 +136,7 @@ def main() -> None:
         if singleton_manager.is_running():
             logger.info("Another instance is already running, sending show command...")
             if singleton_manager.send_show_command():
-                return
+                return 0
             else:
                 logger.warning(
                     "Failed to communicate with existing instance, starting new one..."
@@ -163,7 +155,7 @@ def main() -> None:
 
     config_manager = ConfigManager()
     plugins_dir = os.path.join(current_dir, "plugins")
-    config = {"general": config_manager.DEFAULT_CONFIG.copy()}
+    config = {"general": config_manager.defaults.copy()}
 
     try:
         launcher_window = LauncherWindow(
@@ -248,15 +240,10 @@ def start_plugins(plugin_manager) -> bool:
     # Start each plugin in plugin_manager.plugins.
     threads = []
     for plugin_id, plugin in plugin_manager.plugins.items():
-        if plugin_manager.enabled_plugins.get(plugin_id, True):
-            thread = threading.Thread(
-                target=start_plugin_thread, args=(plugin_id, plugin)
-            )
-            thread.daemon = True
-            thread.start()
-            threads.append(thread)
-        else:
-            logger.info(f"Plugin {plugin_id} is disabled, not starting.")
+        thread = threading.Thread(target=start_plugin_thread, args=(plugin_id, plugin))
+        thread.daemon = True
+        thread.start()
+        threads.append(thread)
 
     logger.info("All enabled plugins started")
     return False

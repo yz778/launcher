@@ -169,7 +169,7 @@ def get_config_defaults(self) -> Dict[str, Any]:
 
 def initialize(self, config: Dict[str, Any], config_manager) -> bool:
     super().initialize(config, config_manager)
-    self.max_results = config.get("max_results", 10)
+    self.max_results = config.get("max_results")
     return True
 ```
 
