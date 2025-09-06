@@ -46,7 +46,7 @@ compile:
 
 # Lint and format Python code
 lint:
-	ruff check --select I --fix
+	ruff check --select I --fix || exit 1
 	ruff format
 
 .PHONY: all setup update run clean compile lint
