@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from typing import Optional, Callable
 from xdg_base_dirs import xdg_runtime_dir
 import logging

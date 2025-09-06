@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-
+from launcher.plugins.base import Plugin, SearchResult
 from gi.repository import GLib
-from plugins.base import Plugin, SearchResult
-from typing import Dict, List, Any, Type, Callable, Optional
+from typing import List, Type, Callable, Optional
 import importlib
 import inspect
 import logging
@@ -18,7 +16,6 @@ class PluginManager:
     __slots__ = (
         "plugins",
         "config",
-        "config_manager",
         "active_search_threads",
         "active_search_threads_lock",
         "_executor",
@@ -26,10 +23,9 @@ class PluginManager:
         "prefix_registry",
     )
 
-    def __init__(self, config_manager=None):
+    def __init__(self, config):
         self.plugins = {}
-        self.config = {}
-        self.config_manager = config_manager
+        self.config = config
         self.active_search_threads = 0
         self.active_search_threads_lock = threading.Lock()
         self._executor = None
@@ -46,9 +42,8 @@ class PluginManager:
             )
         return self._executor
 
-    def load_plugins(self, plugins_dir: str, config: Dict[str, Any]) -> None:
+    def load_plugins(self, plugins_dir: str) -> None:
         """Discover and load all plugins from the specified directory"""
-        self.config = config
         self.plugins_dir = plugins_dir
 
         plugin_dirs = [
@@ -79,39 +74,37 @@ class PluginManager:
                     and obj != Plugin
                     and not inspect.isabstract(obj)
                 ):
-                    return self._register_plugin(obj, self.config)
+                    return self._register_plugin(obj)
         except Exception as e:
             logger.error(f"Error loading plugin {plugin_dir}: {e}")
             return False
         return False
 
-    def _register_plugin(
-        self, plugin_class: Type[Plugin], config: Dict[str, Any]
-    ) -> bool:
+    def _register_plugin(self, plugin_class: Type[Plugin]) -> bool:
         """Register and initialize a single plugin"""
         try:
             plugin = plugin_class()
             plugin_id = plugin.get_id()
-            plugins_config = config.get("plugins", {})
-            plugin_specific_config = plugins_config.get(plugin_id, {})
-            enabled = plugin_specific_config.get("enabled", True)
+
+            # Check if plugin is enabled - access plugin config from self.config
+            plugin_config = getattr(self.config, plugin_id, None)
+            enabled = getattr(plugin_config, "enabled", True) if plugin_config else True
+
             if not enabled:
                 logger.info(
                     f"Plugin disabled: {plugin.get_name()} ({plugin_id}) - skipping registration"
                 )
                 return False
 
-            plugin_defaults = getattr(plugin_class, "defaults", {})
-            if self.config_manager:
-                self.config_manager.register_plugin_defaults(plugin_id, plugin_defaults)
+            # Register plugin defaults with config manager if it has DEFAULTS
+            plugin_defaults = getattr(plugin_class, "DEFAULTS", {})
+            if plugin_defaults and hasattr(self.config, "_config_manager"):
+                # Register defaults for potential future config file creation
+                self.config._config_manager.register_plugin_defaults(
+                    plugin_id, plugin_defaults
+                )
 
-            final_config = (
-                self.config_manager.get_plugin_config(plugin_id, plugin_defaults)
-                if self.config_manager
-                else plugin_defaults.copy()
-            )
-
-            if plugin.initialize(final_config, self.config_manager):
+            if plugin.initialize(plugin_config):
                 self.plugins[plugin_id] = plugin
 
                 if plugin.has_prefix():

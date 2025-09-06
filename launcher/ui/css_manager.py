@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from gi.repository import Gtk, Gdk
 import logging
 import os
@@ -18,11 +16,11 @@ class CssManager:
         CssManager._load_css_from_file(file_path)
 
     @classmethod
-    def load_css(cls, config: dict = None, plugins: dict = None) -> None:
+    def load_css(cls, config, plugins: dict = None) -> None:
         """Load CSS styling from default, plugin, and custom sources"""
         css_path = None
-        if config and "general" in config and "css_file" in config["general"]:
-            css_path = config["general"]["css_file"]
+        if config and hasattr(config, "system"):
+            css_path = config.system.css_file
 
         logger.info("Loading default CSS styling")
         cls._load_css_from_string(cls.DEFAULT_CSS)

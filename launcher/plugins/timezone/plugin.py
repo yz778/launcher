@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-
-from ..base import Plugin, SearchResult
-from datetime import datetime, time
 from launcher.utils.scoring_system import calculate_match_score
+from launcher.plugins.base import Plugin, SearchResult
+from datetime import datetime, time
 from typing import Dict, List, Any, Optional
 import logging
 import pytz
@@ -14,7 +12,7 @@ logger = logging.getLogger(__name__)
 class TimezonePlugin(Plugin):
     """Plugin for converting times between timezones"""
 
-    defaults = {
+    DEFAULTS = {
         "track_history": True,
     }
 
@@ -79,9 +77,9 @@ class TimezonePlugin(Plugin):
             for alias in aliases
         }
 
-    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+    def initialize(self, config) -> bool:
         """Initialize the plugin with the given configuration"""
-        super().initialize(config, config_manager)
+        super().initialize(config)
         return True
 
     def start(self) -> bool:

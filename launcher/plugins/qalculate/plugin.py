@@ -1,15 +1,13 @@
-#!/usr/bin/env python3
-
-from ..base import Plugin, SearchResult
 from launcher.utils.scoring_system import calculate_match_score
-from typing import Dict, List, Any, Optional
+from launcher.plugins.base import Plugin, SearchResult
+from typing import List, Optional
 import logging
 import pyperclip
-import subprocess
+import queue
 import re
+import subprocess
 import threading
 import time
-import queue
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +15,7 @@ logger = logging.getLogger(__name__)
 class QalculatePlugin(Plugin):
     """Plugin for calculating mathematical expressions"""
 
-    defaults = {
+    DEFAULTS = {
         "track_history": True,
     }
 
@@ -43,9 +41,9 @@ class QalculatePlugin(Plugin):
     def get_description(self) -> str:
         return "Calculate expressions with Qalculate"
 
-    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+    def initialize(self, config) -> bool:
         """Initialize the plugin with the given configuration"""
-        super().initialize(config, config_manager)
+        super().initialize(config)
 
         # Check if qalc is available before proceeding with initialization
         try:
