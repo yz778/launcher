@@ -1,12 +1,13 @@
-from launcher.plugins.base import SearchResult
-from launcher.utils.scoring_system import calculate_match_score
-from typing import Dict, Any, List, Optional
+import json
 import logging
 import math
 import os
-import time
-import json
 import tempfile
+import time
+from typing import Any, Dict, List, Optional
+
+from launcher.plugins.base import SearchResult
+from launcher.utils.scoring_system import FieldHighlight, calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -23,15 +24,33 @@ class HistoryManager:
             return None
 
         score = 0
+        name_indices = set()
+        description_indices = set()
 
         if query is None:
             score = entry.get("last_execution_time")
         else:
             name_l = entry.get("name").lower()
             desc_l = result["description"].lower()
-            score = calculate_match_score(query, name_l, is_name=True)
+
+            # Check name match
+            name_match = calculate_match_score(query, name_l, is_name=True)
+            if name_match:
+                score = name_match[0]
+                name_indices = name_match[1].name_indices
+
+            # Check description match
             if desc_l and query in desc_l:
-                score = max(score, calculate_match_score(query, desc_l, is_name=False))
+                desc_match = calculate_match_score(query, desc_l, is_name=False)
+                if desc_match:
+                    # Use higher score but keep both highlights
+                    if desc_match[0] > score:
+                        score = desc_match[0]
+                    description_indices = desc_match[1].description_indices
+
+        field_highlight = FieldHighlight(
+            name_indices=name_indices, description_indices=description_indices
+        )
 
         return SearchResult(
             plugin_id="history",
@@ -45,11 +64,12 @@ class HistoryManager:
                 "original_result": result,
                 "track_history": True,
             },
+            hilight=field_highlight,
         )
 
-    def get_recent_results(self, max_results: int = 10) -> List[SearchResult]:
+    def get_history_results(self) -> List[SearchResult]:
         """
-        Return a list of SearchResult objects for the most recent history entries.
+        Return a list of SearchResult objects for history entries.
         """
         results = []
         for entry in self.history:
@@ -57,7 +77,7 @@ class HistoryManager:
             if history_result:
                 results.append(history_result)
 
-        return results[:max_results]
+        return results
 
     __slots__ = ("history", "history_file")
 

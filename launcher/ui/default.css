@@ -3,6 +3,7 @@
     background: #23272e;
     border: 1.5px solid #44475a;
     padding: 0;
+    border-radius: 10px;
 }
 
 /* Entry styling */
@@ -47,13 +48,10 @@
 
 #app-list-item {
     padding: 8px;
+    margin-bottom: 5px;
     border-radius: 6px;
     transition: background-color 0.15s ease;
     min-height: 40px;
-}
-
-#app-list-item:hover {
-    background-color: rgba(60, 80, 120, 0.4);
 }
 
 #app-list-item:selected {
@@ -65,10 +63,6 @@
     padding: 8px;
     border-radius: 6px;
     min-height: 40px;
-}
-
-#history-item:hover {
-    background-color: rgba(100, 100, 100, 0.3);
 }
 
 #history-item:selected {
@@ -136,24 +130,3 @@ scrollbar slider:active {
     background-color: rgba(150, 150, 150, 0.8);
 }
 
-/* Text highlighting styles */
-.highlight-exact {
-    color: #8be9fd;
-    font-weight: bold;
-}
-
-.highlight-prefix {
-    color: #8be9fd;
-    font-weight: bold;
-}
-
-.highlight-word {
-    color: #50fa7b;
-    font-weight: bold;
-}
-
-.highlight-fuzzy {
-    color: #ffb86c;
-    font-weight: bold;
-    font-style: italic;
-}

@@ -1,5 +1,6 @@
-from launcher.utils.scoring_system import calculate_match_score
-from typing import List, Tuple, TypeVar, Generic, Callable
+from typing import Callable, Generic, List, Tuple, TypeVar
+
+from launcher.utils.scoring_system import FieldHighlight, calculate_match_score
 
 T = TypeVar("T")
 
@@ -26,32 +27,39 @@ class StringMatcher(Generic[T]):
         self.key_func = key_func
         self.history = history or []
 
-    def match(self, query: str, limit: int = 10) -> List[Tuple[T, float]]:
+    def match(
+        self, query: str, limit: int = 10
+    ) -> List[Tuple[T, float, FieldHighlight]]:
         """
-        Match items against the query and return scored results
+        Match items against the query and return scored results with highlight information
 
         Args:
             query: The query string to match against
             limit: Maximum number of results to return
 
         Returns:
-            List of tuples (item, score) sorted by score descending
+            List of tuples (item, score, field_highlight) sorted by score descending
         """
         if not query:
-            return [(item, 100.0) for item in self.items[:limit]]
+            # Create empty highlight for no-query results
+            empty_highlight = FieldHighlight("name", set())
+            return [(item, 100.0, empty_highlight) for item in self.items[:limit]]
 
         query_lower = query.lower().strip()
         matches = []
 
         for item in self.items:
-            score = self._calculate_score(query_lower, item)
-            if score > 0:
-                matches.append((item, score))
+            result = self._calculate_score(query_lower, item)
+            if result is not None:
+                score, field_highlight = result
+                matches.append((item, score, field_highlight))
 
         matches.sort(key=lambda x: x[1], reverse=True)
         return matches[:limit]
 
-    def _calculate_score(self, query: str, item: T) -> float:
+    def _calculate_score(
+        self, query: str, item: T
+    ) -> tuple[float, FieldHighlight] | None:
         """
         Calculate match score between query and item using simplified scoring system
 
@@ -60,7 +68,7 @@ class StringMatcher(Generic[T]):
             item: The item to score
 
         Returns:
-            Score using simplified scoring system (higher is better)
+            Tuple of (score, field_highlight) or None if no match
         """
         key = self.key_func(item)
 

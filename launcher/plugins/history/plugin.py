@@ -1,8 +1,8 @@
-from launcher.plugins.base import Plugin, SearchResult
-from typing import List
-import launcher.services as services
-
 import logging
+from typing import List
+
+import launcher.services as services
+from launcher.plugins.base import Plugin, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -16,9 +16,6 @@ class HistoryPlugin(Plugin):
         "min_query_length": 2,
     }
 
-    def __init__(self):
-        super().__init__()
-
     def get_id(self) -> str:
         return "history"
 
@@ -27,11 +24,6 @@ class HistoryPlugin(Plugin):
 
     def get_description(self) -> str:
         return "Search through command execution history"
-
-    def initialize(self, config) -> bool:
-        super().initialize(config)
-        logger.info("History plugin initialized successfully")
-        return True
 
     def search(self, query: str) -> List[SearchResult]:
         query = query.strip().lower()

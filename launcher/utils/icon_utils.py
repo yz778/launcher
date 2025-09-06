@@ -1,13 +1,14 @@
-from gi.repository import Gtk, GdkPixbuf
-from typing import Optional, List, Dict
-from xdg_base_dirs import xdg_cache_home
-from xdg.IconTheme import getIconPath
 import hashlib
 import logging
 import os
+import threading
 import urllib.parse
 import urllib.request
+from typing import Dict, List, Optional, Callable
 
+from gi.repository import GdkPixbuf, GLib, Gtk
+from xdg.IconTheme import getIconPath
+from xdg_base_dirs import xdg_cache_home
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ SUPPORTED_IMAGE_EXTENSIONS = (
 
 
 def load_theme_icon(
-    icon_name: str, size: int, fallback_names: List[str] = None
+    icon_name: str, size: int, fallback_names: Optional[List[str]] = None
 ) -> Optional[GdkPixbuf.Pixbuf]:
     """
     Load an icon from the theme with fallback options
@@ -61,8 +62,9 @@ def load_theme_icon(
 def load_custom_icon(
     icon_spec: str,
     size: int,
-    cache: Dict[str, GdkPixbuf.Pixbuf] = None,
-    cache_dir: str = None,
+    cache: Optional[Dict[str, GdkPixbuf.Pixbuf]] = None,
+    cache_dir: Optional[str] = None,
+    callback: Optional[Callable[[Optional[GdkPixbuf.Pixbuf]], None]] = None,
 ) -> Optional[GdkPixbuf.Pixbuf]:
     """
     Load custom icon with URI scheme support and caching
@@ -77,9 +79,11 @@ def load_custom_icon(
         size: Icon size in pixels
         cache: Optional cache dictionary to store loaded icons
         cache_dir: Directory for storing downloaded URL icons
+        callback: Optional callback function(pixbuf) called when async loading completes
 
     Returns:
         Loaded icon pixbuf or None if loading fails
+        For URL icons, returns loading icon immediately and calls callback when done
     """
     if not icon_spec or size <= 0:
         return None
@@ -99,6 +103,14 @@ def load_custom_icon(
             icon_name = icon_spec[8:]
             loaded_icon = _load_icon_from_theme(icon_name, size)
         elif icon_spec.startswith(("http://", "https://")):
+            if callback:
+
+                def url_callback(pixbuf):
+                    if cache is not None and pixbuf is not None:
+                        cache[icon_spec] = pixbuf
+                    callback(pixbuf)
+
+                load_icon_from_url_async(icon_spec, size, url_callback, cache_dir)
             loaded_icon = _load_icon_from_url(icon_spec, size, cache_dir)
         elif icon_spec.startswith("file://"):
             file_path = icon_spec[7:]
@@ -108,7 +120,11 @@ def load_custom_icon(
         else:
             loaded_icon = _load_icon_from_theme(icon_spec, size)
 
-        if cache is not None and loaded_icon is not None:
+        if (
+            cache is not None
+            and loaded_icon is not None
+            and not icon_spec.startswith(("http://", "https://"))
+        ):
             cache[icon_spec] = loaded_icon
 
     except Exception as e:
@@ -149,7 +165,7 @@ def _load_icon_from_file(icon_path: str, size: int) -> Optional[GdkPixbuf.Pixbuf
 
 
 def _load_icon_from_url(
-    icon_url: str, size: int, cache_dir: str = None
+    icon_url: str, size: int, cache_dir: Optional[str] = None
 ) -> Optional[GdkPixbuf.Pixbuf]:
     """
     Load icon from URL with local caching
@@ -188,64 +204,122 @@ def _load_icon_from_url(
             except Exception:
                 pass
 
-    # Download icon from URL
-    try:
-        request = urllib.request.Request(
-            icon_url, headers={"User-Agent": "Launcher/1.0"}
-        )
+    # If not cached, return a loading icon immediately
+    return get_loading_icon(size)
 
-        with urllib.request.urlopen(request, timeout=10) as response:
-            if response.status == 200:
-                content_type = response.headers.get("content-type", "").lower()
-                if not content_type.startswith("image/"):
-                    logger.warning(
-                        f"URL does not return an image (content-type: {content_type}): {icon_url}"
-                    )
-                    return None
 
-                content = response.read(5 * 1024 * 1024)  # 5MB limit
+def load_icon_from_url_async(
+    icon_url: str,
+    size: int,
+    callback: Callable[[Optional[GdkPixbuf.Pixbuf]], None],
+    cache_dir: Optional[str] = None,
+):
+    """
+    Asynchronously load icon from URL. Calls callback(pixbuf) on main thread when done.
+    Returns a loading icon immediately.
+    """
 
-                content_type_to_ext = {
-                    "image/png": ".png",
-                    "image/jpeg": ".jpg",
-                    "image/jpg": ".jpg",
-                    "image/gif": ".gif",
-                    "image/svg+xml": ".svg",
-                    "image/x-icon": ".ico",
-                    "image/vnd.microsoft.icon": ".ico",
-                    "image/bmp": ".bmp",
-                    "image/tiff": ".tiff",
-                    "image/webp": ".webp",
-                }
-
-                if content_type in content_type_to_ext:
-                    correct_ext = content_type_to_ext[content_type]
-                    if not cache_path.endswith(correct_ext):
-                        cache_filename = f"{url_hash}{correct_ext}"
-                        cache_path = os.path.join(cache_dir, cache_filename)
-
-                with open(cache_path, "wb") as f:
-                    f.write(content)
-
-                return GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                    cache_path, size, size, True
-                )
-            else:
-                logger.warning(
-                    f"HTTP {response.status} when downloading icon: {icon_url}"
-                )
-
-    except urllib.error.URLError as e:
-        logger.error(f"Network error downloading icon from {icon_url}: {e}")
-    except Exception as e:
-        logger.error(f"Error downloading icon from {icon_url}: {e}")
+    def worker():
+        pixbuf = None
         try:
-            if os.path.exists(cache_path):
-                os.remove(cache_path)
-        except Exception:
-            pass
+            # Try to download and cache as in the original function
+            if not cache_dir:
+                _cache_dir = os.path.join(xdg_cache_home(), "launcher", "url_icons")
+            else:
+                _cache_dir = cache_dir
+            os.makedirs(_cache_dir, exist_ok=True)
+            url_hash = hashlib.sha256(icon_url.encode()).hexdigest()[:16]
+            parsed_url = urllib.parse.urlparse(icon_url)
+            file_ext = os.path.splitext(parsed_url.path)[1].lower()
+            if file_ext not in SUPPORTED_IMAGE_EXTENSIONS:
+                file_ext = ".png"
+            cache_filename = f"{url_hash}{file_ext}"
+            cache_path = os.path.join(_cache_dir, cache_filename)
+            # Check if icon is already cached
+            if os.path.isfile(cache_path):
+                try:
+                    pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                        cache_path, size, size, True
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to load cached icon {cache_path}: {e}")
+                    try:
+                        os.remove(cache_path)
+                    except Exception:
+                        pass
+            if pixbuf is None:
+                # Download icon from URL
+                request = urllib.request.Request(
+                    icon_url, headers={"User-Agent": "Launcher/1.0"}
+                )
+                with urllib.request.urlopen(request, timeout=10) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get("content-type", "").lower()
+                        if not content_type.startswith("image/"):
+                            logger.warning(
+                                f"URL does not return an image (content-type: {content_type}): {icon_url}"
+                            )
+                        else:
+                            content = response.read(5 * 1024 * 1024)  # 5MB limit
+                            content_type_to_ext = {
+                                "image/png": ".png",
+                                "image/jpeg": ".jpg",
+                                "image/jpg": ".jpg",
+                                "image/gif": ".gif",
+                                "image/svg+xml": ".svg",
+                                "image/x-icon": ".ico",
+                                "image/vnd.microsoft.icon": ".ico",
+                                "image/bmp": ".bmp",
+                                "image/tiff": ".tiff",
+                                "image/webp": ".webp",
+                            }
+                            if content_type in content_type_to_ext:
+                                correct_ext = content_type_to_ext[content_type]
+                                if not cache_path.endswith(correct_ext):
+                                    cache_filename = f"{url_hash}{correct_ext}"
+                                    cache_path = os.path.join(
+                                        _cache_dir, cache_filename
+                                    )
+                            with open(cache_path, "wb") as f:
+                                f.write(content)
+                            try:
+                                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                                    cache_path, size, size, True
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    f"Failed to load downloaded icon {cache_path}: {e}"
+                                )
+                    else:
+                        logger.warning(
+                            f"HTTP {response.status} when downloading icon: {icon_url}"
+                        )
+        except Exception as e:
+            logger.error(f"Error downloading icon from {icon_url}: {e}")
+            try:
+                if os.path.exists(cache_path):
+                    os.remove(cache_path)
+            except Exception:
+                pass
 
-    return None
+        # Call the callback on the main thread
+        def _cb():
+            callback(pixbuf)
+            return False  # Only run once
+
+        GLib.idle_add(_cb)
+
+    threading.Thread(target=worker, daemon=True).start()
+    return get_loading_icon(size)
+
+
+# Helper: get a loading icon (spinner or placeholder)
+def get_loading_icon(size: int) -> Optional[GdkPixbuf.Pixbuf]:
+    # You can customize this to use a real spinner or placeholder image
+    # For now, use a fallback icon (e.g., 'view-refresh' or 'image-missing')
+    return _load_icon_from_theme("view-refresh", size) or _load_icon_from_theme(
+        "image-missing", size
+    )
 
 
 def _load_icon_from_theme(icon_name: str, size: int) -> Optional[GdkPixbuf.Pixbuf]:
@@ -397,16 +471,3 @@ def _get_desktop_fallback_icon(size: int) -> Optional[GdkPixbuf.Pixbuf]:
         return icon_theme.load_icon("application-x-executable", size, 0)
     except Exception:
         return None
-
-
-def ensure_correct_icon_size(
-    pixbuf: Optional[GdkPixbuf.Pixbuf], size: int
-) -> Optional[GdkPixbuf.Pixbuf]:
-    """Ensure pixbuf is the correct size"""
-    if not pixbuf:
-        return pixbuf
-
-    if pixbuf.get_width() != size or pixbuf.get_height() != size:
-        return pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
-
-    return pixbuf

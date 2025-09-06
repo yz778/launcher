@@ -1,8 +1,3 @@
-from launcher.utils.icon_utils import normalize_icon_spec
-from launcher.utils.process_manager import process_manager
-from launcher.utils.string_matcher import StringMatcher
-from launcher.plugins.base import Plugin, SearchResult
-from typing import Dict, List, Any
 import json
 import logging
 import os
@@ -10,6 +5,12 @@ import re
 import shlex
 import stat
 import threading
+from typing import Any, Dict, List
+
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.icon_utils import normalize_icon_spec
+from launcher.utils.process_manager import process_manager
+from launcher.utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +308,7 @@ class ExecutablePlugin(Plugin):
         matches = current_matcher.match(search_query, limit=20)
 
         results = []
-        for executable, score in matches:
+        for executable, score, field_highlight in matches:
             # Use custom icon if specified, otherwise use fallback
             if executable.custom_icon:
                 icon_spec = normalize_icon_spec(executable.custom_icon)
@@ -321,6 +322,7 @@ class ExecutablePlugin(Plugin):
                 description=executable.description,
                 icon_spec=icon_spec,
                 score=score,
+                hilight=field_highlight,
                 metadata={
                     "command": executable.get_command(),
                     "args": args,

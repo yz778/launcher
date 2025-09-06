@@ -1,12 +1,14 @@
+import logging
+from typing import List
+
+from gi.repository import Gdk, GLib, Gtk, Pango
+from plugins.base import SearchResult
+from ui.css_manager import CssManager
+
 from launcher import services
-from launcher.utils.icon_utils import load_custom_icon, get_fallback_icon
+from launcher.utils.icon_utils import get_fallback_icon, load_custom_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
 from launcher.utils.text_highlighter import TextHighlighter
-from gi.repository import Gtk, Gdk, Pango, GLib
-from plugins.base import SearchResult
-from typing import List
-from ui.css_manager import CssManager
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ class AppListItem(Gtk.ListBoxRow):
         self.set_name("app-list-item")
         self.result = result
         self.query = query
+        self.icon_widget = None  # Store reference to icon widget for async updates
 
         # Add plugin-specific CSS class
         style_context = self.get_style_context()
@@ -37,16 +40,16 @@ class AppListItem(Gtk.ListBoxRow):
 
         # Load and display icon
         icon_pixbuf = self._load_result_icon(result, icon_size)
+        icon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        icon_box.set_size_request(icon_size, icon_size)
+
         if icon_pixbuf:
-            icon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            icon_box.set_size_request(icon_size, icon_size)
-            icon = Gtk.Image.new_from_pixbuf(icon_pixbuf)
-            icon_box.pack_start(icon, True, False, 0)
-            hbox.pack_start(icon_box, False, False, 0)
+            self.icon_widget = Gtk.Image.new_from_pixbuf(icon_pixbuf)
+            icon_box.pack_start(self.icon_widget, True, False, 0)
         else:
-            spacer = Gtk.Box()
-            spacer.set_size_request(icon_size, icon_size)
-            hbox.pack_start(spacer, False, False, 0)
+            self.icon_widget = None
+
+        hbox.pack_start(icon_box, False, False, 0)
 
         # Create a vertical box for name and description
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -61,7 +64,7 @@ class AppListItem(Gtk.ListBoxRow):
         name_label.set_name("app-name")
 
         # Apply highlighting based on current query (UI handles highlighting logic)
-        self._apply_highlighting(name_label, result.name, self.query)
+        self._apply_highlighting(name_label, result.name, self.query, "name")
         name_box.pack_start(name_label, True, True, 0)
 
         if usage_count > 0:
@@ -83,7 +86,9 @@ class AppListItem(Gtk.ListBoxRow):
 
         # Apply highlighting to description
         if result.description:
-            self._apply_highlighting(desc_label, result.description, self.query)
+            self._apply_highlighting(
+                desc_label, result.description, self.query, "description"
+            )
 
         vbox.pack_start(desc_label, True, True, 0)
 
@@ -93,11 +98,28 @@ class AppListItem(Gtk.ListBoxRow):
     def _load_result_icon(self, result: SearchResult, size: int):
         """Load icon for a search result using icon_spec"""
         if result.icon_spec:
-            return load_custom_icon(result.icon_spec, size)
+
+            def icon_callback(pixbuf):
+                if pixbuf and self.icon_widget is not None:
+                    self.update_icon(pixbuf)
+
+            return load_custom_icon(result.icon_spec, size, callback=icon_callback)
         else:
             return get_fallback_icon(size)
 
-    def _apply_highlighting(self, label: Gtk.Label, text: str, query: str) -> None:
+    def update_icon(self, pixbuf):
+        """Update the icon widget with a new pixbuf"""
+        if self.icon_widget is not None and pixbuf is not None:
+            self.icon_widget.set_from_pixbuf(pixbuf)
+        elif self.icon_widget is None and pixbuf is not None:
+            parent = self.get_children()[0].get_children()[0]  # hbox -> icon_box
+            self.icon_widget = Gtk.Image.new_from_pixbuf(pixbuf)
+            parent.pack_start(self.icon_widget, True, False, 0)
+            self.icon_widget.show()
+
+    def _apply_highlighting(
+        self, label: Gtk.Label, text: str, query: str, field_type: str
+    ) -> None:
         """Apply highlighting to a label based on the search query using flexible highlighting"""
         if not text or not query:
             label.set_text(text or "")
@@ -109,15 +131,15 @@ class AppListItem(Gtk.ListBoxRow):
             return
 
         try:
-            highlighter = TextHighlighter()
-            segments = highlighter.get_highlight_segments(text, query)
+            hilight = getattr(self.result, "hilight", None)
+            indices = hilight.get_indices_for_field(field_type) if hilight else None
 
-            if not segments:
+            if indices:
+                highlighter = TextHighlighter()
+                markup = highlighter.build_markup_from_indices(text, indices)
+                label.set_markup(markup)
+            else:
                 label.set_text(text)
-                return
-
-            markup = highlighter.build_markup(text, segments, label)
-            label.set_markup(markup)
 
         except Exception:
             label.set_text(text)
@@ -215,9 +237,6 @@ class LauncherWindow(Gtk.Window):
         self._result_update_timeout_id = None
         self._result_update_delay_ms = 100  # Delay to stabilize result updates
 
-        # Track if user is navigating with keys
-        self.user_navigating = False
-
         # Make sure the scrolled window is hidden initially
         self.scrolled.hide()
 
@@ -238,18 +257,13 @@ class LauncherWindow(Gtk.Window):
         for child in self.list_box.get_children():
             child.destroy()
 
-    def _populate_list_box(self, results_to_display: List[SearchResult]):
+    def _populate_list_box(self, results: List[SearchResult]):
         """Populates the list box with the given results and updates UI elements."""
-        # Clear previous items from list_box with proper cleanup
+
         for child in self.list_box.get_children():
-            child.destroy()  # Properly destroy widgets
+            child.destroy()
 
-        # Always show dropdown if user has typed something
-        self.scrolled.show()
-        self.result_count_label.hide()
-
-        # Add new items
-        for result in results_to_display:
+        for result in results:
             history_count = (
                 result.metadata.get("usage_count", 0)
                 if result.plugin_id == "history"
@@ -267,46 +281,28 @@ class LauncherWindow(Gtk.Window):
 
         self.list_box.show_all()
         self.scrolled.show()
-        # Scroll to top when results change
-        vadj = self.scrolled.get_vadjustment()
-        if vadj:
-            vadj.set_value(vadj.get_lower())
+        self._update_results_count(results)
 
-        # Use unified display setup
-        count_text = (
-            f"{len(results_to_display)} result{'s' if len(results_to_display) != 1 else ''}"
-            if results_to_display
-            else ""
-        )
-        self._setup_results_display(results_to_display, count_text)
-
-        if not self.user_navigating:
-            self.list_box.unselect_all()
-
-    def _setup_results_display(self, items, count_text=""):
+    def _update_results_count(self, results):
         """Unified method to set up the results display area with consistent sizing and scrolling."""
+
+        count = len(results)
+
         # Show/hide result count
-        if count_text:
+        if count:
+            count_text = f"{count} result{'s' if count != 1 else ''}"
             self.result_count_label.set_text(count_text)
             self.result_count_label.show()
         else:
             self.result_count_label.set_text("")
             self.result_count_label.hide()
 
-        # Calculate display height - always use results window height for consistency
-        self.resize(self.window_width, self.window_height)
-
         # Set scrolling policy based on number of items
-        if len(items) > 5:
+        if count > 5:
             self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.ALWAYS)
             self.scrolled.set_overlay_scrolling(False)
         else:
             self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
-
-        # Scroll to top when results change
-        vadj = self.scrolled.get_vadjustment()
-        if vadj:
-            vadj.set_value(vadj.get_lower())
 
     def handle_plugin_results(
         self, search_id: int, plugin_id: str, plugin_results: List[SearchResult]
@@ -350,21 +346,17 @@ class LauncherWindow(Gtk.Window):
         if search_id != self.active_search_id:
             return False  # Ignore stale updates
 
-        # First, adjust scores based on history for all current results
-        # Apply deduplication based on plugin scores (no double scoring needed)
         self.current_results = self.result_deduplicator.deduplicate_results(
             self.current_results
         )
 
-        # Sort by score only - history plugin already has prioritized scores
         self.current_results.sort(key=lambda r: r.score, reverse=True)
-
-        # Truncate results - cache max_results to avoid repeated config lookups
-        if not hasattr(self, "_cached_max_results"):
-            self._cached_max_results = services.config.system.max_results
-        self.current_results = self.current_results[: self._cached_max_results]
+        self.current_results = self.current_results[
+            : services.config.system.max_results
+        ]
 
         self._populate_list_box(self.current_results)
+
         return False  # Remove from timeout queue
 
     def handle_search_finished(self, search_id: int):
@@ -397,8 +389,7 @@ class LauncherWindow(Gtk.Window):
     def _show_recent_history(self) -> None:
         """Show recent history."""
         self._clear_list_box_and_hide()
-        max_results = services.config.system.max_results
-        results = services.history_manager.get_recent_results(max_results)
+        results = services.history_manager.get_history_results()
         if results:
             self._populate_list_box(results)
 
@@ -411,7 +402,6 @@ class LauncherWindow(Gtk.Window):
             GLib.source_remove(self._result_update_timeout_id)
             self._result_update_timeout_id = None
 
-        self.user_navigating = False  # Reset navigation state
         query = self.entry.get_text().strip()
 
         self.current_results.clear()
@@ -436,26 +426,46 @@ class LauncherWindow(Gtk.Window):
         return False
 
     def _navigate_selection(self, direction: int, state) -> bool:
-        """Navigate selection in the results list by direction (+1 down, -1 up), wrapping around.
-        Updates the entry line with the selected row's user_input without triggering a search.
-        """
-        self.user_navigating = True
+        """Navigate selection in the results list by direction (+1 down, -1 up), supporting shift+arrow multi-selection like typical listboxes."""
         children = self.list_box.get_children()
         if not children:
             return True
 
+        shift_pressed = bool(state & Gdk.ModifierType.SHIFT_MASK)
+
+        # Track anchor for shift selection
+        if not hasattr(self, "_selection_anchor") or not shift_pressed:
+            # Set anchor to current selection or to-be-selected row
+            selected_row = self.list_box.get_selected_row()
+            if selected_row:
+                self._selection_anchor = selected_row.get_index()
+            else:
+                self._selection_anchor = 0 if direction > 0 else len(children) - 1
+
         selected_row = self.list_box.get_selected_row()
         if selected_row:
             index = selected_row.get_index()
-            target_index = (index + direction) % len(children)
+            target_index = index + direction
+            if target_index < 0 or target_index >= len(children):
+                return True
         else:
             target_index = 0 if direction > 0 else len(children) - 1
 
         target_row = self.list_box.get_row_at_index(target_index)
 
-        if not (state & Gdk.ModifierType.SHIFT_MASK):
+        if shift_pressed:
+            # Select range from anchor to target_index (inclusive)
+            anchor = self._selection_anchor
+            start = min(anchor, target_index)
+            end = max(anchor, target_index)
             self.list_box.unselect_all()
-        self.list_box.select_row(target_row)
+            for i in range(start, end + 1):
+                row = self.list_box.get_row_at_index(i)
+                self.list_box.select_row(row)
+        else:
+            self.list_box.unselect_all()
+            self.list_box.select_row(target_row)
+            self._selection_anchor = target_index
 
         # Ensure the selected row is visible
         adjustment = self.scrolled.get_vadjustment()
@@ -469,12 +479,13 @@ class LauncherWindow(Gtk.Window):
             self._search_timeout_id = None
 
         # Update the entry with the row's user_input without triggering search
-        if self.entry_changed_handler_id is not None:
-            self.entry.handler_block(self.entry_changed_handler_id)
-        self.entry.set_text(target_row.result.name)
-        self.entry.set_position(-1)
-        if self.entry_changed_handler_id is not None:
-            self.entry.handler_unblock(self.entry_changed_handler_id)
+        if not shift_pressed:
+            if self.entry_changed_handler_id is not None:
+                self.entry.handler_block(self.entry_changed_handler_id)
+            self.entry.set_text(target_row.result.name)
+            self.entry.set_position(-1)
+            if self.entry_changed_handler_id is not None:
+                self.entry.handler_unblock(self.entry_changed_handler_id)
 
         return True
 
@@ -596,9 +607,10 @@ class LauncherWindow(Gtk.Window):
 
     def show_and_focus(self):
         """Show window and grab focus"""
-        self.entry.select_region(0, -1)
         self.show_all()
         self.present()
+        self.entry.select_region(0, -1)
+        self.entry.grab_focus()
 
     def on_delete_event(self, widget, event):
         """Handle window delete event - hide or quit in foreground mode"""

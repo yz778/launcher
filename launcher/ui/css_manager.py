@@ -1,6 +1,7 @@
-from gi.repository import Gtk, Gdk
 import logging
 import os
+
+from gi.repository import Gdk, Gtk
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,12 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict, field
-from typing import List, Any, Dict, Optional
-from launcher import services
 import logging
 import os
 import sys
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional
+
+from launcher import services
+from launcher.utils.scoring_system import FieldHighlight
 
 logger = logging.getLogger(__name__)
 
@@ -20,10 +22,13 @@ class SearchResult:
     icon_spec: Optional[str] = None
     score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
+    hilight: Optional["FieldHighlight"] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the SearchResult to a dictionary."""
-        return asdict(self)
+        """Convert the SearchResult to a dictionary, excluding hilight data."""
+        result_dict = asdict(self)
+        result_dict.pop("hilight", None)  # don't store in history
+        return result_dict
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SearchResult":
@@ -62,6 +67,15 @@ class Plugin(ABC):
             The prefix string (e.g., ">") or None if no prefix is used
         """
         return self.prefix
+
+    def strip_prefix(self, query: str) -> str:
+        """
+        Strips the plugin's prefix from the query if it exists.
+        Handles cases with and without a space after the prefix.
+        """
+        if self.prefix and query.lower().startswith(self.prefix.lower()):
+            return query[len(self.prefix) :].lstrip()
+        return query
 
     def has_prefix(self) -> bool:
         """

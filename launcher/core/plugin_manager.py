@@ -1,11 +1,13 @@
-from launcher.plugins.base import Plugin, SearchResult
-from gi.repository import GLib
-from typing import List, Type, Callable, Optional
 import importlib
 import inspect
 import logging
 import os
 import threading
+from typing import Callable, List, Optional, Type
+
+from gi.repository import GLib
+
+from launcher.plugins.base import Plugin, SearchResult
 
 logger = logging.getLogger(__name__)
 
