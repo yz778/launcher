@@ -196,11 +196,9 @@ class DesktopFilePlugin(Plugin):
         # Initialize with empty data first
         self.desktop_files = {}
         self.matcher = StringMatcher(items=[], key_func=lambda df: df.name)
-        # Access cache dir through services
-        from launcher import services
-
-        cache_dir = services.config_manager.get_cache_dir()
-        self.cache_file = os.path.join(cache_dir, f"{self.get_id()}_cache.json")
+        self.cache_file = os.path.join(
+            self.get_cache_dir(), f"{self.get_id()}_cache.json"
+        )
 
         return True
 

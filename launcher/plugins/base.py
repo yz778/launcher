@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict, field
 from typing import List, Any, Dict, Optional
+from launcher import services
 import logging
 import os
 import sys
@@ -71,15 +72,6 @@ class Plugin(ABC):
         """
         return self.prefix is not None and self.prefix != ""
 
-    def get_general_config(self, key: str, default: Any = None) -> Any:
-        """Helper to get a value from the system config section."""
-        # Access system config through global services
-        from launcher import services
-
-        if services.config and hasattr(services.config, "system"):
-            return getattr(services.config.system, key, default)
-        return default
-
     def should_track_history(self) -> bool:
         """
         Check if this plugin should track executions in history
@@ -121,97 +113,11 @@ class Plugin(ABC):
         self.config = config
         return True
 
-    @staticmethod
-    def is_structurally_valid(
-        entry: Dict[str, Any], plugin_manager: Optional[Any] = None
-    ) -> bool:
-        """
-        Check if a history entry has valid structure and types.
-
-        This function performs basic structural and type validation that is common
-        across all plugins and the history manager.
-
-        Args:
-            entry: History entry to validate
-            plugin_manager: Optional plugin manager to check if plugins still exist
-
-        Returns:
-            True if entry has valid structure and types, False otherwise
-        """
-        try:
-            # Basic structure validation
-            if not isinstance(entry, dict):
-                return False
-
-            # Required fields validation
-            required_fields = [
-                "plugin_id",
-                "item_id",
-                "name",
-                "result",
-                "last_execution_time",
-                "usage_count",
-            ]
-            for field in required_fields:
-                if field not in entry:
-                    logger.debug(f"Missing required field: {field}")
-                    return False
-
-            # Type validation
-            plugin_id = entry.get("plugin_id")
-            item_id = entry.get("item_id")
-            name = entry.get("name")
-            result = entry.get("result")
-            last_execution_time = entry.get("last_execution_time")
-            usage_count = entry.get("usage_count")
-
-            if not isinstance(plugin_id, str) or not plugin_id.strip():
-                logger.debug(f"Invalid plugin_id: {plugin_id}")
-                return False
-
-            if not isinstance(item_id, str) or not item_id.strip():
-                logger.debug(f"Invalid item_id: {item_id}")
-                return False
-
-            if not isinstance(name, str):
-                logger.debug(f"Invalid name: {name}")
-                return False
-
-            if not isinstance(result, dict):
-                logger.debug(f"Invalid result: {result}")
-                return False
-
-            if (
-                not isinstance(last_execution_time, (int, float))
-                or last_execution_time <= 0
-            ):
-                logger.debug(f"Invalid last_execution_time: {last_execution_time}")
-                return False
-
-            if not isinstance(usage_count, int) or usage_count <= 0:
-                logger.debug(f"Invalid usage_count: {usage_count}")
-                return False
-
-            # Plugin existence validation (if plugin_manager provided)
-            if plugin_manager and hasattr(plugin_manager, "plugins"):
-                if plugin_id not in plugin_manager.plugins:
-                    logger.debug(f"Plugin no longer exists: {plugin_id}")
-                    return False
-
-            return True
-
-        except Exception as e:
-            logger.debug(f"Error validating history entry structure: {e}")
-            return False
+    def get_cache_dir(self) -> str:
+        return services.config.system.cache_dir
 
     def get_terminal_command(self) -> str:
-        """
-        Helper to get the terminal command from general configuration
-
-        Returns:
-            Terminal command string
-        """
-        return self.get_general_config("terminal_command")
+        return services.config.system.get("terminal_command")
 
     def start(self) -> bool:
         """
@@ -256,5 +162,3 @@ class Plugin(ABC):
         This method is called when the plugin is being unloaded.
         Override this method to release any resources used by the plugin.
         """
-
-    _empty_input_handlers = []
