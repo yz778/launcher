@@ -290,7 +290,16 @@ class LauncherWindow(Gtk.Window):
 
         # Show/hide result count
         if count:
-            count_text = f"{count} result{'s' if count != 1 else ''}"
+            prefix_plugins = services.plugin_manager.get_current_prefix_plugins()
+            if prefix_plugins:
+                if len(prefix_plugins) == 1:
+                    count_text = prefix_plugins[0]
+                else:
+                    additional_count = len(prefix_plugins) - 1
+                    count_text = f"{prefix_plugins[0]} +{additional_count} plugin{'s' if additional_count else ''}"
+            else:
+                count_text = f"{count} result{'s' if count != 1 else ''}"
+
             self.result_count_label.set_text(count_text)
             self.result_count_label.show()
         else:
@@ -609,8 +618,13 @@ class LauncherWindow(Gtk.Window):
         """Show window and grab focus"""
         self.show_all()
         self.present()
-        self.entry.select_region(0, -1)
+        GLib.timeout_add(self._search_delay_ms, self._select_and_focus)
+
+    def _select_and_focus(self):
+        """Select text and grab focus after widget is ready"""
         self.entry.grab_focus()
+        self.entry.select_region(0, -1)
+        return False  # Remove from idle queue
 
     def on_delete_event(self, widget, event):
         """Handle window delete event - hide or quit in foreground mode"""

@@ -179,7 +179,7 @@ class QalculatePlugin(Plugin):
 
     def _strip_ansi_codes(self, text: str) -> str:
         """Remove ANSI color codes from text"""
-        ansi_escape = re.compile(r"\x1B(?:[@-Z\-_]|[[0-?]*[ -/]*[@-~])")
+        ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
         return ansi_escape.sub("", text)
 
     def _is_calculation(self, query: str) -> bool:
@@ -192,7 +192,7 @@ class QalculatePlugin(Plugin):
             return True
 
         # 2. Starts with a number (most calculations do)
-        if query and query[0].isdigit():
+        if query[0].isdigit():
             return True
 
         # 3. Contains conversion keywords
@@ -212,10 +212,8 @@ class QalculatePlugin(Plugin):
 
         Returns None if calculation fails
         """
-        expression = self.strip_prefix(expression)
 
         with self._process_lock:
-            # Ensure we have a running qalc session
             if self._qalc_process is None or self._qalc_process.poll() is not None:
                 self._start_qalc_session()
 
@@ -237,8 +235,6 @@ class QalculatePlugin(Plugin):
 
                 # Read the result with timeout
                 start_time = time.time()
-                result_lines = []
-
                 while time.time() - start_time < self._qalc_timeout_seconds:
                     try:
                         line = self._output_queue.get(
@@ -246,21 +242,13 @@ class QalculatePlugin(Plugin):
                         )
                         clean_line = self._strip_ansi_codes(line.strip())
 
-                        # Skip empty lines and prompt lines (lines starting with >)
+                        # Return first non-empty line that doesn't start with >
                         if clean_line and not clean_line.startswith(">"):
-                            result_lines.append(clean_line)
-                            # Got a result, break out
-                            break
+                            self._start_cooldown_timer()
+                            return clean_line
 
                     except queue.Empty:
                         continue
-
-                if result_lines:
-                    for line in result_lines:
-                        if line and line.strip():
-                            result = line.strip()
-                            self._start_cooldown_timer()
-                            return result
 
                 return None
 
@@ -271,34 +259,26 @@ class QalculatePlugin(Plugin):
 
     def search(self, query: str) -> List[SearchResult]:
         """Search for calculations matching the query"""
-        # Check if this is a calculation
-        if not query or not self._is_calculation(query):
+        query = self.strip_prefix(query)
+        if not self._is_calculation(query):
             return []
 
         result = self._calculate(query)
-
         if result is None:
-            if self._last_valid_result is None:
+            if self._last_valid_result is not None:
+                result = self._last_valid_result
+            else:
                 return []
-
-            result = self._last_valid_result
-
         else:
             self._last_valid_result = result
-
-        display_query = self.strip_prefix(query)
-
-        # Calculate score but ignore highlighting for calculation results
-        score_result = calculate_match_score(query, query, is_name=True)
-        score = score_result[0] if score_result else 100.0
 
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,
-            name=display_query,
+            name=query,
             description=result,
             icon_spec="theme://qalculate",
-            score=score,
+            score=100.0,
             hilight=None,
             metadata={
                 "result": result,

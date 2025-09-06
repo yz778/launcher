@@ -23,6 +23,7 @@ class PluginManager:
         "_executor",
         "plugins_dir",
         "prefix_registry",
+        "_current_prefix_plugins",
     )
 
     def __init__(self, config):
@@ -32,7 +33,8 @@ class PluginManager:
         self.active_search_threads_lock = threading.Lock()
         self._executor = None
         self.plugins_dir = ""
-        self.prefix_registry = {}  # prefix -> plugin_id mapping
+        self.prefix_registry = {}  # prefix -> list of plugin_ids mapping
+        self._current_prefix_plugins = []  # Names of plugins currently being searched via prefix
 
     def _get_executor(self):
         """Get or create thread pool executor"""
@@ -111,12 +113,9 @@ class PluginManager:
 
                 if plugin.has_prefix():
                     prefix = plugin.get_prefix()
-                    if prefix in self.prefix_registry:
-                        logger.warning(
-                            f"Prefix '{prefix}' already registered by plugin {self.prefix_registry[prefix]}, "
-                            f"overriding with plugin {plugin_id}"
-                        )
-                    self.prefix_registry[prefix] = plugin_id
+                    if prefix not in self.prefix_registry:
+                        self.prefix_registry[prefix] = []
+                    self.prefix_registry[prefix].append(plugin_id)
                     logger.info(f"Registered prefix '{prefix}' for plugin {plugin_id}")
 
                 logger.info(f"Initialized plugin: {plugin.get_name()} ({plugin_id})")
@@ -144,9 +143,11 @@ class PluginManager:
                     prefix = plugin.get_prefix()
                     if (
                         prefix in self.prefix_registry
-                        and self.prefix_registry[prefix] == plugin_id
+                        and plugin_id in self.prefix_registry[prefix]
                     ):
-                        del self.prefix_registry[prefix]
+                        self.prefix_registry[prefix].remove(plugin_id)
+                        if not self.prefix_registry[prefix]:  # Remove empty list
+                            del self.prefix_registry[prefix]
                         logger.info(
                             f"Unregistered prefix '{prefix}' for plugin {plugin_id}"
                         )
@@ -168,18 +169,28 @@ class PluginManager:
         Search across enabled plugins non-blockingly using thread pool.
         If query starts with a registered prefix, only search that plugin.
         """
-        if not query or not query.strip():
+        query = query.strip()
+        if not query:
             GLib.idle_add(finished_callback, search_id)
             return
 
-        target_plugin_id = self._get_plugin_for_prefix(query)
+        target_plugin_ids = self._get_plugins_for_prefix(query)
 
-        if target_plugin_id:
-            if target_plugin_id in self.plugins:
-                plugins_to_search = [(target_plugin_id, self.plugins[target_plugin_id])]
-            else:
+        if target_plugin_ids:
+            plugins_to_search = [
+                (plugin_id, self.plugins[plugin_id])
+                for plugin_id in target_plugin_ids
+                if plugin_id in self.plugins
+            ]
+            if not plugins_to_search:
                 GLib.idle_add(finished_callback, search_id)
                 return
+
+            self._current_prefix_plugins = [
+                self.plugins[pid].get_name()
+                for pid in target_plugin_ids
+                if pid in self.plugins
+            ]
         else:
             plugins_to_search = [
                 (plugin_id, plugin_instance)
@@ -187,6 +198,7 @@ class PluginManager:
                 if not plugin_instance.has_prefix()
                 or not self._query_matches_any_prefix(query)
             ]
+            self._current_prefix_plugins = []
 
         if not plugins_to_search:
             GLib.idle_add(finished_callback, search_id)
@@ -233,6 +245,10 @@ class PluginManager:
         """
         Find the longest matching prefix for the given query.
 
+        For non-symbol prefixes (alphanumeric), requires a space delimiter after the prefix
+        to avoid overmatching (e.g., "calc" should match "calc 2+2" but not "calculator").
+        Symbol prefixes match immediately without requiring a delimiter.
+
         Sorts prefixes by length in descending order to ensure the most specific
         (longest) prefix is matched first, avoiding non-deterministic behavior
         when one prefix is a substring of another.
@@ -246,21 +262,30 @@ class PluginManager:
         sorted_prefixes = sorted(self.prefix_registry.keys(), key=len, reverse=True)
         for prefix in sorted_prefixes:
             if query.startswith(prefix):
-                return prefix
+                # Check if this is a symbol prefix (non-alphanumeric characters)
+                is_symbol_prefix = not prefix.isalnum()
+
+                if is_symbol_prefix:
+                    # Symbol prefixes match immediately
+                    return prefix
+                else:
+                    # Word prefixes require a space delimiter or end of string
+                    if len(query) == len(prefix) or query[len(prefix)].isspace():
+                        return prefix
         return None
 
-    def _get_plugin_for_prefix(self, query: str) -> Optional[str]:
+    def _get_plugins_for_prefix(self, query: str) -> List[str]:
         """
-        Get the plugin ID that should handle this query based on prefix matching.
+        Get the plugin IDs that should handle this query based on prefix matching.
 
         Args:
             query: The search query
 
         Returns:
-            Plugin ID if query matches a registered prefix, None otherwise
+            List of plugin IDs if query matches a registered prefix, empty list otherwise
         """
         matching_prefix = self._find_matching_prefix(query)
-        return self.prefix_registry.get(matching_prefix) if matching_prefix else None
+        return self.prefix_registry.get(matching_prefix, []) if matching_prefix else []
 
     def _query_matches_any_prefix(self, query: str) -> bool:
         """
@@ -285,6 +310,16 @@ class PluginManager:
             The matching prefix or None if no prefix matches
         """
         return self._find_matching_prefix(query)
+
+    def get_current_prefix_plugins(self) -> List[str]:
+        """
+        Get the names of plugins currently being searched via prefix matching.
+
+        Returns:
+            List of plugin names that are being searched due to prefix matching,
+            empty list if no prefix is being used
+        """
+        return self._current_prefix_plugins.copy()
 
     def execute(self, result: SearchResult) -> bool:
         """Execute an action for the given search result"""
