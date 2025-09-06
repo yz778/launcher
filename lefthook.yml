@@ -1,0 +1,10 @@
+pre-commit:
+  commands:
+    prevent-main-commit:
+      run: |
+        if [ "$(git branch --show-current)" = "main" ]; then
+          echo "🚨 Direct commits to main branch are not allowed"
+          exit 1
+        fi
+    lint:
+      run: make lint
