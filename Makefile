@@ -44,4 +44,9 @@ clean:
 compile:
 	$(VENV_PYTHON) -m compileall .
 
-.PHONY: all setup update run clean compile
+# Lint and format Python code
+lint:
+	ruff check --select I --fix
+	ruff format
+
+.PHONY: all setup update run clean compile lint

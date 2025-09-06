@@ -1,9 +1,10 @@
-from launcher.plugins.base import Plugin, SearchResult
-from launcher.utils.scoring_system import calculate_match_score
-from launcher.utils.process_manager import process_manager
-from typing import List
 import logging
 import shlex
+from typing import List
+
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.process_manager import process_manager
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,6 @@ class TerminalPlugin(Plugin):
     """
 
     DEFAULTS = {
-        "prefix": ">",
         "track_history": True,
     }
 
@@ -31,37 +31,38 @@ class TerminalPlugin(Plugin):
     def get_description(self) -> str:
         return "Execute shell commands directly."
 
-    def initialize(self, config) -> bool:
-        super().initialize(config)
-        self.prefix = getattr(config, "prefix", self.DEFAULTS["prefix"])
-        return True
-
     def start(self) -> bool:
         return True
 
     def search(self, query: str) -> List[SearchResult]:
-        if query.startswith(self.prefix):
-            command = query[len(self.prefix) :].strip()
-            if not command:
-                return []
+        if not query.startswith(self.prefix):
+            return []
 
-            # Extract base command for display name
-            base_command = command.split()[0] if command else command
+        command = self.strip_prefix(query)
+        if not command:
+            return []
 
-            result = SearchResult(
-                plugin_id=self.get_id(),
-                item_id=command,
-                name=base_command,
-                description="Execute in terminal",
-                icon_spec="https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png",
-                score=calculate_match_score(query, command, is_name=True),
-                metadata={
-                    "command": command,
-                    "track_history": self.should_track_history(),
-                },
-            )
-            return [result]
-        return []
+        # Extract base command for display name
+        base_command = command.split()[0] if command else command
+
+        # Calculate score but ignore highlighting for terminal commands
+        score_result = calculate_match_score(query, command, is_name=True)
+        score = score_result[0] if score_result else 100.0
+
+        result = SearchResult(
+            plugin_id=self.get_id(),
+            item_id=command,
+            name=base_command,
+            description="Execute in terminal",
+            icon_spec="https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png",
+            score=score,
+            hilight=None,
+            metadata={
+                "command": command,
+                "track_history": self.should_track_history(),
+            },
+        )
+        return [result]
 
     def execute(self, result: SearchResult) -> bool:
         if result.plugin_id != self.get_id():

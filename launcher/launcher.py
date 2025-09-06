@@ -1,10 +1,11 @@
-from launcher import services
-from launcher.singleton import SingletonManager
 import argparse
 import logging
 import os
 import signal
 import sys
+
+from launcher import services
+from launcher.singleton import SingletonManager
 
 # add current dir to path to load modules
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -133,8 +134,8 @@ def main() -> int:
 
     # Start up the launcher
     from launcher.core.config import ConfigManager
+    from launcher.ui import idle_add, process_pending_events, run_main_loop
     from launcher.ui.launcher_window import LauncherWindow
-    from launcher.ui import run_main_loop, process_pending_events, idle_add
 
     services.config_manager = ConfigManager(args.config)
     services.config = services.config_manager.get()
@@ -160,9 +161,9 @@ def complete_initialization(
     """Finish async initialization tasks after UI is visible"""
 
     # Lazy import heavy modules
-    from launcher.ui.css_manager import CssManager
-    from launcher.core.plugin_manager import PluginManager
     from launcher.core.history_manager import HistoryManager
+    from launcher.core.plugin_manager import PluginManager
+    from launcher.ui.css_manager import CssManager
 
     global services
     services.history_manager = HistoryManager(services.config)
@@ -179,8 +180,6 @@ def complete_initialization(
 def start_plugins(plugin_manager) -> bool:
     """Initialize all enabled plugins"""
     import threading
-
-    logger.info("Starting plugins in parallel...")
 
     def start_plugin_thread(plugin_id, plugin):
         """Thread function to start a single plugin."""

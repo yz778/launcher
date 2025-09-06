@@ -1,7 +1,8 @@
 import json
-import os
 import logging
+import os
 from typing import Any, Dict, Optional
+
 from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_state_home
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,8 @@ class ConfigManager:
             "window_position_vertical_percent": 25,
             "window_position_force_center": True,
             "window_position_debug": False,
+            "highlight_color": "#8be9fd",
+            "highlight_weight": "bold",
         }
         self._plugin_defaults = {}
         self.config_file = config_file

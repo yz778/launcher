@@ -1,10 +1,12 @@
-from launcher.utils.scoring_system import calculate_match_score
-from launcher.plugins.base import Plugin, SearchResult
-from datetime import datetime, time
-from typing import Dict, List, Any, Optional
 import logging
-import pytz
 import re
+from datetime import datetime, time
+from typing import Any, Dict, List, Optional
+
+import pytz
+
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,7 @@ class TimezonePlugin(Plugin):
 
     def __init__(self):
         super().__init__()
+        self.prefix = "tz"
         self._timezone_aliases = self._build_timezone_aliases()
 
     def get_id(self) -> str:
@@ -76,11 +79,6 @@ class TimezonePlugin(Plugin):
             for tz, aliases in alias_groups.items()
             for alias in aliases
         }
-
-    def initialize(self, config) -> bool:
-        """Initialize the plugin with the given configuration"""
-        super().initialize(config)
-        return True
 
     def start(self) -> bool:
         """Start the plugin and perform any necessary setup work"""
@@ -264,6 +262,8 @@ class TimezonePlugin(Plugin):
 
     def search(self, query: str) -> List[SearchResult]:
         """Search for timezone conversions matching the query, supporting 'local' for both source and target"""
+        query = self.strip_prefix(query)
+
         if not self._is_timezone_query(query):
             return []
 
@@ -291,7 +291,9 @@ class TimezonePlugin(Plugin):
         target_tz_display = tz_display(parsed["target_tz"])
 
         description = f"{result} in {target_tz_display}"
-        base_score = calculate_match_score(query, query, is_name=True)
+
+        score_result = calculate_match_score(query, query, is_name=True)
+        base_score = score_result[0] if score_result else 100.0
         timezone_bonus = 50
         final_score = base_score + timezone_bonus
 
@@ -302,6 +304,7 @@ class TimezonePlugin(Plugin):
             description=description,
             icon_spec="theme://appointment-soon",
             score=final_score,
+            hilight=None,
             metadata={
                 "result": result,
                 "conversion": parsed,

@@ -1,10 +1,11 @@
-from typing import Optional, Callable
-from xdg_base_dirs import xdg_runtime_dir
 import logging
 import os
 import socket
 import tempfile
 import threading
+from typing import Callable, Optional
+
+from xdg_base_dirs import xdg_runtime_dir
 
 logger = logging.getLogger(__name__)
 
