@@ -8,6 +8,7 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
 - **Core Plugins**:
   - **Desktop File Plugin**: Launch applications from .desktop files
   - **Executable Plugin**: Launch executables from custom directories
+  - **History Plugin**: Search through command execution history
   - **QCalculate Plugin**: Advanced calculator with Qalculate! engine
   - **Terminal Plugin**: Execute shell commands directly
   - **Timezone Plugin**: Convert time between different timezones
@@ -32,9 +33,9 @@ Example configuration:
 
 ```json
 {
-  "general": {
+  "system": {
     "max_results": 15,
-    "icon_size": 32
+    "icon_size": 48
   }
 }
 ```
@@ -118,16 +119,16 @@ Customize search result highlighting by overriding CSS classes:
 }
 ```
 
-### Setup
+## Setup
 
 ```bash
-./setup.sh
+make setup
 ```
 
 ## Usage
 
 ```bash
-./launcher.sh [-h]
+make run
 ```
 
 ### Keyboard Shortcuts

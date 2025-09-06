@@ -1,8 +1,5 @@
-#!/usr/bin/env python3
-
-
-from ..base import Plugin, SearchResult
-from typing import List, Dict, Any
+from launcher.plugins.base import Plugin, SearchResult
+from typing import List
 import launcher.services as services
 
 import logging
@@ -13,7 +10,7 @@ logger = logging.getLogger(__name__)
 class HistoryPlugin(Plugin):
     """Plugin for searching through command history"""
 
-    defaults = {
+    DEFAULTS = {
         "enabled": True,
         "max_results": 10,
         "min_query_length": 2,
@@ -31,14 +28,16 @@ class HistoryPlugin(Plugin):
     def get_description(self) -> str:
         return "Search through command execution history"
 
-    def initialize(self, config: Dict[str, Any]) -> bool:
-        self.config = config
+    def initialize(self, config) -> bool:
+        super().initialize(config)
         logger.info("History plugin initialized successfully")
         return True
 
     def search(self, query: str) -> List[SearchResult]:
         query = query.strip().lower()
-        if len(query) < self.config.get("min_query_length"):
+        if len(query) < getattr(
+            self.config, "min_query_length", self.DEFAULTS["min_query_length"]
+        ):
             return []
 
         history_manager = services.history_manager
@@ -56,7 +55,9 @@ class HistoryPlugin(Plugin):
                     results.append(history_result)
 
         results.sort(key=lambda r: r.score, reverse=True)
-        return results[: self.config.get("max_results", 10)]
+        return results[
+            : getattr(self.config, "max_results", self.DEFAULTS["max_results"])
+        ]
 
     def execute(self, result: SearchResult) -> bool:
         original_result_dict = result.metadata.get("original_result")

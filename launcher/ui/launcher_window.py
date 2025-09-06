@@ -1,14 +1,12 @@
-#!/usr/bin/env python3
-
-from gi.repository import Gtk, Gdk, Pango, GLib
+from launcher import services
 from launcher.utils.icon_utils import load_custom_icon, get_fallback_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
 from launcher.utils.text_highlighter import TextHighlighter
+from gi.repository import Gtk, Gdk, Pango, GLib
 from plugins.base import SearchResult
 from typing import List
 from ui.css_manager import CssManager
 import logging
-import services
 
 logger = logging.getLogger(__name__)
 
@@ -141,10 +139,9 @@ class LauncherWindow(Gtk.Window):
         self.foreground_mode = foreground_mode
         self.result_deduplicator = ResultDeduplicator()
 
-        general_config = services.config.get("general", {})
-        self.icon_size = general_config.get("icon_size")
-        self.window_width = general_config.get("window_width")
-        self.window_height = general_config.get("window_height")
+        self.icon_size = services.config.system.icon_size
+        self.window_width = services.config.system.window_width
+        self.window_height = services.config.system.window_height
 
         self.set_decorated(False)
         self.set_default_size(self.window_width, self.window_height)
@@ -158,7 +155,7 @@ class LauncherWindow(Gtk.Window):
 
         # Create a vertical box for the layout
         self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.vbox.set_border_width(general_config.get("border_width"))
+        self.vbox.set_border_width(services.config.system.border_width)
         self.add(self.vbox)
 
         # Create a box for the entry field and result count
@@ -364,9 +361,7 @@ class LauncherWindow(Gtk.Window):
 
         # Truncate results - cache max_results to avoid repeated config lookups
         if not hasattr(self, "_cached_max_results"):
-            self._cached_max_results = services.config.get("general", {}).get(
-                "max_results", 15
-            )
+            self._cached_max_results = services.config.system.max_results
         self.current_results = self.current_results[: self._cached_max_results]
 
         self._populate_list_box(self.current_results)
@@ -399,6 +394,14 @@ class LauncherWindow(Gtk.Window):
 
         self._search_timeout_id = GLib.timeout_add(self._search_delay_ms, self._search)
 
+    def _show_recent_history(self) -> None:
+        """Show recent history."""
+        self._clear_list_box_and_hide()
+        max_results = services.config.system.max_results
+        results = services.history_manager.get_recent_results(max_results)
+        if results:
+            self._populate_list_box(results)
+
     def _search(self) -> bool:
         """Actually perform the search (called after debounce delay)"""
         self._search_timeout_id = None  # Clear timeout ID
@@ -416,17 +419,7 @@ class LauncherWindow(Gtk.Window):
         self.autocomplete_index = -1
 
         if not query:
-            self._clear_list_box_and_hide()
-            # Show recent history results directly from history_manager
-            if services.history_manager and hasattr(
-                services.history_manager, "get_recent_results"
-            ):
-                max_results = services.config.get("general", {}).get("max_results", 15)
-                results = services.history_manager.get_recent_results(max_results)
-                if results:
-                    self._populate_list_box(results)
-                else:
-                    self._clear_list_box_and_hide()
+            self._show_recent_history()
             return False
 
         # Check for autocomplete matches - cache history manager check
@@ -675,15 +668,5 @@ class LauncherWindow(Gtk.Window):
             "changed", self.on_entry_changed
         )
 
-        self.history_plugin = services.plugin_manager.plugins.get("history")
-        if services.history_manager and hasattr(
-            services.history_manager, "get_recent_results"
-        ):
-            max_results = services.config.get("general", {}).get("max_results", 15)
-            results = services.history_manager.get_recent_results(max_results)
-            if results:
-                self._populate_list_box(results)
-            else:
-                self._clear_list_box_and_hide()
-
+        self._show_recent_history()
         self.entry.grab_focus()

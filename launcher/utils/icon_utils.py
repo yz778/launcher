@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from gi.repository import Gtk, GdkPixbuf
 from typing import Optional, List, Dict
 from xdg_base_dirs import xdg_cache_home

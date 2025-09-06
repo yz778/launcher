@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-
-from ..base import Plugin, SearchResult
-from launcher.utils.string_matcher import StringMatcher
 from launcher.utils.icon_utils import normalize_icon_spec
 from launcher.utils.process_manager import process_manager
+from launcher.utils.string_matcher import StringMatcher
+from launcher.plugins.base import Plugin, SearchResult
 from typing import Dict, List, Any
 import json
 import logging
@@ -133,7 +131,7 @@ class ExecutablePlugin(Plugin):
         "matcher",
     )
 
-    defaults = {
+    DEFAULTS = {
         "locations": [
             "~/bin",
             "~/.local/bin",
@@ -170,24 +168,26 @@ class ExecutablePlugin(Plugin):
     def get_description(self) -> str:
         return "Search for executable files in custom directories with support for custom icons (file paths, URLs, or theme names)"
 
-    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+    def initialize(self, config) -> bool:
         """Initialize the plugin with the given configuration"""
-        super().initialize(config, config_manager)
+        super().initialize(config)
 
-        locations = config.get("locations")
+        locations = getattr(config, "locations", self.DEFAULTS["locations"])
         self.locations = [os.path.expanduser(loc) for loc in locations]
 
-        include_patterns = config.get("include")
+        include_patterns = getattr(config, "include", self.DEFAULTS["include"])
         self.include_patterns = [re.compile(pattern) for pattern in include_patterns]
 
-        exclude_patterns = config.get("exclude")
+        exclude_patterns = getattr(config, "exclude", self.DEFAULTS["exclude"])
         self.exclude_patterns = [re.compile(pattern) for pattern in exclude_patterns]
 
-        self.cache_icons = config.get("cache_icons")
+        self.cache_icons = getattr(config, "cache_icons", self.DEFAULTS["cache_icons"])
 
-        self.cache_file = os.path.join(
-            self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json"
-        )
+        # Access cache dir through services
+        from launcher import services
+
+        cache_dir = services.config_manager.get_cache_dir()
+        self.cache_file = os.path.join(cache_dir, f"{self.get_id()}_cache.json")
 
         return True
 
