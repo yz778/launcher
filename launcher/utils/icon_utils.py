@@ -397,16 +397,3 @@ def _get_desktop_fallback_icon(size: int) -> Optional[GdkPixbuf.Pixbuf]:
         return icon_theme.load_icon("application-x-executable", size, 0)
     except Exception:
         return None
-
-
-def ensure_correct_icon_size(
-    pixbuf: Optional[GdkPixbuf.Pixbuf], size: int
-) -> Optional[GdkPixbuf.Pixbuf]:
-    """Ensure pixbuf is the correct size"""
-    if not pixbuf:
-        return pixbuf
-
-    if pixbuf.get_width() != size or pixbuf.get_height() != size:
-        return pixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
-
-    return pixbuf

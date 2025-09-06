@@ -447,7 +447,9 @@ class LauncherWindow(Gtk.Window):
         selected_row = self.list_box.get_selected_row()
         if selected_row:
             index = selected_row.get_index()
-            target_index = (index + direction) % len(children)
+            target_index = index + direction
+            if target_index < 0 or target_index >= len(children):
+                return True
         else:
             target_index = 0 if direction > 0 else len(children) - 1
 
