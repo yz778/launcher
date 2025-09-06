@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from typing import Dict, Any, Optional
 from xdg_base_dirs import xdg_cache_home, xdg_config_home, xdg_state_home
 import logging

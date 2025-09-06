@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from ..base import Plugin, SearchResult
 from launcher.utils.string_matcher import StringMatcher
 from launcher.utils.icon_utils import normalize_icon_spec

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from ..base import Plugin, SearchResult
 from datetime import datetime, time
 from launcher.utils.scoring_system import calculate_match_score

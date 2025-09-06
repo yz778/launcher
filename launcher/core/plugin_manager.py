@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from gi.repository import GLib
 from plugins.base import Plugin, SearchResult
 from typing import Dict, List, Any, Type, Callable, Optional

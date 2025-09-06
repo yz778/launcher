@@ -399,6 +399,14 @@ class LauncherWindow(Gtk.Window):
 
         self._search_timeout_id = GLib.timeout_add(self._search_delay_ms, self._search)
 
+    def _show_recent_history(self) -> None:
+        """Show recent history."""
+        self._clear_list_box_and_hide()
+        max_results = services.config.get("general", {}).get("max_results")
+        results = services.history_manager.get_recent_results(max_results)
+        if results:
+            self._populate_list_box(results)
+
     def _search(self) -> bool:
         """Actually perform the search (called after debounce delay)"""
         self._search_timeout_id = None  # Clear timeout ID
@@ -416,17 +424,7 @@ class LauncherWindow(Gtk.Window):
         self.autocomplete_index = -1
 
         if not query:
-            self._clear_list_box_and_hide()
-            # Show recent history results directly from history_manager
-            if services.history_manager and hasattr(
-                services.history_manager, "get_recent_results"
-            ):
-                max_results = services.config.get("general", {}).get("max_results", 15)
-                results = services.history_manager.get_recent_results(max_results)
-                if results:
-                    self._populate_list_box(results)
-                else:
-                    self._clear_list_box_and_hide()
+            self._show_recent_history()
             return False
 
         # Check for autocomplete matches - cache history manager check
@@ -675,15 +673,5 @@ class LauncherWindow(Gtk.Window):
             "changed", self.on_entry_changed
         )
 
-        self.history_plugin = services.plugin_manager.plugins.get("history")
-        if services.history_manager and hasattr(
-            services.history_manager, "get_recent_results"
-        ):
-            max_results = services.config.get("general", {}).get("max_results", 15)
-            results = services.history_manager.get_recent_results(max_results)
-            if results:
-                self._populate_list_box(results)
-            else:
-                self._clear_list_box_and_hide()
-
+        self._show_recent_history()
         self.entry.grab_focus()

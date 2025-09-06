@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from .singleton import SingletonManager
 from .utils.config_utils import arg_parser
 import services

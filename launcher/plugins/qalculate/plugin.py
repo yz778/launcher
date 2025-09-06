@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from ..base import Plugin, SearchResult
 from launcher.utils.scoring_system import calculate_match_score
 from typing import Dict, List, Any, Optional

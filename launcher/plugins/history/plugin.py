@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-
-
 from ..base import Plugin, SearchResult
 from typing import List, Dict, Any
 import launcher.services as services

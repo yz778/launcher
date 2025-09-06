@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-
-
 from launcher.plugins.base import SearchResult
 from launcher.utils.scoring_system import calculate_match_score
 from typing import Dict, Any, List, Optional
@@ -15,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 
 class HistoryManager:
+    """Manager for tracking and persisting launch history"""
+
     def make_search_result(self, entry, query):
         """
         Create a SearchResult from a history entry
@@ -59,8 +58,6 @@ class HistoryManager:
                 results.append(history_result)
 
         return results[:max_results]
-
-    """Manager for tracking and persisting launch history"""
 
     __slots__ = ("history", "history_file")
 
