@@ -63,7 +63,7 @@ class AppListItem(Gtk.ListBoxRow):
         name_label.set_name("app-name")
 
         # Apply highlighting based on current query (UI handles highlighting logic)
-        self._apply_highlighting(name_label, result.name, self.query)
+        self._apply_highlighting(name_label, result.name, self.query, "name")
         name_box.pack_start(name_label, True, True, 0)
 
         if usage_count > 0:
@@ -85,7 +85,9 @@ class AppListItem(Gtk.ListBoxRow):
 
         # Apply highlighting to description
         if result.description:
-            self._apply_highlighting(desc_label, result.description, self.query)
+            self._apply_highlighting(
+                desc_label, result.description, self.query, "description"
+            )
 
         vbox.pack_start(desc_label, True, True, 0)
 
@@ -99,7 +101,9 @@ class AppListItem(Gtk.ListBoxRow):
         else:
             return get_fallback_icon(size)
 
-    def _apply_highlighting(self, label: Gtk.Label, text: str, query: str) -> None:
+    def _apply_highlighting(
+        self, label: Gtk.Label, text: str, query: str, field_type: str
+    ) -> None:
         """Apply highlighting to a label based on the search query using flexible highlighting"""
         if not text or not query:
             label.set_text(text or "")
@@ -111,15 +115,23 @@ class AppListItem(Gtk.ListBoxRow):
             return
 
         try:
-            highlighter = TextHighlighter()
-            segments = highlighter.get_highlight_segments(text, query)
+            # Check if we have hilight information from the search result
+            hilight = getattr(self.result, "hilight", None)
 
-            if not segments:
+            # Get indices for the specific field being rendered
+            if hilight:
+                indices = hilight.get_indices_for_field(field_type)
+                if indices:
+                    # Use exact indices with config-based styling
+                    highlighter = TextHighlighter()
+                    markup = highlighter.build_markup_from_indices(text, indices)
+                    label.set_markup(markup)
+                else:
+                    # No highlighting for this field - just set plain text
+                    label.set_text(text)
+            else:
+                # No highlighting - just set plain text
                 label.set_text(text)
-                return
-
-            markup = highlighter.build_markup(text, segments, label)
-            label.set_markup(markup)
 
         except Exception:
             label.set_text(text)

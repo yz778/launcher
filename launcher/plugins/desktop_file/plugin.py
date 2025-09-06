@@ -309,7 +309,7 @@ class DesktopFilePlugin(Plugin):
 
         # Convert matches to search results
         results = []
-        for desktop_file, score in matches:
+        for desktop_file, score, field_highlight in matches:
             result = SearchResult(
                 plugin_id=self.get_id(),
                 item_id=desktop_file.path,
@@ -322,6 +322,7 @@ class DesktopFilePlugin(Plugin):
                     "args": args,
                     "track_history": self.should_track_history(),
                 },
+                hilight=field_highlight,
             )
             results.append(result)
 

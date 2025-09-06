@@ -308,7 +308,7 @@ class ExecutablePlugin(Plugin):
         matches = current_matcher.match(search_query, limit=20)
 
         results = []
-        for executable, score in matches:
+        for executable, score, field_highlight in matches:
             # Use custom icon if specified, otherwise use fallback
             if executable.custom_icon:
                 icon_spec = normalize_icon_spec(executable.custom_icon)
@@ -322,6 +322,7 @@ class ExecutablePlugin(Plugin):
                 description=executable.description,
                 icon_spec=icon_spec,
                 score=score,
+                hilight=field_highlight,
                 metadata={
                     "command": executable.get_command(),
                     "args": args,

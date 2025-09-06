@@ -30,6 +30,8 @@ class ConfigManager:
             "window_position_vertical_percent": 25,
             "window_position_force_center": True,
             "window_position_debug": False,
+            "highlight_color": "#8be9fd",
+            "highlight_weight": "bold",
         }
         self._plugin_defaults = {}
         self.config_file = config_file

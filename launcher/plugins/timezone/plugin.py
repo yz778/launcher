@@ -289,7 +289,9 @@ class TimezonePlugin(Plugin):
         target_tz_display = tz_display(parsed["target_tz"])
 
         description = f"{result} in {target_tz_display}"
-        base_score = calculate_match_score(query, query, is_name=True)
+
+        score_result = calculate_match_score(query, query, is_name=True)
+        base_score = score_result[0] if score_result else 100.0
         timezone_bonus = 50
         final_score = base_score + timezone_bonus
 
@@ -300,6 +302,7 @@ class TimezonePlugin(Plugin):
             description=description,
             icon_spec="theme://appointment-soon",
             score=final_score,
+            hilight=None,
             metadata={
                 "result": result,
                 "conversion": parsed,

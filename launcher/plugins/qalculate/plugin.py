@@ -293,13 +293,18 @@ class QalculatePlugin(Plugin):
         if display_query.startswith("="):
             display_query = display_query[1:].strip()
 
+        # Calculate score but ignore highlighting for calculation results
+        score_result = calculate_match_score(query, query, is_name=True)
+        score = score_result[0] if score_result else 100.0
+
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,
             name=query,
             description=result,
             icon_spec="theme://qalculate",
-            score=calculate_match_score(query, query, is_name=True),
+            score=score,
+            hilight=None,
             metadata={
                 "result": result,
                 "track_history": self.should_track_history(),

@@ -43,13 +43,18 @@ class TerminalPlugin(Plugin):
             # Extract base command for display name
             base_command = command.split()[0] if command else command
 
+            # Calculate score but ignore highlighting for terminal commands
+            score_result = calculate_match_score(query, command, is_name=True)
+            score = score_result[0] if score_result else 100.0
+
             result = SearchResult(
                 plugin_id=self.get_id(),
                 item_id=command,
                 name=base_command,
                 description="Execute in terminal",
                 icon_spec="https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png",
-                score=calculate_match_score(query, command, is_name=True),
+                score=score,
+                hilight=None,
                 metadata={
                     "command": command,
                     "track_history": self.should_track_history(),
