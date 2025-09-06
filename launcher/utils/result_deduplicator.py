@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-
-import logging
-from typing import List
 from launcher.plugins.base import SearchResult
+from typing import List
+import logging
 
 logger = logging.getLogger(__name__)
 

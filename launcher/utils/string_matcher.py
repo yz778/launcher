@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from launcher.utils.scoring_system import calculate_match_score
 from typing import List, Tuple, TypeVar, Generic, Callable
 

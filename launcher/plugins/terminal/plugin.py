@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-
-from ..base import Plugin, SearchResult
+from launcher.plugins.base import Plugin, SearchResult
 from launcher.utils.scoring_system import calculate_match_score
 from launcher.utils.process_manager import process_manager
-from typing import Dict, Any, List
+from typing import List
 import logging
 import shlex
 
@@ -15,7 +13,7 @@ class TerminalPlugin(Plugin):
     Launcher plugin to execute shell commands directly in a terminal.
     """
 
-    defaults = {
+    DEFAULTS = {
         "prefix": ">",
         "track_history": True,
     }
@@ -33,9 +31,9 @@ class TerminalPlugin(Plugin):
     def get_description(self) -> str:
         return "Execute shell commands directly."
 
-    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
-        super().initialize(config, config_manager)
-        self.prefix = config.get("prefix")
+    def initialize(self, config) -> bool:
+        super().initialize(config)
+        self.prefix = getattr(config, "prefix", self.DEFAULTS["prefix"])
         return True
 
     def start(self) -> bool:

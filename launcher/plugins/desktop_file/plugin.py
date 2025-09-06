@@ -1,11 +1,9 @@
-#!/usr/bin/env python3
-
-from ..base import Plugin, SearchResult
+from launcher.utils.process_manager import process_manager
 from launcher.utils.string_matcher import StringMatcher
+from launcher.plugins.base import Plugin, SearchResult
 from typing import Dict, List, Any
 from xdg_base_dirs import xdg_data_home, xdg_data_dirs
 from xdg.DesktopEntry import DesktopEntry
-from launcher.utils.process_manager import process_manager
 import glob
 import json
 import logging
@@ -157,10 +155,9 @@ class DesktopFilePlugin(Plugin):
         "desktop_files",
         "locations",
         "matcher",
-        "config_manager",
     ]
 
-    defaults = {
+    DEFAULTS = {
         "locations": [
             str(xdg_data_home() / "applications"),
             *[str(path / "applications") for path in xdg_data_dirs()],
@@ -186,19 +183,24 @@ class DesktopFilePlugin(Plugin):
     def get_description(self) -> str:
         return "Search for applications from .desktop files"
 
-    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+    def initialize(self, config) -> bool:
         """Initialize the plugin with the given configuration"""
-        super().initialize(config, config_manager)
+        super().initialize(config)
 
         # Get locations from config
-        self.locations = [os.path.expanduser(loc) for loc in config.get("locations")]
+        self.locations = [
+            os.path.expanduser(loc)
+            for loc in getattr(config, "locations", self.DEFAULTS["locations"])
+        ]
 
         # Initialize with empty data first
         self.desktop_files = {}
         self.matcher = StringMatcher(items=[], key_func=lambda df: df.name)
-        self.cache_file = os.path.join(
-            self.config_manager.get_cache_dir(), f"{self.get_id()}_cache.json"
-        )
+        # Access cache dir through services
+        from launcher import services
+
+        cache_dir = services.config_manager.get_cache_dir()
+        self.cache_file = os.path.join(cache_dir, f"{self.get_id()}_cache.json")
 
         return True
 

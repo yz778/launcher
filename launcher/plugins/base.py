@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict, field
 from typing import List, Any, Dict, Optional
@@ -22,16 +20,6 @@ class SearchResult:
     score: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def __post_init__(self):
-        """Handle icon_spec documentation"""
-        # Icon specification with URI scheme support:
-        # - theme://icon_name for theme icons
-        # - desktop://icon_name for desktop file icons
-        # - file:///path/to/icon for file paths
-        # - http://example.com/icon.png for URLs
-        # - Plain strings are treated as theme icons for backward compatibility
-        pass
-
     def to_dict(self) -> Dict[str, Any]:
         """Convert the SearchResult to a dictionary."""
         return asdict(self)
@@ -45,8 +33,8 @@ class SearchResult:
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
-    __slots__ = ("config", "config_manager", "prefix")
-    defaults = {}
+    __slots__ = ("config", "prefix")
+    DEFAULTS = {}
 
     @abstractmethod
     def get_id(self) -> str:
@@ -62,8 +50,7 @@ class Plugin(ABC):
 
     def __init__(self):
         """Initialize the plugin base class"""
-        self.config: Dict[str, Any] = {}
-        self.config_manager = None
+        self.config = None
         self.prefix: Optional[str] = None
 
     def get_prefix(self) -> Optional[str]:
@@ -85,11 +72,12 @@ class Plugin(ABC):
         return self.prefix is not None and self.prefix != ""
 
     def get_general_config(self, key: str, default: Any = None) -> Any:
-        """Helper to get a value from the [general] config section."""
-        if self.config_manager:
-            config = self.config_manager.get_config()
-            general_config = config.get("general", {})
-            return general_config.get(key, default)
+        """Helper to get a value from the system config section."""
+        # Access system config through global services
+        from launcher import services
+
+        if services.config and hasattr(services.config, "system"):
+            return getattr(services.config.system, key, default)
         return default
 
     def should_track_history(self) -> bool:
@@ -99,7 +87,7 @@ class Plugin(ABC):
         Returns:
             True if executions should be tracked in history, False otherwise
         """
-        return self.config.get("track_history")
+        return getattr(self.config, "track_history", True) if self.config else True
 
     def get_default_css(self) -> str:
         """Return the contents of 'default.css' from the plugin's directory, or an empty string if not found."""
@@ -116,7 +104,7 @@ class Plugin(ABC):
         except (OSError, IOError):
             return ""
 
-    def initialize(self, config: Dict[str, Any], config_manager) -> bool:
+    def initialize(self, config) -> bool:
         """
         Initialize the plugin with the given configuration.
         Base implementation stores the config. Subclasses should call super().
@@ -125,24 +113,13 @@ class Plugin(ABC):
         Use the start() method for actual setup work that should be done after the GUI is started.
 
         Args:
-            config: Final merged configuration dictionary (defaults + user overrides)
-            config_manager: The central config manager instance
+            config: Plugin-specific configuration object (AttrDict)
 
         Returns:
             True if initialization was successful, False otherwise
         """
         self.config = config
-        self.config_manager = config_manager
         return True
-
-    def get_icon_size(self) -> int:
-        """
-        Helper to get the icon size from general configuration
-
-        Returns:
-            Icon size in pixels (default: 48)
-        """
-        return self.get_general_config("icon_size", 48)
 
     @staticmethod
     def is_structurally_valid(
