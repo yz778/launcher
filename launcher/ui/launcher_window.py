@@ -296,7 +296,7 @@ class LauncherWindow(Gtk.Window):
                     count_text = prefix_plugins[0]
                 else:
                     additional_count = len(prefix_plugins) - 1
-                    count_text = f"{prefix_plugins[0]} +{additional_count} plugin{'s' if additional_count else ''}"
+                    count_text = f"{prefix_plugins[0]} +{additional_count} plugin{'s' if additional_count != 1 else ''}"
             else:
                 count_text = f"{count} result{'s' if count != 1 else ''}"
 

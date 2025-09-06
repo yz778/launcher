@@ -187,9 +187,7 @@ class PluginManager:
                 return
 
             self._current_prefix_plugins = [
-                self.plugins[pid].get_name()
-                for pid in target_plugin_ids
-                if pid in self.plugins
+                plugin.get_name() for _, plugin in plugins_to_search
             ]
         else:
             plugins_to_search = [
