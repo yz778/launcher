@@ -1,12 +1,14 @@
+import logging
+from typing import List
+
+from gi.repository import Gdk, GLib, Gtk, Pango
+from plugins.base import SearchResult
+from ui.css_manager import CssManager
+
 from launcher import services
-from launcher.utils.icon_utils import load_custom_icon, get_fallback_icon
+from launcher.utils.icon_utils import get_fallback_icon, load_custom_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
 from launcher.utils.text_highlighter import TextHighlighter
-from gi.repository import Gtk, Gdk, Pango, GLib
-from plugins.base import SearchResult
-from typing import List
-from ui.css_manager import CssManager
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -436,13 +438,22 @@ class LauncherWindow(Gtk.Window):
         return False
 
     def _navigate_selection(self, direction: int, state) -> bool:
-        """Navigate selection in the results list by direction (+1 down, -1 up), wrapping around.
-        Updates the entry line with the selected row's user_input without triggering a search.
-        """
+        """Navigate selection in the results list by direction (+1 down, -1 up), supporting shift+arrow multi-selection like typical listboxes."""
         self.user_navigating = True
         children = self.list_box.get_children()
         if not children:
             return True
+
+        shift_pressed = bool(state & Gdk.ModifierType.SHIFT_MASK)
+
+        # Track anchor for shift selection
+        if not hasattr(self, "_selection_anchor") or not shift_pressed:
+            # Set anchor to current selection or to-be-selected row
+            selected_row = self.list_box.get_selected_row()
+            if selected_row:
+                self._selection_anchor = selected_row.get_index()
+            else:
+                self._selection_anchor = 0 if direction > 0 else len(children) - 1
 
         selected_row = self.list_box.get_selected_row()
         if selected_row:
@@ -455,9 +466,19 @@ class LauncherWindow(Gtk.Window):
 
         target_row = self.list_box.get_row_at_index(target_index)
 
-        if not (state & Gdk.ModifierType.SHIFT_MASK):
+        if shift_pressed:
+            # Select range from anchor to target_index (inclusive)
+            anchor = self._selection_anchor
+            start = min(anchor, target_index)
+            end = max(anchor, target_index)
             self.list_box.unselect_all()
-        self.list_box.select_row(target_row)
+            for i in range(start, end + 1):
+                row = self.list_box.get_row_at_index(i)
+                self.list_box.select_row(row)
+        else:
+            self.list_box.unselect_all()
+            self.list_box.select_row(target_row)
+            self._selection_anchor = target_index
 
         # Ensure the selected row is visible
         adjustment = self.scrolled.get_vadjustment()

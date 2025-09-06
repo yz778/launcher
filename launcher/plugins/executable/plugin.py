@@ -1,8 +1,3 @@
-from launcher.utils.icon_utils import normalize_icon_spec
-from launcher.utils.process_manager import process_manager
-from launcher.utils.string_matcher import StringMatcher
-from launcher.plugins.base import Plugin, SearchResult
-from typing import Dict, List, Any
 import json
 import logging
 import os
@@ -10,6 +5,12 @@ import re
 import shlex
 import stat
 import threading
+from typing import Any, Dict, List
+
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.icon_utils import normalize_icon_spec
+from launcher.utils.process_manager import process_manager
+from launcher.utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,13 @@
-from launcher.plugins.base import SearchResult
-from launcher.utils.scoring_system import calculate_match_score
-from typing import Dict, Any, List, Optional
+import json
 import logging
 import math
 import os
-import time
-import json
 import tempfile
+import time
+from typing import Any, Dict, List, Optional
+
+from launcher.plugins.base import SearchResult
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 

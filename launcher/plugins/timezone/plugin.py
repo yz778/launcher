@@ -1,10 +1,12 @@
-from launcher.utils.scoring_system import calculate_match_score
-from launcher.plugins.base import Plugin, SearchResult
-from datetime import datetime, time
-from typing import Dict, List, Any, Optional
 import logging
-import pytz
 import re
+from datetime import datetime, time
+from typing import Any, Dict, List, Optional
+
+import pytz
+
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,7 @@ class TimezonePlugin(Plugin):
     """Plugin for converting times between timezones"""
 
     DEFAULTS = {
+        "prefix": "tz",
         "track_history": True,
     }
 
@@ -76,11 +79,6 @@ class TimezonePlugin(Plugin):
             for tz, aliases in alias_groups.items()
             for alias in aliases
         }
-
-    def initialize(self, config) -> bool:
-        """Initialize the plugin with the given configuration"""
-        super().initialize(config)
-        return True
 
     def start(self) -> bool:
         """Start the plugin and perform any necessary setup work"""

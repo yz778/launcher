@@ -1,6 +1,7 @@
-from gi.repository import Gtk, GLib
-from typing import List
 import re
+from typing import List
+
+from gi.repository import GLib, Gtk
 
 
 class HighlightSegment:
@@ -17,9 +18,6 @@ class HighlightSegment:
 
 class TextHighlighter:
     """Flexible text highlighter that supports multiple matching strategies"""
-
-    def __init__(self):
-        pass
 
     def get_highlight_segments(self, text: str, query: str) -> List[HighlightSegment]:
         """

@@ -1,9 +1,10 @@
-from launcher.plugins.base import Plugin, SearchResult
-from launcher.utils.scoring_system import calculate_match_score
-from launcher.utils.process_manager import process_manager
-from typing import List
 import logging
 import shlex
+from typing import List
+
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.process_manager import process_manager
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +15,6 @@ class TerminalPlugin(Plugin):
     """
 
     DEFAULTS = {
-        "prefix": ">",
         "track_history": True,
     }
 
@@ -30,11 +30,6 @@ class TerminalPlugin(Plugin):
 
     def get_description(self) -> str:
         return "Execute shell commands directly."
-
-    def initialize(self, config) -> bool:
-        super().initialize(config)
-        self.prefix = getattr(config, "prefix", self.DEFAULTS["prefix"])
-        return True
 
     def start(self) -> bool:
         return True

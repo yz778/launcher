@@ -1,13 +1,15 @@
-from launcher.utils.scoring_system import calculate_match_score
-from launcher.plugins.base import Plugin, SearchResult
-from typing import List, Optional
 import logging
-import pyperclip
 import queue
 import re
 import subprocess
 import threading
 import time
+from typing import List, Optional
+
+import pyperclip
+
+from launcher.plugins.base import Plugin, SearchResult
+from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 

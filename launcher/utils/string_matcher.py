@@ -1,5 +1,6 @@
+from typing import Callable, Generic, List, Tuple, TypeVar
+
 from launcher.utils.scoring_system import calculate_match_score
-from typing import List, Tuple, TypeVar, Generic, Callable
 
 T = TypeVar("T")
 
