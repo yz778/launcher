@@ -54,10 +54,6 @@
     min-height: 40px;
 }
 
-#app-list-item:hover {
-    background-color: rgba(60, 80, 120, 0.4);
-}
-
 #app-list-item:selected {
     background-color: rgba(80, 100, 140, 0.6);
 }
@@ -67,10 +63,6 @@
     padding: 8px;
     border-radius: 6px;
     min-height: 40px;
-}
-
-#history-item:hover {
-    background-color: rgba(100, 100, 100, 0.3);
 }
 
 #history-item:selected {

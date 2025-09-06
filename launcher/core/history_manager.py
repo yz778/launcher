@@ -48,9 +48,9 @@ class HistoryManager:
             },
         )
 
-    def get_recent_results(self, max_results: int = 10) -> List[SearchResult]:
+    def get_history_results(self) -> List[SearchResult]:
         """
-        Return a list of SearchResult objects for the most recent history entries.
+        Return a list of SearchResult objects for history entries.
         """
         results = []
         for entry in self.history:
@@ -58,7 +58,7 @@ class HistoryManager:
             if history_result:
                 results.append(history_result)
 
-        return results[:max_results]
+        return results
 
     __slots__ = ("history", "history_file")
 

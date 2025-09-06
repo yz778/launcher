@@ -217,9 +217,6 @@ class LauncherWindow(Gtk.Window):
         self._result_update_timeout_id = None
         self._result_update_delay_ms = 100  # Delay to stabilize result updates
 
-        # Track if user is navigating with keys
-        self.user_navigating = False
-
         # Make sure the scrolled window is hidden initially
         self.scrolled.hide()
 
@@ -240,18 +237,13 @@ class LauncherWindow(Gtk.Window):
         for child in self.list_box.get_children():
             child.destroy()
 
-    def _populate_list_box(self, results_to_display: List[SearchResult]):
+    def _populate_list_box(self, results: List[SearchResult]):
         """Populates the list box with the given results and updates UI elements."""
-        # Clear previous items from list_box with proper cleanup
+
         for child in self.list_box.get_children():
-            child.destroy()  # Properly destroy widgets
+            child.destroy()
 
-        # Always show dropdown if user has typed something
-        self.scrolled.show()
-        self.result_count_label.hide()
-
-        # Add new items
-        for result in results_to_display:
+        for result in results:
             history_count = (
                 result.metadata.get("usage_count", 0)
                 if result.plugin_id == "history"
@@ -269,46 +261,28 @@ class LauncherWindow(Gtk.Window):
 
         self.list_box.show_all()
         self.scrolled.show()
-        # Scroll to top when results change
-        vadj = self.scrolled.get_vadjustment()
-        if vadj:
-            vadj.set_value(vadj.get_lower())
+        self._update_results_count(results)
 
-        # Use unified display setup
-        count_text = (
-            f"{len(results_to_display)} result{'s' if len(results_to_display) != 1 else ''}"
-            if results_to_display
-            else ""
-        )
-        self._setup_results_display(results_to_display, count_text)
-
-        if not self.user_navigating:
-            self.list_box.unselect_all()
-
-    def _setup_results_display(self, items, count_text=""):
+    def _update_results_count(self, results):
         """Unified method to set up the results display area with consistent sizing and scrolling."""
+
+        count = len(results)
+
         # Show/hide result count
-        if count_text:
+        if count:
+            count_text = f"{count} result{'s' if count != 1 else ''}"
             self.result_count_label.set_text(count_text)
             self.result_count_label.show()
         else:
             self.result_count_label.set_text("")
             self.result_count_label.hide()
 
-        # Calculate display height - always use results window height for consistency
-        self.resize(self.window_width, self.window_height)
-
         # Set scrolling policy based on number of items
-        if len(items) > 5:
+        if count > 5:
             self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.ALWAYS)
             self.scrolled.set_overlay_scrolling(False)
         else:
             self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
-
-        # Scroll to top when results change
-        vadj = self.scrolled.get_vadjustment()
-        if vadj:
-            vadj.set_value(vadj.get_lower())
 
     def handle_plugin_results(
         self, search_id: int, plugin_id: str, plugin_results: List[SearchResult]
@@ -352,21 +326,17 @@ class LauncherWindow(Gtk.Window):
         if search_id != self.active_search_id:
             return False  # Ignore stale updates
 
-        # First, adjust scores based on history for all current results
-        # Apply deduplication based on plugin scores (no double scoring needed)
         self.current_results = self.result_deduplicator.deduplicate_results(
             self.current_results
         )
 
-        # Sort by score only - history plugin already has prioritized scores
         self.current_results.sort(key=lambda r: r.score, reverse=True)
-
-        # Truncate results - cache max_results to avoid repeated config lookups
-        if not hasattr(self, "_cached_max_results"):
-            self._cached_max_results = services.config.system.max_results
-        self.current_results = self.current_results[: self._cached_max_results]
+        self.current_results = self.current_results[
+            : services.config.system.max_results
+        ]
 
         self._populate_list_box(self.current_results)
+
         return False  # Remove from timeout queue
 
     def handle_search_finished(self, search_id: int):
@@ -399,8 +369,7 @@ class LauncherWindow(Gtk.Window):
     def _show_recent_history(self) -> None:
         """Show recent history."""
         self._clear_list_box_and_hide()
-        max_results = services.config.system.max_results
-        results = services.history_manager.get_recent_results(max_results)
+        results = services.history_manager.get_history_results()
         if results:
             self._populate_list_box(results)
 
@@ -413,7 +382,6 @@ class LauncherWindow(Gtk.Window):
             GLib.source_remove(self._result_update_timeout_id)
             self._result_update_timeout_id = None
 
-        self.user_navigating = False  # Reset navigation state
         query = self.entry.get_text().strip()
 
         self.current_results.clear()
@@ -439,7 +407,6 @@ class LauncherWindow(Gtk.Window):
 
     def _navigate_selection(self, direction: int, state) -> bool:
         """Navigate selection in the results list by direction (+1 down, -1 up), supporting shift+arrow multi-selection like typical listboxes."""
-        self.user_navigating = True
         children = self.list_box.get_children()
         if not children:
             return True
@@ -492,12 +459,13 @@ class LauncherWindow(Gtk.Window):
             self._search_timeout_id = None
 
         # Update the entry with the row's user_input without triggering search
-        if self.entry_changed_handler_id is not None:
-            self.entry.handler_block(self.entry_changed_handler_id)
-        self.entry.set_text(target_row.result.name)
-        self.entry.set_position(-1)
-        if self.entry_changed_handler_id is not None:
-            self.entry.handler_unblock(self.entry_changed_handler_id)
+        if not shift_pressed:
+            if self.entry_changed_handler_id is not None:
+                self.entry.handler_block(self.entry_changed_handler_id)
+            self.entry.set_text(target_row.result.name)
+            self.entry.set_position(-1)
+            if self.entry_changed_handler_id is not None:
+                self.entry.handler_unblock(self.entry_changed_handler_id)
 
         return True
 
@@ -619,9 +587,10 @@ class LauncherWindow(Gtk.Window):
 
     def show_and_focus(self):
         """Show window and grab focus"""
-        self.entry.select_region(0, -1)
         self.show_all()
         self.present()
+        self.entry.select_region(0, -1)
+        self.entry.grab_focus()
 
     def on_delete_event(self, widget, event):
         """Handle window delete event - hide or quit in foreground mode"""
