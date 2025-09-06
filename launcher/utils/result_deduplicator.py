@@ -39,17 +39,20 @@ class ResultDeduplicator:
         if not history_results:
             return results
 
-        # Build a set of (original_plugin_id, original_item_id) from history results
+        # Build a set of (original_plugin_id, original_item_id, args) from history results
         history_keys = set()
         for history_result in history_results:
             result = history_result.metadata.get("original_result")
             plugin_id = result.get("plugin_id")
             item_id = result.get("item_id")
-            history_keys.add((plugin_id, item_id))
+            args = "".join(result.get("metadata").get("args", []))
+            history_keys.add((plugin_id, item_id, args))
 
         # Remove all other_results that are captured by history
         filtered_other_results = [
-            r for r in other_results if (r.plugin_id, r.item_id) not in history_keys
+            r
+            for r in other_results
+            if (r.plugin_id, r.item_id, None) not in history_keys
         ]
 
         return history_results + filtered_other_results

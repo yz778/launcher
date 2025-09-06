@@ -31,45 +31,52 @@ class ConfigManager:
             "window_position_debug": False,
         }
         self._plugin_defaults = {}
-        self.config = None
         self.config_file = config_file
-        self.load_config(config_file)
+        self._user_config = self._load_user_config(config_file)
 
-    def register_plugin_defaults(self, plugin_id: str, defaults: Dict[str, Any]):
-        self._plugin_defaults[plugin_id] = defaults
-        # Reload config to include new plugin defaults
-        self.load_config(self.config_file)
-
-    def load_config(self, config_file: Optional[str] = None):
         # 1. Start with system defaults
         config_data = {"system": self._system_defaults.copy()}
 
-        # 2. Add plugin defaults
-        config_data.update(self._plugin_defaults)
+        # 2. Merge user config, which can override system defaults and provide plugin configs
+        self._merge_dicts(config_data, self._user_config)
 
-        # 3. Load user config if it exists
-        if config_file:
-            expanded_path = os.path.expanduser(config_file)
-            if os.path.exists(expanded_path):
-                try:
-                    with open(expanded_path, "r") as f:
-                        user_config = json.load(f)
-
-                    # 4. Merge user config into defaults
-                    self._merge_dicts(config_data, user_config)
-                    logger.info(f"Loaded user configuration from {expanded_path}")
-                except Exception as e:
-                    logger.error(
-                        f"Error loading configuration from {expanded_path}: {e}"
-                    )
-            else:
-                logger.info("No user configuration file found, using defaults")
-
-        # 5. Convert to AttrDict for attribute-style access
+        # 3. Convert to AttrDict for attribute-style access
         self.config = self._to_attr_dict(config_data)
 
-        # 6. Expose config manager for plugin registration
+        # 4. Expose config manager for plugin registration
         self.config._config_manager = self
+
+    def _load_user_config(self, config_file: Optional[str] = None) -> Dict:
+        if not config_file:
+            return {}
+
+        expanded_path = os.path.expanduser(config_file)
+        if not os.path.exists(expanded_path):
+            logger.info("No user configuration file found, using defaults")
+            return {}
+
+        try:
+            with open(expanded_path, "r") as f:
+                user_config = json.load(f)
+            logger.info(f"Loaded user configuration from {expanded_path}")
+            return user_config
+        except Exception as e:
+            logger.error(f"Error loading configuration from {expanded_path}: {e}")
+            return {}
+
+    def register_plugin_defaults(self, plugin_id: str, defaults: Dict[str, Any]):
+        self._plugin_defaults[plugin_id] = defaults
+
+        # Merge plugin defaults into the config, without overwriting existing values (from user config)
+        plugin_config = self._to_attr_dict({plugin_id: defaults})
+        self._merge_defaults(self.config, plugin_config)
+
+    def _merge_defaults(self, base, defaults):
+        for key, value in defaults.items():
+            if key not in base:
+                base[key] = value
+            elif isinstance(value, AttrDict) and isinstance(base.get(key), AttrDict):
+                self._merge_defaults(base[key], value)
 
     def _merge_dicts(self, base, override):
         for key, value in override.items():
@@ -118,7 +125,6 @@ class ConfigManager:
 
     def get_cache_dir(self) -> str:
         """Get the cache directory, creating it if it doesn't exist"""
-        cache_dir = self.config.system.cache_dir
-        cache_dir = os.path.expanduser(cache_dir)
+        cache_dir = os.path.expanduser(self.config.system.cache_dir)
         os.makedirs(cache_dir, exist_ok=True)
         return cache_dir
