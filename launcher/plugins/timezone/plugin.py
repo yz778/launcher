@@ -102,8 +102,8 @@ class TimezonePlugin(Plugin):
     def _parse_timezone_query(self, query: str) -> Optional[Dict[str, Any]]:
         """Parse a timezone conversion query"""
         try:
-            query = query.strip()
-            parts = query.lower().split(" to ")
+            query = query.strip().lower()
+            parts = query.split(" to ")
 
             if len(parts) != 2:
                 return None
