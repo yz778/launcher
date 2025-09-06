@@ -181,8 +181,6 @@ def start_plugins(plugin_manager) -> bool:
     """Initialize all enabled plugins"""
     import threading
 
-    logger.info("Starting plugins in parallel...")
-
     def start_plugin_thread(plugin_id, plugin):
         """Thread function to start a single plugin."""
         try:

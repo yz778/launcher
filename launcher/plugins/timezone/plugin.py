@@ -15,7 +15,6 @@ class TimezonePlugin(Plugin):
     """Plugin for converting times between timezones"""
 
     DEFAULTS = {
-        "prefix": "tz",
         "track_history": True,
     }
 
@@ -38,6 +37,7 @@ class TimezonePlugin(Plugin):
 
     def __init__(self):
         super().__init__()
+        self.prefix = "tz"
         self._timezone_aliases = self._build_timezone_aliases()
 
     def get_id(self) -> str:
@@ -262,6 +262,8 @@ class TimezonePlugin(Plugin):
 
     def search(self, query: str) -> List[SearchResult]:
         """Search for timezone conversions matching the query, supporting 'local' for both source and target"""
+        query = self.strip_prefix(query)
+
         if not self._is_timezone_query(query):
             return []
 

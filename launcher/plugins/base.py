@@ -68,6 +68,15 @@ class Plugin(ABC):
         """
         return self.prefix
 
+    def strip_prefix(self, query: str) -> str:
+        """
+        Strips the plugin's prefix from the query if it exists.
+        Handles cases with and without a space after the prefix.
+        """
+        if self.prefix and query.lower().startswith(self.prefix.lower()):
+            return query[len(self.prefix) :].lstrip()
+        return query
+
     def has_prefix(self) -> bool:
         """
         Check if this plugin uses a prefix.

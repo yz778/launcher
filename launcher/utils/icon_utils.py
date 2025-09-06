@@ -4,7 +4,7 @@ import os
 import threading
 import urllib.parse
 import urllib.request
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable
 
 from gi.repository import GdkPixbuf, GLib, Gtk
 from xdg.IconTheme import getIconPath
@@ -27,7 +27,7 @@ SUPPORTED_IMAGE_EXTENSIONS = (
 
 
 def load_theme_icon(
-    icon_name: str, size: int, fallback_names: List[str] = None
+    icon_name: str, size: int, fallback_names: Optional[List[str]] = None
 ) -> Optional[GdkPixbuf.Pixbuf]:
     """
     Load an icon from the theme with fallback options
@@ -62,8 +62,9 @@ def load_theme_icon(
 def load_custom_icon(
     icon_spec: str,
     size: int,
-    cache: Dict[str, GdkPixbuf.Pixbuf] = None,
-    cache_dir: str = None,
+    cache: Optional[Dict[str, GdkPixbuf.Pixbuf]] = None,
+    cache_dir: Optional[str] = None,
+    callback: Optional[Callable[[Optional[GdkPixbuf.Pixbuf]], None]] = None,
 ) -> Optional[GdkPixbuf.Pixbuf]:
     """
     Load custom icon with URI scheme support and caching
@@ -78,9 +79,11 @@ def load_custom_icon(
         size: Icon size in pixels
         cache: Optional cache dictionary to store loaded icons
         cache_dir: Directory for storing downloaded URL icons
+        callback: Optional callback function(pixbuf) called when async loading completes
 
     Returns:
         Loaded icon pixbuf or None if loading fails
+        For URL icons, returns loading icon immediately and calls callback when done
     """
     if not icon_spec or size <= 0:
         return None
@@ -100,6 +103,14 @@ def load_custom_icon(
             icon_name = icon_spec[8:]
             loaded_icon = _load_icon_from_theme(icon_name, size)
         elif icon_spec.startswith(("http://", "https://")):
+            if callback:
+
+                def url_callback(pixbuf):
+                    if cache is not None and pixbuf is not None:
+                        cache[icon_spec] = pixbuf
+                    callback(pixbuf)
+
+                load_icon_from_url_async(icon_spec, size, url_callback, cache_dir)
             loaded_icon = _load_icon_from_url(icon_spec, size, cache_dir)
         elif icon_spec.startswith("file://"):
             file_path = icon_spec[7:]
@@ -109,7 +120,11 @@ def load_custom_icon(
         else:
             loaded_icon = _load_icon_from_theme(icon_spec, size)
 
-        if cache is not None and loaded_icon is not None:
+        if (
+            cache is not None
+            and loaded_icon is not None
+            and not icon_spec.startswith(("http://", "https://"))
+        ):
             cache[icon_spec] = loaded_icon
 
     except Exception as e:
@@ -150,7 +165,7 @@ def _load_icon_from_file(icon_path: str, size: int) -> Optional[GdkPixbuf.Pixbuf
 
 
 def _load_icon_from_url(
-    icon_url: str, size: int, cache_dir: str = None
+    icon_url: str, size: int, cache_dir: Optional[str] = None
 ) -> Optional[GdkPixbuf.Pixbuf]:
     """
     Load icon from URL with local caching
@@ -193,8 +208,12 @@ def _load_icon_from_url(
     return get_loading_icon(size)
 
 
-# New async loader for URL icons
-def load_icon_from_url_async(icon_url: str, size: int, callback, cache_dir: str = None):
+def load_icon_from_url_async(
+    icon_url: str,
+    size: int,
+    callback: Callable[[Optional[GdkPixbuf.Pixbuf]], None],
+    cache_dir: Optional[str] = None,
+):
     """
     Asynchronously load icon from URL. Calls callback(pixbuf) on main thread when done.
     Returns a loading icon immediately.

@@ -23,6 +23,7 @@ class QalculatePlugin(Plugin):
 
     def __init__(self):
         super().__init__()
+        self.prefix = "="
         self._last_valid_result = None
         self._active_processes = set()
         self._qalc_process = None
@@ -178,7 +179,7 @@ class QalculatePlugin(Plugin):
 
     def _strip_ansi_codes(self, text: str) -> str:
         """Remove ANSI color codes from text"""
-        ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        ansi_escape = re.compile(r"\x1B(?:[@-Z\-_]|[[0-?]*[ -/]*[@-~])")
         return ansi_escape.sub("", text)
 
     def _is_calculation(self, query: str) -> bool:
@@ -186,10 +187,8 @@ class QalculatePlugin(Plugin):
         if not query:
             return False
 
-        query = query.strip()
-
         # 1. Explicit calculation trigger
-        if query.startswith("="):
+        if query.startswith(self.prefix):
             return True
 
         # 2. Starts with a number (most calculations do)
@@ -213,9 +212,7 @@ class QalculatePlugin(Plugin):
 
         Returns None if calculation fails
         """
-        # Strip leading = if present
-        if expression.startswith("="):
-            expression = expression[1:].strip()
+        expression = self.strip_prefix(expression)
 
         with self._process_lock:
             # Ensure we have a running qalc session
@@ -289,9 +286,7 @@ class QalculatePlugin(Plugin):
         else:
             self._last_valid_result = result
 
-        display_query = query
-        if display_query.startswith("="):
-            display_query = display_query[1:].strip()
+        display_query = self.strip_prefix(query)
 
         # Calculate score but ignore highlighting for calculation results
         score_result = calculate_match_score(query, query, is_name=True)
@@ -300,7 +295,7 @@ class QalculatePlugin(Plugin):
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,
-            name=query,
+            name=display_query,
             description=result,
             icon_spec="theme://qalculate",
             score=score,
@@ -335,10 +330,7 @@ class QalculatePlugin(Plugin):
             return False
 
         try:
-            if query.startswith("="):
-                expression = query[1:].strip()
-            else:
-                expression = query.strip()
+            expression = self.strip_prefix(query)
 
             # Use start_new_session to detach from parent process
             subprocess.Popen(

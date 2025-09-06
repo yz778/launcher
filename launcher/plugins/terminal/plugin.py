@@ -35,33 +35,34 @@ class TerminalPlugin(Plugin):
         return True
 
     def search(self, query: str) -> List[SearchResult]:
-        if query.startswith(self.prefix):
-            command = query[len(self.prefix) :].strip()
-            if not command:
-                return []
+        if not query.startswith(self.prefix):
+            return []
 
-            # Extract base command for display name
-            base_command = command.split()[0] if command else command
+        command = self.strip_prefix(query)
+        if not command:
+            return []
 
-            # Calculate score but ignore highlighting for terminal commands
-            score_result = calculate_match_score(query, command, is_name=True)
-            score = score_result[0] if score_result else 100.0
+        # Extract base command for display name
+        base_command = command.split()[0] if command else command
 
-            result = SearchResult(
-                plugin_id=self.get_id(),
-                item_id=command,
-                name=base_command,
-                description="Execute in terminal",
-                icon_spec="https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png",
-                score=score,
-                hilight=None,
-                metadata={
-                    "command": command,
-                    "track_history": self.should_track_history(),
-                },
-            )
-            return [result]
-        return []
+        # Calculate score but ignore highlighting for terminal commands
+        score_result = calculate_match_score(query, command, is_name=True)
+        score = score_result[0] if score_result else 100.0
+
+        result = SearchResult(
+            plugin_id=self.get_id(),
+            item_id=command,
+            name=base_command,
+            description="Execute in terminal",
+            icon_spec="https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png",
+            score=score,
+            hilight=None,
+            metadata={
+                "command": command,
+                "track_history": self.should_track_history(),
+            },
+        )
+        return [result]
 
     def execute(self, result: SearchResult) -> bool:
         if result.plugin_id != self.get_id():

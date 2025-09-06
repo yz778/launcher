@@ -27,6 +27,7 @@ class AppListItem(Gtk.ListBoxRow):
         self.set_name("app-list-item")
         self.result = result
         self.query = query
+        self.icon_widget = None  # Store reference to icon widget for async updates
 
         # Add plugin-specific CSS class
         style_context = self.get_style_context()
@@ -39,16 +40,16 @@ class AppListItem(Gtk.ListBoxRow):
 
         # Load and display icon
         icon_pixbuf = self._load_result_icon(result, icon_size)
+        icon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        icon_box.set_size_request(icon_size, icon_size)
+
         if icon_pixbuf:
-            icon_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-            icon_box.set_size_request(icon_size, icon_size)
-            icon = Gtk.Image.new_from_pixbuf(icon_pixbuf)
-            icon_box.pack_start(icon, True, False, 0)
-            hbox.pack_start(icon_box, False, False, 0)
+            self.icon_widget = Gtk.Image.new_from_pixbuf(icon_pixbuf)
+            icon_box.pack_start(self.icon_widget, True, False, 0)
         else:
-            spacer = Gtk.Box()
-            spacer.set_size_request(icon_size, icon_size)
-            hbox.pack_start(spacer, False, False, 0)
+            self.icon_widget = None
+
+        hbox.pack_start(icon_box, False, False, 0)
 
         # Create a vertical box for name and description
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
@@ -97,9 +98,24 @@ class AppListItem(Gtk.ListBoxRow):
     def _load_result_icon(self, result: SearchResult, size: int):
         """Load icon for a search result using icon_spec"""
         if result.icon_spec:
-            return load_custom_icon(result.icon_spec, size)
+
+            def icon_callback(pixbuf):
+                if pixbuf and self.icon_widget is not None:
+                    self.update_icon(pixbuf)
+
+            return load_custom_icon(result.icon_spec, size, callback=icon_callback)
         else:
             return get_fallback_icon(size)
+
+    def update_icon(self, pixbuf):
+        """Update the icon widget with a new pixbuf"""
+        if self.icon_widget is not None and pixbuf is not None:
+            self.icon_widget.set_from_pixbuf(pixbuf)
+        elif self.icon_widget is None and pixbuf is not None:
+            parent = self.get_children()[0].get_children()[0]  # hbox -> icon_box
+            self.icon_widget = Gtk.Image.new_from_pixbuf(pixbuf)
+            parent.pack_start(self.icon_widget, True, False, 0)
+            self.icon_widget.show()
 
     def _apply_highlighting(
         self, label: Gtk.Label, text: str, query: str, field_type: str
@@ -115,22 +131,14 @@ class AppListItem(Gtk.ListBoxRow):
             return
 
         try:
-            # Check if we have hilight information from the search result
             hilight = getattr(self.result, "hilight", None)
+            indices = hilight.get_indices_for_field(field_type) if hilight else None
 
-            # Get indices for the specific field being rendered
-            if hilight:
-                indices = hilight.get_indices_for_field(field_type)
-                if indices:
-                    # Use exact indices with config-based styling
-                    highlighter = TextHighlighter()
-                    markup = highlighter.build_markup_from_indices(text, indices)
-                    label.set_markup(markup)
-                else:
-                    # No highlighting for this field - just set plain text
-                    label.set_text(text)
+            if indices:
+                highlighter = TextHighlighter()
+                markup = highlighter.build_markup_from_indices(text, indices)
+                label.set_markup(markup)
             else:
-                # No highlighting - just set plain text
                 label.set_text(text)
 
         except Exception:
