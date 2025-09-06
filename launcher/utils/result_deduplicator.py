@@ -50,9 +50,7 @@ class ResultDeduplicator:
 
         # Remove all other_results that are captured by history
         filtered_other_results = [
-            r
-            for r in other_results
-            if (r.plugin_id, r.item_id, None) not in history_keys
+            r for r in other_results if (r.plugin_id, r.item_id, "") not in history_keys
         ]
 
         return history_results + filtered_other_results
