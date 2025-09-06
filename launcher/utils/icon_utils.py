@@ -4,7 +4,7 @@ import os
 import threading
 import urllib.parse
 import urllib.request
-from typing import Dict, List, Optional, Callable
+from typing import Callable, Dict, List, Optional
 
 from gi.repository import GdkPixbuf, GLib, Gtk
 from xdg.IconTheme import getIconPath
