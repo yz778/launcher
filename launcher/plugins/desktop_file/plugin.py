@@ -163,8 +163,7 @@ class DesktopFilePlugin(Plugin):
         "locations": [
             str(xdg_data_home() / "applications"),
             *[str(path / "applications") for path in xdg_data_dirs()],
-        ],
-        "track_history": True,
+        ]
     }
 
     def __init__(self):
@@ -320,7 +319,6 @@ class DesktopFilePlugin(Plugin):
                 metadata={
                     "desktop_file": desktop_file,
                     "args": args,
-                    "track_history": self.should_track_history(),
                 },
                 hilight=field_highlight,
             )

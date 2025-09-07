@@ -11,7 +11,6 @@ class HistoryPlugin(Plugin):
     """Plugin for searching through command history"""
 
     DEFAULTS = {
-        "enabled": True,
         "max_results": 10,
         "min_query_length": 2,
     }

@@ -149,6 +149,13 @@ class LauncherWindow(Gtk.Window):
     """Main launcher window"""
 
     _shutdown_requested = False
+    _nav_keys = [
+        Gdk.KEY_Up,
+        Gdk.KEY_Down,
+        Gdk.KEY_Tab,
+        Gdk.KEY_Page_Up,
+        Gdk.KEY_Page_Down,
+    ]
 
     def __init__(
         self,
@@ -522,6 +529,7 @@ class LauncherWindow(Gtk.Window):
                     row = self.list_box.get_row_at_index(0)
                 if row:
                     self.execute_result(row.result, event)
+                    self.entry.set_text("")
                     return True
             return True
 
@@ -575,6 +583,7 @@ class LauncherWindow(Gtk.Window):
 
         self._capture_modifier_state(result, event)
 
+        plugin = services.plugin_manager.plugins.get(result.plugin_id)
         if services.plugin_manager.execute(result):
             result_to_track = result
             if result.plugin_id == "history":
@@ -582,7 +591,9 @@ class LauncherWindow(Gtk.Window):
                 if original_result_dict:
                     result_to_track = SearchResult.from_dict(original_result_dict)
 
-            self._handle_history_tracking(result_to_track)
+            if plugin.track_history:
+                services.history_manager.add_history(result_to_track)
+
             self.close_window()
 
     def _validate_managers(self) -> bool:
@@ -605,14 +616,6 @@ class LauncherWindow(Gtk.Window):
         result.metadata["ctrl_pressed"] = bool(state & Gdk.ModifierType.CONTROL_MASK)
         result.metadata["alt_pressed"] = bool(state & Gdk.ModifierType.MOD1_MASK)
         result.metadata["cmd_pressed"] = bool(state & Gdk.ModifierType.META_MASK)
-
-    def _handle_history_tracking(self, result: SearchResult) -> None:
-        """Handle history tracking logic for executed results"""
-        should_track = result.metadata.get("track_history", True)
-        if not should_track:
-            return
-
-        services.history_manager.add_history(result)
 
     def show_and_focus(self):
         """Show window and grab focus"""
@@ -637,13 +640,6 @@ class LauncherWindow(Gtk.Window):
     def on_key_press(self, widget, event) -> bool:
         keyval = event.keyval
         state = event.state
-        nav_keys = [
-            Gdk.KEY_Up,
-            Gdk.KEY_Down,
-            Gdk.KEY_Tab,
-            Gdk.KEY_Page_Up,
-            Gdk.KEY_Page_Down,
-        ]
 
         if keyval == Gdk.KEY_q and state & Gdk.ModifierType.CONTROL_MASK:
             logger.info("Ctrl+Q pressed, quitting via launcher window")
@@ -654,7 +650,7 @@ class LauncherWindow(Gtk.Window):
             self.close_window()
             return True
 
-        if keyval not in nav_keys and not self.is_active():
+        if keyval not in self._nav_keys and not self.is_active():
             self.present()
             self.entry.grab_focus()
         return False
