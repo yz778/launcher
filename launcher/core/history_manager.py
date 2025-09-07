@@ -62,7 +62,6 @@ class HistoryManager:
             metadata={
                 "usage_count": entry.get("usage_count"),
                 "original_result": result,
-                "track_history": True,
             },
             hilight=field_highlight,
         )

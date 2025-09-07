@@ -14,10 +14,6 @@ class TerminalPlugin(Plugin):
     Launcher plugin to execute shell commands directly in a terminal.
     """
 
-    DEFAULTS = {
-        "track_history": True,
-    }
-
     def __init__(self):
         super().__init__()
         self.prefix = ">"
@@ -57,10 +53,7 @@ class TerminalPlugin(Plugin):
             icon_spec="https://img.icons8.com/?size=80&id=v8LYQxpvZ4xX&format=png",
             score=score,
             hilight=None,
-            metadata={
-                "command": command,
-                "track_history": self.should_track_history(),
-            },
+            metadata={"command": command},
         )
         return [result]
 
