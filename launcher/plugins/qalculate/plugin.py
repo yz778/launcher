@@ -17,10 +17,6 @@ logger = logging.getLogger(__name__)
 class QalculatePlugin(Plugin):
     """Plugin for calculating mathematical expressions"""
 
-    DEFAULTS = {
-        "track_history": True,
-    }
-
     def __init__(self):
         super().__init__()
         self.prefix = "="
@@ -280,10 +276,7 @@ class QalculatePlugin(Plugin):
             icon_spec="theme://qalculate",
             score=100.0,
             hilight=None,
-            metadata={
-                "result": result,
-                "track_history": self.should_track_history(),
-            },
+            metadata={"result": result},
         )
 
         return [search_result]

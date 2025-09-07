@@ -14,10 +14,6 @@ logger = logging.getLogger(__name__)
 class TimezonePlugin(Plugin):
     """Plugin for converting times between timezones"""
 
-    DEFAULTS = {
-        "track_history": True,
-    }
-
     # Compiled regex patterns for performance
     _TIME_PATTERNS = [
         re.compile(r"\d{1,2}:\d{2}"),  # HH:MM format
@@ -38,6 +34,7 @@ class TimezonePlugin(Plugin):
     def __init__(self):
         super().__init__()
         self.prefix = "tz"
+        self.track_history = False
         self._timezone_aliases = self._build_timezone_aliases()
 
     def get_id(self) -> str:
@@ -308,7 +305,6 @@ class TimezonePlugin(Plugin):
             metadata={
                 "result": result,
                 "conversion": parsed,
-                "track_history": self.should_track_history(),
             },
         )
 

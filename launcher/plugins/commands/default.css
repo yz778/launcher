@@ -1,0 +1,21 @@
+/* Commands Plugin CSS */
+
+.commands-result {
+    background-color: #2d3748;
+    border-left: 3px solid #4299e1;
+}
+
+.commands-result:selected {
+    background-color: #4299e1;
+    color: white;
+}
+
+.commands-result .name {
+    color: #e2e8f0;
+    font-weight: bold;
+}
+
+.commands-result .description {
+    color: #a0aec0;
+    font-style: italic;
+}

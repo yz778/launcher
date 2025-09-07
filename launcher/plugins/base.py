@@ -39,7 +39,7 @@ class SearchResult:
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
-    __slots__ = ("config", "prefix")
+    __slots__ = ("config", "prefix", "track_history")
     DEFAULTS = {}
 
     @abstractmethod
@@ -56,8 +56,9 @@ class Plugin(ABC):
 
     def __init__(self):
         """Initialize the plugin base class"""
-        self.config = None
+        self.config = self.DEFAULTS
         self.prefix: Optional[str] = None
+        self.track_history = True
 
     def get_prefix(self) -> Optional[str]:
         """
@@ -85,15 +86,6 @@ class Plugin(ABC):
             True if plugin has a prefix, False otherwise
         """
         return self.prefix is not None and self.prefix != ""
-
-    def should_track_history(self) -> bool:
-        """
-        Check if this plugin should track executions in history
-
-        Returns:
-            True if executions should be tracked in history, False otherwise
-        """
-        return getattr(self.config, "track_history", True) if self.config else True
 
     def get_default_css(self) -> str:
         """Return the contents of 'default.css' from the plugin's directory, or an empty string if not found."""

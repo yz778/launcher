@@ -20,9 +20,9 @@ class PluginManager:
         "config",
         "active_search_threads",
         "active_search_threads_lock",
-        "_executor",
         "plugins_dir",
         "prefix_registry",
+        "_executor",
         "_current_prefix_plugins",
     )
 
@@ -31,9 +31,9 @@ class PluginManager:
         self.config = config
         self.active_search_threads = 0
         self.active_search_threads_lock = threading.Lock()
-        self._executor = None
         self.plugins_dir = ""
         self.prefix_registry = {}  # prefix -> list of plugin_ids mapping
+        self._executor = None
         self._current_prefix_plugins = []  # Names of plugins currently being searched via prefix
 
     def _get_executor(self):
@@ -318,6 +318,10 @@ class PluginManager:
             empty list if no prefix is being used
         """
         return self._current_prefix_plugins.copy()
+
+    def get_plugin_by_id(self, plugin_id: str) -> Optional[Plugin]:
+        """Get a plugin instance by its ID"""
+        return self.plugins.get(plugin_id)
 
     def execute(self, result: SearchResult) -> bool:
         """Execute an action for the given search result"""

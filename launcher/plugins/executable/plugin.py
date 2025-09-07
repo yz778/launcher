@@ -145,8 +145,7 @@ class ExecutablePlugin(Plugin):
             ".*~$",  # Exclude backup files
             ".*\\.bak$",  # Exclude .bak files
         ],
-        "cache_icons": True,  # Cache loaded icons for better performance
-        "track_history": True,  # Track executable commands in history
+        "cache_icons": True,
     }
 
     def __init__(self):
@@ -327,7 +326,6 @@ class ExecutablePlugin(Plugin):
                     "command": executable.get_command(),
                     "args": args,
                     "executable_data": executable.to_dict(),  # Store dictionary representation
-                    "track_history": self.should_track_history(),
                 },
             )
             results.append(result)
