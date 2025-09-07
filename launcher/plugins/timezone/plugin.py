@@ -297,7 +297,7 @@ class TimezonePlugin(Plugin):
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,
-            name=f"{parsed['source_time']} {source_tz_display} → {result}",
+            name=query,
             description=description,
             icon_spec="theme://appointment-soon",
             score=final_score,

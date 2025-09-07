@@ -1,26 +1,13 @@
-.timezone-result #app-list-item {
-    padding: 8px;
-    border-radius: 8px;
-    transition: background-color 0.2s ease;
-    min-height: 50px;
-}
+.timezone-result #app-list-item {}
 
-.timezone-result #app-list-item:hover {
-    background-color: rgba(70, 130, 180, 0.4);
-}
+.timezone-result #app-list-item:hover {}
 
-.timezone-result #app-list-item:selected {
-    background-color: rgba(90, 150, 200, 0.6);
-}
+.timezone-result #app-list-item:selected {}
 
-.timezone-result #app-name {
-    color: #e0f0ff;
-    font-size: 14px;
-    font-weight: bold;
-}
+.timezone-result #app-name {}
 
 .timezone-result #app-description {
     color: #b0d0f0;
-    font-size: 14px;
+    font-size: 24px;
     font-weight: bold;
 }
