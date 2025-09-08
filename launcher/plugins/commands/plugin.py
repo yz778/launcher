@@ -40,39 +40,19 @@ class CommandsPlugin(Plugin):
             return []
 
         command = self.strip_prefix(query).lower()
-        if not command:
-            results = []
-            for cmd_name, cmd_info in self.commands.items():
-                result = SearchResult(
-                    plugin_id=self.get_id(),
-                    item_id=cmd_name,
-                    name=cmd_info["name"],
-                    description=cmd_info["description"],
-                    icon_spec=cmd_info["icon"],
-                    score=100.0,
-                    metadata={"command": cmd_name},
-                )
-                results.append(result)
-            return results
-
-        # Filter commands that match the query
-        results = []
-        for cmd_name, cmd_info in self.commands.items():
-            if cmd_name.startswith(command):
-                # Calculate a simple score based on how well it matches
-                score = 100.0 - (len(cmd_name) - len(command)) * 10
-                result = SearchResult(
-                    plugin_id=self.get_id(),
-                    item_id=cmd_name,
-                    name=cmd_info["name"],
-                    description=cmd_info["description"],
-                    icon_spec=cmd_info["icon"],
-                    score=score,
-                    metadata={"command": cmd_name},
-                )
-                results.append(result)
-
-        return results
+        return [
+            SearchResult(
+                plugin_id=self.get_id(),
+                item_id=cmd_name,
+                name=cmd_info["name"],
+                description=cmd_info["description"],
+                icon_spec=cmd_info["icon"],
+                score=100.0,
+                metadata={"command": cmd_name},
+            )
+            for cmd_name, cmd_info in self.commands.items()
+            if command == "" or cmd_name.startswith(command)
+        ]
 
     def execute(self, result: SearchResult) -> bool:
         if result.plugin_id != self.get_id():
