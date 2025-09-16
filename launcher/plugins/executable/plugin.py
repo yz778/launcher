@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import shlex
+import shutil
 import stat
 import threading
 from typing import Any, Dict, List
@@ -283,6 +284,10 @@ class ExecutablePlugin(Plugin):
         executable = ExecutableFile(path)
         if executable.is_executable:
             self.executables[path] = executable
+
+    def validate_item(self, item_id: str) -> bool:
+        """Check if the executable file still exists and is executable."""
+        return os.path.isfile(item_id) and os.access(item_id, os.X_OK)
 
     def cleanup(self) -> None:
         """Clean up plugin resources"""

@@ -161,6 +161,20 @@ class Plugin(ABC):
             True if execution was successful, False otherwise
         """
 
+    def validate_item(self, item_id: str) -> bool:
+        """
+        (Optional) Check if a given item_id is still valid.
+        This is used by the HistoryManager to prune stale entries.
+
+        Args:
+            item_id: The unique identifier for the item.
+
+        Returns:
+            True if the item is still valid, False otherwise.
+            Defaults to True if not implemented by the plugin.
+        """
+        return True
+
     def cleanup(self) -> None:
         """
         Clean up resources used by the plugin
