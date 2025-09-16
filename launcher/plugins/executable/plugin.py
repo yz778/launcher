@@ -3,7 +3,6 @@ import logging
 import os
 import re
 import shlex
-import shutil
 import stat
 import threading
 from typing import Any, Dict, List
