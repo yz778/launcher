@@ -113,12 +113,12 @@ def main() -> int:
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
+    # Handle singleton behavior (default unless --foreground is specified)
     if not args.foreground:
         logger.info("Running in singleton mode")
         services.singleton_manager = SingletonManager("launcher")
 
         if services.singleton_manager.is_running():
-            logger.info("Another instance is already running, sending show command...")
             if services.singleton_manager.send_show_command():
                 return 0
             else:
