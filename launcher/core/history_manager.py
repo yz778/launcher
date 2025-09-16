@@ -6,6 +6,8 @@ import tempfile
 import time
 from typing import Any, Dict, List, Optional
 
+from gi.repository import GLib
+
 from launcher.plugins.base import SearchResult
 from launcher.utils.scoring_system import FieldHighlight, calculate_match_score
 
@@ -78,11 +80,12 @@ class HistoryManager:
 
         return results
 
-    __slots__ = ("history", "history_file")
+    __slots__ = ("history", "history_file", "_cleanup_scheduled")
 
     def __init__(self, config):
         self.history: List[Dict[str, Any]] = []
         self.history_file = None
+        self._cleanup_scheduled = False
 
         if config and hasattr(config, "system"):
             history_file = config.system.history_file
@@ -274,6 +277,83 @@ class HistoryManager:
             boost = min(50, 10 * math.log2(total_count + 1))
             return base_score + boost
         return base_score
+
+    def schedule_background_cleanup(self) -> None:
+        """
+        Schedule background cleanup to run when the system is idle.
+        This should be called after all services are initialized.
+        """
+        if self._cleanup_scheduled:
+            return
+
+        self._cleanup_scheduled = True
+        # Schedule cleanup to run at idle priority after a short delay
+        GLib.timeout_add_seconds(5, self._start_background_cleanup)
+        logger.info("Background history cleanup scheduled")
+
+    def _start_background_cleanup(self) -> bool:
+        """
+        Start the background cleanup process.
+        Returns False to prevent the timeout from repeating.
+        """
+        try:
+            self._validate_and_cleanup_history()
+        except Exception as e:
+            logger.error(f"Error during background history cleanup: {e}")
+        return False  # Don't repeat
+
+    def _validate_and_cleanup_history(self) -> None:
+        """
+        Validate all history entries and remove invalid ones.
+        """
+        from launcher import services
+
+        if not hasattr(services, "plugin_manager") or not services.plugin_manager:
+            logger.warning("Plugin manager not available for history validation")
+            return
+
+        logger.info("Starting background history validation")
+        initial_count = len(self.history)
+        valid_entries = []
+
+        for entry in self.history:
+            result_data = entry.get("result")
+            if not result_data:
+                continue
+
+            plugin_id = result_data.get("plugin_id")
+            item_id = result_data.get("item_id")
+
+            if not plugin_id or not item_id:
+                continue
+
+            # Get the plugin and validate the item
+            plugin = services.plugin_manager.get_plugin_by_id(plugin_id)
+            if plugin and hasattr(plugin, "validate_item"):
+                try:
+                    if plugin.validate_item(item_id):
+                        valid_entries.append(entry)
+                    else:
+                        logger.debug(
+                            f"Removing invalid history entry: {plugin_id}:{item_id}"
+                        )
+                except Exception as e:
+                    logger.error(f"Error validating {plugin_id}:{item_id}: {e}")
+                    # Keep the entry if validation fails
+                    valid_entries.append(entry)
+            else:
+                # Keep entries for plugins that don't support validation
+                valid_entries.append(entry)
+
+        # Update history with valid entries
+        self.history = valid_entries
+        removed_count = initial_count - len(valid_entries)
+
+        if removed_count > 0:
+            logger.info(f"Removed {removed_count} invalid history entries")
+            self.save_history()
+        else:
+            logger.info("All history entries are valid")
 
     def cleanup(self) -> None:
         """
