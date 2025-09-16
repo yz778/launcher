@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "launcher"
 version = "1.0.0"
-authors = [{name = "yz778"}]
+authors = [{ name = "yz778" }]
 description = "GTK Launcher"
 readme = "README.md"
 license = "MIT"
@@ -32,3 +32,5 @@ Homepage = "https://github.com/yz778/launcher"
 launcher = "launcher.launcher:main"
 
 [tool.setuptools.packages.find]
+where = ["."]
+include = ["launcher*"]
