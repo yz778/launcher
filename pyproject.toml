@@ -30,3 +30,5 @@ Homepage = "https://github.com/yz778/launcher"
 
 [project.scripts]
 launcher = "launcher.launcher:main"
+
+[tool.setuptools.packages.find]
