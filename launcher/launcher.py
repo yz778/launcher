@@ -173,6 +173,10 @@ def complete_initialization(
     CssManager.load_css(services.config, services.plugin_manager.plugins)
     services.launcher_window.start()
     start_plugins(services.plugin_manager)
+
+    # Schedule background history cleanup after all services are initialized
+    services.history_manager.schedule_background_cleanup()
+
     logger.info("Background initialization completed")
     return False  # Remove from idle queue
 

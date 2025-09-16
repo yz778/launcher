@@ -282,6 +282,10 @@ class DesktopFilePlugin(Plugin):
         except Exception as e:
             logger.error(f"Error processing {file_path}: {e}")
 
+    def validate_item(self, item_id: str) -> bool:
+        """Check if the .desktop file still exists."""
+        return os.path.exists(item_id)
+
     def cleanup(self) -> None:
         """Clean up plugin resources"""
         self.desktop_files.clear()
