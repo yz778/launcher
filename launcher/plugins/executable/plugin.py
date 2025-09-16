@@ -89,8 +89,8 @@ class ExecutableFile:
                     elif not found_shebang:
                         continue
 
-                    elif line.startswith("#"):
-                        stripped_line = line.lstrip("#").strip()
+                    elif line.startswith("#") or line.startswith("--"):
+                        stripped_line = line.lstrip("#").lstrip("--").strip()
 
                         if stripped_line.startswith("icon "):
                             value = stripped_line[5:].strip()
