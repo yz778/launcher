@@ -7,6 +7,6 @@
 @define-color text-color #383a42;
 @define-color text-color-alt #383a42;
 @define-color text-color-muted #a0a1a7;
-@define--color text-color-subtle #a0a1a7;
+@define-color text-color-subtle #a0a1a7;
 @define-color window-background #fafafa;
 @define-color window-border #e4e4e4;
