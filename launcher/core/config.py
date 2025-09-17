@@ -168,10 +168,7 @@ class ConfigManager:
             # Update the user config
             current_config = user_config
             for key in keys[:-1]:
-                if key not in current_config:
-                    current_config[key] = {}
-                current_config = current_config[key]
-
+                current_config = current_config.setdefault(key, {})
             current_config[keys[-1]] = value
 
             # Ensure directory exists
