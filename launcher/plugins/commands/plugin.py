@@ -153,17 +153,20 @@ class CommandsPlugin(Plugin):
             if services.css_manager.load_all_styles(
                 theme_name, plugins, with_transition=is_preview
             ):
-                if not is_preview and services.config_manager:
-                    services.config_manager.update_config("system.theme", theme_name)
-                    logger.info(
-                        f"Theme '{theme_name}' applied and saved to configuration"
-                    )
-                    return True
-                else:
-                    logger.warning(
-                        "Config manager not available, theme applied but not saved"
-                    )
-                    return True
+                if not is_preview:
+                    if services.config_manager:
+                        services.config_manager.update_config(
+                            "system.theme", theme_name
+                        )
+                        logger.info(
+                            f"Theme '{theme_name}' applied and saved to configuration"
+                        )
+                        return True
+                    else:
+                        logger.warning(
+                            "Config manager not available, theme applied but not saved"
+                        )
+                        return True
             else:
                 logger.error(f"Failed to apply theme: {theme_name}")
                 return False
