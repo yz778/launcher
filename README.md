@@ -6,7 +6,7 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
 
 - **Plugin Architecture**: Easily extend with new search sources
 - **Core Plugins**:
-  - **Commands Plugin**: Provides internal commands for the launcher.
+  - **Commands Plugin**: Provides internal commands like `:exit` and `:theme`.
   - **Desktop File Plugin**: Launch applications from .desktop files
   - **Executable Plugin**: Launch executables from custom directories
   - **History Plugin**: Search through command execution history
@@ -14,46 +14,79 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
   - **Terminal Plugin**: Execute shell commands directly
   - **Timezone Plugin**: Convert time between different timezones
 - **Intelligent Search**: A scoring system that prioritizes results based on where a query matches (name vs. description) and the type of match (exact, prefix, substring, fuzzy).
-- **Smart Highlighting**: Matched characters in results are highlighted. The color and style of the highlight is configurable.
+- **Smart Highlighting**: Matched characters in results are highlighted.
 - **History Tracking**: Learns from usage patterns to prioritize frequently used items
-- **Customizable**: Configure through JSON configuration file
-- **Theming**: Full CSS-based styling system.
+- **Customizable**: Configure through a simple JSON file.
+- **Theming**:
+  - Full CSS-based styling system.
+  - Switch themes on the fly with the `:theme` command or --theme CLI command.
+  - Live theme preview as you select different themes.
+  - Comes with several built-in themes.
 
 ## Configuration
 
 The launcher uses a layered configuration approach:
 
-1. **Default Configuration**: Built-in defaults are always applied first
-2. **User Configuration**: Custom settings in `~/.config/launcher/config.json`
-   override defaults
+1.  **Default Configuration**: Built-in defaults are always applied first.
+2.  **User Configuration**: Custom settings in `~/.config/launcher/config.json` override defaults.
 
-Configuration is loaded recursively, so you only need to specify the values you
-want to change.
+Configuration is loaded recursively, so you only need to specify the values you want to change.
 
-Example configuration:
+Example `~/.config/launcher/config.json`:
 
 ```json
 {
   "system": {
     "max_results": 15,
     "icon_size": 48,
-    "highlight_color": "#ff6b6b",
-    "highlight_weight": "bold"
+    "theme": "dracula"
   }
 }
 ```
 
-## Styling
+## Theming
 
-The launcher supports comprehensive CSS-based theming:
+The launcher supports a powerful CSS-based theming system.
 
-1. **Default Styling**: Built-in CSS provides a complete dark theme
-2. **Plugin Styles**: Each plugin can contribute its own CSS styles
-3. **Custom CSS**: User CSS file overrides defaults and plugin styles
+### Switching Themes
 
-### CSS Structure
+You can switch themes in two ways:
 
-The launcher uses semantic CSS classes for easy customization:
+1.  **Using the `:theme` command**:
+    - Type `:theme` in the launcher to see a list of available themes.
+    - Select a theme to preview it instantly.
+    - Press `Enter` to apply the theme and save it to your configuration.
+2.  **Using the command-line**:
+    - Run `launcher --theme <theme_name>` to apply a theme to a running instance.
+
+### Built-in Themes
+
+The launcher includes a variety of pre-installed themes:
+
+- `catppuccin-frappe`
+- `catppuccin-latte`
+- `catppuccin-macchiato`
+- `catppuccin-mocha`
+- `dark-blue`
+- `dark-green`
+- `dark-orange`
+- `dark-purple`
+- `dark-red`
+- `dark-teal`
+- `default`
+- `dracula`
+- `gruvbox-dark`
+- `light`
+- `nord`
+- `solarized-dark`
+
+### Creating Custom Themes
+
+You can create your own themes by adding a CSS file to `~/.config/launcher/themes/`. The name of the file (without the `.css` extension) will be the name of your theme.
+
+For example, to create a theme named `my-theme`, create the file `~/.config/launcher/themes/my-theme.css`.
+
+The launcher uses semantic CSS IDs and classes for easy customization:
 
 ```css
 /* Main window and entry */
@@ -68,42 +101,6 @@ The launcher uses semantic CSS classes for easy customization:
 /* Plugin-specific styles */
 .desktop-file-result { /* Desktop application results */ }
 .executable-result { /* Executable file results */ }
-.calculator-result { /* Calculator results */ }
-.terminal-result { /* Terminal command results */ }
-```
-
-### Custom Highlighting
-
-Customize search result highlighting by adding the following to your configuration file:
-`~/.config/launcher/config.json`:
-
-```json
-{
-  "system": {
-    "highlight_color": "#4ecdc4",
-    "highlight_weight": "bold"
-  }
-}
-```
-The `highlight_weight` property accepts any valid Pango font weight (e.g., `normal`, `bold`, `700`).
-
-### Example Custom CSS
-
-```css
-/* Dark blue theme variant */
-#launcher-window {
-    background: #1e2030;
-    border-color: #4a5568;
-}
-
-#launcher-entry {
-    color: #e2e8f0;
-    font-size: 18px;
-}
-
-.desktop-file-result #app-list-item:selected {
-    background-color: rgba(66, 153, 225, 0.6);
-}
 ```
 
 ## Setup
@@ -116,6 +113,16 @@ make setup
 
 ```bash
 make run
+```
+
+You can also control a running instance from the command line:
+
+```bash
+# Show the launcher window
+./launcher
+
+# Change the theme
+./launcher --theme nord
 ```
 
 ### Keyboard Shortcuts

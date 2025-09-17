@@ -22,10 +22,8 @@ class ConfigManager:
             "terminal_command": "foot",
             "window_width": 600,
             "window_height": 400,
-            "item_height": 50,
-            "border_width": 10,
             "history_file": str(xdg_state_home() / "launcher/history.json"),
-            "css_file": str(xdg_config_home() / "launcher/launcher.css"),
+            "theme": "default",
             "cache_dir": str(xdg_cache_home() / "launcher"),
             "window_position_vertical_percent": 25,
             "window_position_force_center": True,
@@ -131,3 +129,61 @@ class ConfigManager:
         cache_dir = os.path.expanduser(self.config.system.cache_dir)
         os.makedirs(cache_dir, exist_ok=True)
         return cache_dir
+
+    def update_config(self, key_path: str, value: Any) -> bool:
+        """Update a configuration value and save to file
+
+        Args:
+            key_path: Dot-separated path to the config key (e.g., "system.theme")
+            value: New value to set
+
+        Returns:
+            True if update was successful, False otherwise
+        """
+        if not self.config_file:
+            logger.error("No config file path available for updates")
+            return False
+
+        try:
+            # Update the in-memory config
+            keys = key_path.split(".")
+            current = self.config
+            for key in keys[:-1]:
+                if not hasattr(current, key):
+                    setattr(current, key, AttrDict())
+                current = getattr(current, key)
+
+            setattr(current, keys[-1], value)
+
+            # Save to file
+            expanded_path = os.path.expanduser(self.config_file)
+
+            # Load existing user config or create new one
+            if os.path.exists(expanded_path):
+                with open(expanded_path, "r") as f:
+                    user_config = json.load(f)
+            else:
+                user_config = {}
+
+            # Update the user config
+            current_config = user_config
+            for key in keys[:-1]:
+                if key not in current_config:
+                    current_config[key] = {}
+                current_config = current_config[key]
+
+            current_config[keys[-1]] = value
+
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(expanded_path), exist_ok=True)
+
+            # Write back to file
+            with open(expanded_path, "w") as f:
+                json.dump(user_config, f, indent=2, sort_keys=True)
+
+            logger.info(f"Updated configuration: {key_path} = {value}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error updating configuration {key_path}: {e}")
+            return False

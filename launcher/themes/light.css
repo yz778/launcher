@@ -1,0 +1,64 @@
+#launcher-window {
+    background: #ffffff;
+    border-color: #e0e0e0;
+}
+
+#launcher-entry-container {
+    background: #ffffff;
+}
+
+#launcher-entry {
+    color: #212121;
+}
+
+#result-count-label {
+    color: #757575;
+}
+
+#app-list-item:selected {
+    background-color: rgba(33, 150, 243, 0.2);
+}
+
+#history-item:selected {
+    background-color: rgba(33, 150, 243, 0.1);
+}
+
+.history-result #app-name {
+    color: #212121;
+}
+
+.history-result #app-description {
+    color: #616161;
+}
+
+#history-icon {
+    color: #757575;
+}
+
+#history-text {
+    color: #212121;
+}
+
+#app-name {
+    color: #212121;
+}
+
+#app-description {
+    color: #616161;
+}
+
+#app-count {
+    color: #757575;
+}
+
+scrollbar slider {
+    background-color: rgba(158, 158, 158, 0.4);
+}
+
+scrollbar slider:hover {
+    background-color: rgba(158, 158, 158, 0.6);
+}
+
+scrollbar slider:active {
+    background-color: rgba(158, 158, 158, 0.8);
+}
