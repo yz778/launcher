@@ -185,12 +185,12 @@ class LauncherWindow(Gtk.Window):
 
         # Create a box for the entry field and result count
         entry_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        entry_box.set_name("launcher-entry-container")
+        entry_box.set_name("launcher-search-container")
 
         # Initialize the entry field
         self.entry = Gtk.Entry()
         self.entry.set_activates_default(True)
-        self.entry.set_name("launcher-entry")
+        self.entry.set_name("launcher-search")
         self.entry.connect("key-press-event", self.on_entry_key_press)
 
         entry_box.pack_start(self.entry, True, True, 0)
