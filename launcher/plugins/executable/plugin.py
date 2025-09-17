@@ -13,6 +13,8 @@ from launcher.utils.process_manager import process_manager
 from launcher.utils.string_matcher import StringMatcher
 
 logger = logging.getLogger(__name__)
+home = os.path.expanduser("~")
+homelen = len(home)
 
 
 class ExecutableFile:
@@ -30,7 +32,11 @@ class ExecutableFile:
     def __init__(self, path: str):
         self.path = path
         self.name = os.path.basename(path)
-        self.description = self.path
+        self.description = (
+            "~" + self.path[homelen:]
+            if self.path.startswith(home + os.sep)
+            else self.path
+        )
         self.is_executable = False
         self.custom_icon = None
         self.use_terminal = True

@@ -34,9 +34,9 @@ class PluginManager:
         self.active_search_threads = 0
         self.active_search_threads_lock = threading.Lock()
         self.plugins_dir = ""
-        self.prefix_registry = {}  # prefix -> list of plugin_ids mapping
+        self.prefix_registry = {}  # prefix -> list of plugin instances mapping
         self._executor = None
-        self._current_prefix_plugins = []  # Names of plugins currently being searched via prefix
+        self._current_prefix_plugins = []  # List of plugin instances currently being searched via prefix
 
     def _get_executor(self):
         """Get or create thread pool executor"""
@@ -136,7 +136,7 @@ class PluginManager:
                     prefix = plugin.get_prefix()
                     if prefix not in self.prefix_registry:
                         self.prefix_registry[prefix] = []
-                    self.prefix_registry[prefix].append(plugin_id)
+                    self.prefix_registry[prefix].append(plugin)
                     logger.info(f"Registered prefix '{prefix}' for plugin {plugin_id}")
 
                 logger.info(f"Initialized plugin: {plugin.get_name()} ({plugin_id})")
@@ -164,9 +164,9 @@ class PluginManager:
                     prefix = plugin.get_prefix()
                     if (
                         prefix in self.prefix_registry
-                        and plugin_id in self.prefix_registry[prefix]
+                        and plugin in self.prefix_registry[prefix]
                     ):
-                        self.prefix_registry[prefix].remove(plugin_id)
+                        self.prefix_registry[prefix].remove(plugin)
                         if not self.prefix_registry[prefix]:  # Remove empty list
                             del self.prefix_registry[prefix]
                         logger.info(
@@ -195,21 +195,15 @@ class PluginManager:
             GLib.idle_add(finished_callback, search_id)
             return
 
-        target_plugin_ids = self._get_plugins_for_prefix(query)
+        target_plugins = self._get_plugins_for_prefix(query)
 
-        if target_plugin_ids:
-            plugins_to_search = [
-                (plugin_id, self.plugins[plugin_id])
-                for plugin_id in target_plugin_ids
-                if plugin_id in self.plugins
-            ]
+        if target_plugins:
+            plugins_to_search = [(plugin.get_id(), plugin) for plugin in target_plugins if plugin.get_id() in self.plugins]
             if not plugins_to_search:
                 GLib.idle_add(finished_callback, search_id)
                 return
 
-            self._current_prefix_plugins = [
-                plugin.get_name() for _, plugin in plugins_to_search
-            ]
+            self._current_prefix_plugins = target_plugins
         else:
             plugins_to_search = [
                 (plugin_id, plugin_instance)
@@ -292,15 +286,15 @@ class PluginManager:
                         return prefix
         return None
 
-    def _get_plugins_for_prefix(self, query: str) -> List[str]:
+    def _get_plugins_for_prefix(self, query: str) -> List[Plugin]:
         """
-        Get the plugin IDs that should handle this query based on prefix matching.
+        Get the plugin instances that should handle this query based on prefix matching.
 
         Args:
             query: The search query
 
         Returns:
-            List of plugin IDs if query matches a registered prefix, empty list otherwise
+            List of plugin instances if query matches a registered prefix, empty list otherwise
         """
         matching_prefix = self._find_matching_prefix(query)
         return self.prefix_registry.get(matching_prefix, []) if matching_prefix else []
@@ -329,12 +323,12 @@ class PluginManager:
         """
         return self._find_matching_prefix(query)
 
-    def get_current_prefix_plugins(self) -> List[str]:
+    def get_current_prefix_plugins(self) -> List[Plugin]:
         """
-        Get the names of plugins currently being searched via prefix matching.
+        Get the plugins currently being searched via prefix matching.
 
         Returns:
-            List of plugin names that are being searched due to prefix matching,
+            List of plugin instances that are being searched due to prefix matching,
             empty list if no prefix is being used
         """
         return self._current_prefix_plugins.copy()

@@ -1,0 +1,12 @@
+@define-color background #0d1117;
+@define-color background-alt #0d1117;
+@define-color border #30363d;
+@define-color foreground #c9d1d9;
+@define-color foreground-alt #c9d1d9;
+@define-color foreground-muted #8b949e;
+@define-color foreground-subtle #484f58;
+@define-color scrollbar rgba(139, 148, 158, 0.4);
+@define-color scrollbar-active rgba(139, 148, 158, 0.8);
+@define-color scrollbar-hover rgba(139, 148, 158, 0.6);
+@define-color selection rgba(56, 139, 253, 0.3);
+@define-color selection-alt rgba(56, 139, 253, 0.2);
