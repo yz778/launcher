@@ -110,17 +110,12 @@ class CssManager:
             int(color.green * 255),
             int(color.blue * 255),
         )
-
-        self._highlight_weight = str(weight)
-        if weight > 400:
-            self._highlight_weight = "bold"
-        else:
-            self._highlight_weight = "normal"
+        self._highlight_weight = "bold" if weight > 400 else "normal"
 
         # Fallback if the theme doesn't specify a highlight color
         if self._highlight_color == "#000000":
             logger.warning("No highlight color found in theme, using fallback")
-            self._highlight_color = "#ff0000"
+            self._highlight_color = "#87CEFA"
             self._highlight_weight = "bold"
 
         win.destroy()
