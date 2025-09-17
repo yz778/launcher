@@ -6,17 +6,18 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
 
 - **Plugin Architecture**: Easily extend with new search sources
 - **Core Plugins**:
+  - **Commands Plugin**: Provides internal commands for the launcher.
   - **Desktop File Plugin**: Launch applications from .desktop files
   - **Executable Plugin**: Launch executables from custom directories
   - **History Plugin**: Search through command execution history
   - **QCalculate Plugin**: Advanced calculator with Qalculate! engine
   - **Terminal Plugin**: Execute shell commands directly
   - **Timezone Plugin**: Convert time between different timezones
-- **Intelligent Search**: Multiple matching strategies (exact, prefix, word boundary, fuzzy)
-- **Smart Highlighting**: Visual feedback with different styles for different match types
+- **Intelligent Search**: A scoring system that prioritizes results based on where a query matches (name vs. description) and the type of match (exact, prefix, substring, fuzzy).
+- **Smart Highlighting**: Matched characters in results are highlighted. The color and style of the highlight is configurable.
 - **History Tracking**: Learns from usage patterns to prioritize frequently used items
 - **Customizable**: Configure through JSON configuration file
-- **Theming**: Full CSS-based styling system with extensible highlight styles
+- **Theming**: Full CSS-based styling system.
 
 ## Configuration
 
@@ -35,7 +36,9 @@ Example configuration:
 {
   "system": {
     "max_results": 15,
-    "icon_size": 48
+    "icon_size": 48,
+    "highlight_color": "#ff6b6b",
+    "highlight_weight": "bold"
   }
 }
 ```
@@ -47,7 +50,6 @@ The launcher supports comprehensive CSS-based theming:
 1. **Default Styling**: Built-in CSS provides a complete dark theme
 2. **Plugin Styles**: Each plugin can contribute its own CSS styles
 3. **Custom CSS**: User CSS file overrides defaults and plugin styles
-4. **Highlight Styles**: Configurable highlighting for different match types
 
 ### CSS Structure
 
@@ -68,37 +70,22 @@ The launcher uses semantic CSS classes for easy customization:
 .executable-result { /* Executable file results */ }
 .calculator-result { /* Calculator results */ }
 .terminal-result { /* Terminal command results */ }
-
-/* Search highlighting */
-.highlight-exact { /* Exact substring matches */ }
-.highlight-prefix { /* Prefix matches */ }
-.highlight-word { /* Word boundary matches */ }
-.highlight-fuzzy { /* Fuzzy character matches */ }
 ```
 
 ### Custom Highlighting
 
-Customize search result highlighting by overriding CSS classes:
+Customize search result highlighting by adding the following to your configuration file:
+`~/.config/launcher/config.json`:
 
-```css
-/* Custom highlighting styles */
-.highlight-exact {
-    color: #ff6b6b;        /* Red for exact matches */
-    font-weight: bold;
-}
-
-.highlight-fuzzy {
-    color: #4ecdc4;        /* Teal for fuzzy matches */
-    font-weight: bold;
-    font-style: italic;
-    text-decoration: underline;
-}
-
-.highlight-word {
-    color: #45b7d1;        /* Blue for word matches */
-    background-color: rgba(69, 183, 209, 0.2);
+```json
+{
+  "system": {
+    "highlight_color": "#4ecdc4",
+    "highlight_weight": "bold"
+  }
 }
 ```
+The `highlight_weight` property accepts any valid Pango font weight (e.g., `normal`, `bold`, `700`).
 
 ### Example Custom CSS
 
@@ -133,10 +120,10 @@ make run
 
 ### Keyboard Shortcuts
 
-- **Type** to search with intelligent matching
+- **Type** to search
 - **Up/Down** to navigate results
 - **Enter** to launch the selected result
-- **Shift+Enter** to launch the selected result in terminal window
+- **Shift+Enter** can modify the behavior of some plugins (e.g., running an executable without a terminal)
 - **Tab** to autocomplete with the selected result
 - **Escape** to clear or exit
 - **Ctrl+Q** to quit
@@ -144,12 +131,9 @@ make run
 
 ### Search Features
 
-- **Exact Matching**: Direct substring search
-- **Prefix Matching**: Matches at the beginning of words
-- **Word Boundary Matching**: Matches complete words
-- **Fuzzy Matching**: Character-by-character approximate matching
+- **Scoring System**: Results are scored and sorted based on a number of factors, including exact matches, prefix matches, and substring matches. Matches in the name of a result are prioritized over matches in the description.
 - **History Integration**: Frequently used items appear first
-- **Visual Highlighting**: Different colors for different match types
+- **Visual Highlighting**: Matched characters are highlighted to provide visual feedback.
 
 ## License
 

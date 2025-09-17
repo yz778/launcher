@@ -124,11 +124,7 @@ class ExecutablePlugin(Plugin):
     __slots__ = (
         "_matcher_lock",
         "cache_file",
-        "cache_icons",
-        "exclude_patterns",
         "executables",
-        "include_patterns",
-        "locations",
         "matcher",
     )
 
@@ -152,11 +148,7 @@ class ExecutablePlugin(Plugin):
         super().__init__()
         self._matcher_lock = threading.Lock()
         self.cache_file = None
-        self.cache_icons = True
-        self.exclude_patterns = []
         self.executables = {}
-        self.include_patterns = []
-        self.locations = []
         self.matcher = None
 
     def get_id(self) -> str:
@@ -168,20 +160,9 @@ class ExecutablePlugin(Plugin):
     def get_description(self) -> str:
         return "Search for executable files in custom directories with support for custom icons (file paths, URLs, or theme names)"
 
-    def initialize(self, config) -> bool:
+    def initialize(self, user_config) -> bool:
         """Initialize the plugin with the given configuration"""
-        super().initialize(config)
-
-        locations = getattr(config, "locations", self.DEFAULTS["locations"])
-        self.locations = [os.path.expanduser(loc) for loc in locations]
-
-        include_patterns = getattr(config, "include", self.DEFAULTS["include"])
-        self.include_patterns = [re.compile(pattern) for pattern in include_patterns]
-
-        exclude_patterns = getattr(config, "exclude", self.DEFAULTS["exclude"])
-        self.exclude_patterns = [re.compile(pattern) for pattern in exclude_patterns]
-
-        self.cache_icons = getattr(config, "cache_icons", self.DEFAULTS["cache_icons"])
+        super().initialize(user_config)
 
         # Access cache dir through services
         from launcher import services
@@ -254,8 +235,9 @@ class ExecutablePlugin(Plugin):
         """Scan for executable files in the configured locations"""
         self.executables = {}
 
-        for location in self.locations:
-            self._scan_executable_location(location)
+        for location in self.config.locations:
+            expanded_location = os.path.expanduser(location)
+            self._scan_executable_location(expanded_location)
 
         logger.info(f"Loaded {len(self.executables)} executable files")
 
@@ -273,9 +255,11 @@ class ExecutablePlugin(Plugin):
 
     def _should_include_file(self, filename: str) -> bool:
         """Check if file should be included based on patterns"""
-        return any(
-            pattern.match(filename) for pattern in self.include_patterns
-        ) and not any(pattern.match(filename) for pattern in self.exclude_patterns)
+        include_patterns = [re.compile(pattern) for pattern in self.config.include]
+        exclude_patterns = [re.compile(pattern) for pattern in self.config.exclude]
+        return any(pattern.match(filename) for pattern in include_patterns) and not any(
+            pattern.match(filename) for pattern in exclude_patterns
+        )
 
     def _process_executable_file(self, location: str, filename: str) -> None:
         """Process a single executable file"""
