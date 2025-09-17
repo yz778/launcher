@@ -269,6 +269,38 @@ class LauncherWindow(Gtk.Window):
             child.destroy()
 
         for result in results:
+            # Check for custom rendering in priority order as per refactor plan
+
+            # 1. Custom render callback (highest priority)
+            if result.render_callback is not None:
+                try:
+                    widget = result.render_callback()
+                    if widget and isinstance(widget, Gtk.Widget):
+                        list_row = Gtk.ListBoxRow()
+                        list_row.result = (
+                            result  # Store result reference for compatibility
+                        )
+                        list_row.add(widget)
+                        self.list_box.add(list_row)
+                        continue
+                except Exception as e:
+                    logger.error(
+                        f"Error executing render_callback for result {result.item_id}: {e}"
+                    )
+                    # Fall back to default rendering
+
+            # 2. Predefined render modes (medium priority)
+            elif result.render_mode is not None:
+                widget = self._create_widget_for_render_mode(result)
+                if widget:
+                    list_row = Gtk.ListBoxRow()
+                    list_row.result = result  # Store result reference for compatibility
+                    list_row.add(widget)
+                    self.list_box.add(list_row)
+                    continue
+                # Fall back to default rendering if widget creation failed
+
+            # 3. Default behavior (backward compatibility)
             history_count = (
                 result.metadata.get("usage_count", 0)
                 if result.plugin_id == "history"
@@ -287,6 +319,99 @@ class LauncherWindow(Gtk.Window):
         self.list_box.show_all()
         self.scrolled.show()
         self._update_results_count(results)
+
+    def _create_widget_for_render_mode(self, result: SearchResult) -> Gtk.Widget:
+        """Create a widget based on the specified render mode and content."""
+        try:
+            if result.render_mode == "text_view":
+                return self._create_text_view_widget(result)
+            elif result.render_mode == "web_view":
+                return self._create_web_view_widget(result)
+            elif result.render_mode == "image_buffer":
+                return self._create_image_widget(result)
+            else:
+                logger.warning(f"Unsupported render mode: {result.render_mode}")
+                return None
+        except Exception as e:
+            logger.error(
+                f"Error creating widget for render mode {result.render_mode}: {e}"
+            )
+            return None
+
+    def _create_text_view_widget(self, result: SearchResult) -> Gtk.Widget:
+        """Create a TextView widget for displaying formatted text content."""
+        text_view = Gtk.TextView()
+        text_view.set_editable(False)
+        text_view.set_cursor_visible(False)
+        text_view.set_wrap_mode(Gtk.WrapMode.WORD)
+
+        buffer = text_view.get_buffer()
+        if result.content:
+            buffer.set_text(str(result.content))
+
+        # Wrap in a scrolled window for long content
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_max_content_height(400)  # Limit height
+        scrolled.add(text_view)
+
+        return scrolled
+
+    def _create_web_view_widget(self, result: SearchResult) -> Gtk.Widget:
+        """Create a WebView widget for displaying web content. Currently disabled as it errors out with Wayland"""
+        return None
+        try:
+            import gi
+
+            gi.require_version("WebKit2", "4.1")
+            from gi.repository import WebKit2
+
+            web_view = WebKit2.WebView()
+
+            if result.content:
+                if isinstance(result.content, str):
+                    if result.content.startswith(("http://", "https://")):
+                        web_view.load_uri(result.content)
+                    else:
+                        web_view.load_html(result.content)
+                else:
+                    logger.warning(
+                        f"Invalid content type for WebView: {type(result.content)}"
+                    )
+                    return None
+
+            # Set a reasonable size
+            web_view.set_size_request(-1, 400)
+            return web_view
+
+        except ImportError:
+            logger.warning("WebKit2 not available, cannot create WebView widget")
+            return None
+
+    def _create_image_widget(self, result: SearchResult) -> Gtk.Widget:
+        """Create an Image widget for displaying image content."""
+        try:
+            if result.content:
+                if hasattr(result.content, "get_pixbuf"):
+                    # Content is already a pixbuf
+                    image = Gtk.Image.new_from_pixbuf(result.content)
+                elif isinstance(result.content, str):
+                    # Content is a file path
+                    image = Gtk.Image.new_from_file(result.content)
+                else:
+                    logger.warning(
+                        f"Invalid content type for Image: {type(result.content)}"
+                    )
+                    return None
+
+                return image
+            else:
+                logger.warning("No content provided for image widget")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error creating image widget: {e}")
+            return None
 
     def _update_results_count(self, results):
         """Unified method to set up the results display area with consistent sizing and scrolling."""
