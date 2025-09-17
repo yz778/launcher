@@ -126,6 +126,8 @@ class ExecutablePlugin(Plugin):
         "cache_file",
         "executables",
         "matcher",
+        "include_patterns",
+        "exclude_patterns",
     )
 
     DEFAULTS = {
@@ -150,6 +152,8 @@ class ExecutablePlugin(Plugin):
         self.cache_file = None
         self.executables = {}
         self.matcher = None
+        self.include_patterns = None
+        self.exclude_patterns = None
 
     def get_id(self) -> str:
         return "executable"
@@ -169,7 +173,8 @@ class ExecutablePlugin(Plugin):
 
         cache_dir = services.config_manager.get_cache_dir()
         self.cache_file = os.path.join(cache_dir, f"{self.get_id()}_cache.json")
-
+        self.include_patterns = [re.compile(pattern) for pattern in self.config.include]
+        self.exclude_patterns = [re.compile(pattern) for pattern in self.config.exclude]
         return True
 
     def _load_from_cache(self) -> None:
@@ -255,11 +260,9 @@ class ExecutablePlugin(Plugin):
 
     def _should_include_file(self, filename: str) -> bool:
         """Check if file should be included based on patterns"""
-        include_patterns = [re.compile(pattern) for pattern in self.config.include]
-        exclude_patterns = [re.compile(pattern) for pattern in self.config.exclude]
-        return any(pattern.match(filename) for pattern in include_patterns) and not any(
-            pattern.match(filename) for pattern in exclude_patterns
-        )
+        return any(
+            pattern.match(filename) for pattern in self.include_patterns
+        ) and not any(pattern.match(filename) for pattern in self.exclude_patterns)
 
     def _process_executable_file(self, location: str, filename: str) -> None:
         """Process a single executable file"""
