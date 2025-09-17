@@ -255,9 +255,10 @@ class QalculatePlugin(Plugin):
 
     def search(self, query: str) -> List[SearchResult]:
         """Search for calculations matching the query"""
-        query = self.strip_prefix(query)
         if not self._is_calculation(query):
             return []
+
+        query = self.strip_prefix(query)
 
         result = self._calculate(query)
         if result is None:
