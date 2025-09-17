@@ -26,9 +26,7 @@ class HistoryPlugin(Plugin):
 
     def search(self, query: str) -> List[SearchResult]:
         query = query.strip().lower()
-        if len(query) < getattr(
-            self.config, "min_query_length", self.DEFAULTS["min_query_length"]
-        ):
+        if len(query) < self.config.min_query_length:
             return []
 
         history_manager = services.history_manager
@@ -46,9 +44,7 @@ class HistoryPlugin(Plugin):
                     results.append(history_result)
 
         results.sort(key=lambda r: r.score, reverse=True)
-        return results[
-            : getattr(self.config, "max_results", self.DEFAULTS["max_results"])
-        ]
+        return results[: self.config.max_results]
 
     def execute(self, result: SearchResult) -> bool:
         original_result_dict = result.metadata.get("original_result")
