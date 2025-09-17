@@ -1,64 +1,12 @@
-#launcher-window {
-    background: #002b36;
-    border-color: #073642;
-}
-
-#launcher-entry-container {
-    background: #002b36;
-}
-
-#launcher-entry {
-    color: #839496;
-}
-
-#result-count-label {
-    color: #268bd2;
-}
-
-#app-list-item:selected {
-    background-color: rgba(38, 139, 210, 0.3);
-}
-
-#history-item:selected {
-    background-color: rgba(38, 139, 210, 0.2);
-}
-
-.history-result #app-name {
-    color: #93a1a1;
-}
-
-.history-result #app-description {
-    color: #657b83;
-}
-
-#history-icon {
-    color: #268bd2;
-}
-
-#history-text {
-    color: #93a1a1;
-}
-
-#app-name {
-    color: #93a1a1;
-}
-
-#app-description {
-    color: #657b83;
-}
-
-#app-count {
-    color: #268bd2;
-}
-
-scrollbar slider {
-    background-color: rgba(38, 139, 210, 0.4);
-}
-
-scrollbar slider:hover {
-    background-color: rgba(38, 139, 210, 0.6);
-}
-
-scrollbar slider:active {
-    background-color: rgba(38, 139, 210, 0.8);
-}
+@define-color background #002b36;
+@define-color background-alt #002b36;
+@define-color foreground #839496;
+@define-color foreground-alt #93a1a1;
+@define-color foreground-muted #657b83;
+@define-color foreground-subtle #268bd2;
+@define-color border #073642;
+@define-color selection rgba(38, 139, 210, 0.3);
+@define-color selection-alt rgba(38, 139, 210, 0.2);
+@define-color scrollbar rgba(38, 139, 210, 0.4);
+@define-color scrollbar-hover rgba(38, 139, 210, 0.6);
+@define-color scrollbar-active rgba(38, 139, 210, 0.8);
