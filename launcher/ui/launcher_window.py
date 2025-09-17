@@ -3,7 +3,6 @@ from typing import List
 
 from gi.repository import Gdk, GLib, Gtk, Pango
 from plugins.base import SearchResult
-from ui.css_manager import CssManager
 
 from launcher import services
 from launcher.utils.icon_utils import get_fallback_icon, load_custom_icon
@@ -34,9 +33,7 @@ class AppListItem(Gtk.ListBoxRow):
         style_context.add_class(f"{result.plugin_id}-result")
 
         # Create a horizontal box to hold the icon and text
-        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        hbox.set_border_width(8)
-        hbox.set_property("height-request", 60)
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
 
         # Load and display icon
         icon_pixbuf = self._load_result_icon(result, icon_size)
@@ -52,10 +49,11 @@ class AppListItem(Gtk.ListBoxRow):
         hbox.pack_start(icon_box, False, False, 0)
 
         # Create a vertical box for name and description
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        vbox.set_name("app-list-item-text")
 
         # Create a horizontal box for name and count
-        name_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        name_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
 
         # Add the name
         name_label = Gtk.Label(label=result.name)  # Always set the initial text
@@ -74,7 +72,7 @@ class AppListItem(Gtk.ListBoxRow):
             count_label.set_halign(Gtk.Align.END)
             count_label.get_style_context().add_class("dim-label")
             count_label.set_name("app-count")
-            name_box.pack_end(count_label, False, False, 5)
+            name_box.pack_end(count_label, False, False, 0)
 
         vbox.pack_start(name_box, True, True, 0)
 
@@ -163,8 +161,6 @@ class LauncherWindow(Gtk.Window):
     ):
         super().__init__(title="Launcher")
 
-        CssManager.load_default_css()
-
         self.foreground_mode = foreground_mode
         self.result_deduplicator = ResultDeduplicator()
 
@@ -183,12 +179,12 @@ class LauncherWindow(Gtk.Window):
         self._schedule_quit = lambda reason=None: GLib.idle_add(Gtk.main_quit)
 
         # Create a vertical box for the layout
-        self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.vbox.set_border_width(services.config.system.border_width)
+        self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.vbox.set_name("launcher-container")
         self.add(self.vbox)
 
         # Create a box for the entry field and result count
-        entry_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+        entry_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         entry_box.set_name("launcher-entry-container")
 
         # Initialize the entry field
@@ -204,14 +200,14 @@ class LauncherWindow(Gtk.Window):
         self.result_count_label.set_halign(Gtk.Align.END)
         self.result_count_label.get_style_context().add_class("dim-label")
         self.result_count_label.set_name("result-count-label")
-        entry_box.pack_end(self.result_count_label, False, False, 5)
+        entry_box.pack_end(self.result_count_label, False, False, 0)
         self.result_count_label.hide()
 
         self.vbox.pack_start(entry_box, False, False, 0)
 
         # Create a scrolled window for the results
         self.scrolled = Gtk.ScrolledWindow()
-        self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.ALWAYS)
+        self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.scrolled.set_shadow_type(Gtk.ShadowType.NONE)
         self.scrolled.set_name("results-scrolled")
 
@@ -219,12 +215,15 @@ class LauncherWindow(Gtk.Window):
         self.scrolled.set_overlay_scrolling(False)
         self.scrolled.set_propagate_natural_height(True)
 
-        self.vbox.pack_start(self.scrolled, True, True, 5)
+        self.vbox.pack_start(self.scrolled, False, False, 0)
+        self.scrolled.set_max_content_height(self.window_height)
 
         # Create the list box for results
         self.list_box = Gtk.ListBox()
         self.list_box.set_selection_mode(Gtk.SelectionMode.MULTIPLE)
         self.list_box.connect("row-activated", self.on_row_activated)
+        self.list_box.connect("row-selected", self.on_row_selected)
+        self.list_box.connect("key-press-event", self.on_list_box_key_press)
         self.list_box.set_name("results-list")
         self.scrolled.add(self.list_box)
 
@@ -257,7 +256,6 @@ class LauncherWindow(Gtk.Window):
         self.scrolled.hide()
         self.result_count_label.set_text("")
         self.result_count_label.hide()
-        self.resize(self.window_width, self.window_height)
 
     def _clear_list_box(self):
         """Clear all items from the list box"""
@@ -279,7 +277,7 @@ class LauncherWindow(Gtk.Window):
 
             list_item = AppListItem(
                 result,
-                icon_size=self.icon_size or 48,
+                icon_size=self.icon_size,
                 usage_count=history_count,
                 query=self.entry.get_text().strip(),
             )
@@ -312,13 +310,6 @@ class LauncherWindow(Gtk.Window):
         else:
             self.result_count_label.set_text("")
             self.result_count_label.hide()
-
-        # Set scrolling policy based on number of items
-        if count > 5:
-            self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.ALWAYS)
-            self.scrolled.set_overlay_scrolling(False)
-        else:
-            self.scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.NEVER)
 
     def handle_plugin_results(
         self, search_id: int, plugin_id: str, plugin_results: List[SearchResult]
@@ -575,6 +566,51 @@ class LauncherWindow(Gtk.Window):
         """Handle activation of a row in the results list"""
         if row and hasattr(row, "result"):
             self.execute_result(row.result, None)
+
+    def on_row_selected(self, list_box, row) -> None:
+        """Handle selection of a row in the results list to preview it"""
+        keymap = Gdk.Keymap.get_default()
+        state = keymap.get_modifier_state()
+        shift_pressed = bool(state & Gdk.ModifierType.SHIFT_MASK)
+
+        if shift_pressed:
+            return  # Don't preview on multi-selection
+
+        if row and hasattr(row, "result"):
+            result = row.result
+            plugin = services.plugin_manager.plugins.get(result.plugin_id)
+            if plugin:
+                try:
+                    plugin.preview(result)
+                except Exception as e:
+                    logger.error(
+                        f"Error previewing result for plugin {result.plugin_id}: {e}"
+                    )
+
+    def on_list_box_key_press(self, widget, event) -> bool:
+        """Handle key presses on the list box to redirect typing to the entry."""
+        keyval = event.keyval
+
+        # For Tab, move focus back to the entry
+        if keyval == Gdk.KEY_Tab:
+            self.entry.grab_focus()
+            return True  # Event handled
+
+        # If at the top of the list, Up arrow focuses entry
+        if keyval == Gdk.KEY_Up:
+            selected_row = self.list_box.get_selected_row()
+            if not selected_row or selected_row.get_index() == 0:
+                self.entry.grab_focus()
+                return True  # Event handled
+
+        # For any printable character, focus the entry and let it handle the key press
+        if Gdk.keyval_to_unicode(keyval) > 0:
+            self.entry.grab_focus()
+            # Returning False allows the key press to be processed by the newly focused entry
+            return False
+
+        # For other navigation keys (Down, etc.), let the default handler work
+        return False
 
     def execute_result(self, result: SearchResult, event=None) -> None:
         """Execute the given search result"""

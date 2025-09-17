@@ -189,6 +189,16 @@ class Plugin(ABC):
         """
         return True
 
+    def preview(self, result: SearchResult) -> None:
+        """
+        (Optional) Preview the given search result without executing it.
+        This is triggered on item focus.
+
+        Args:
+            result: The search result to preview
+        """
+        pass
+
     def cleanup(self) -> None:
         """
         Clean up resources used by the plugin
