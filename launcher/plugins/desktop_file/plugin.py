@@ -155,7 +155,6 @@ class DesktopFilePlugin(Plugin):
         "cache_file",
         "config",
         "desktop_files",
-        "locations",
         "matcher",
     ]
 
@@ -170,9 +169,7 @@ class DesktopFilePlugin(Plugin):
         super().__init__()
         self._matcher_lock = threading.Lock()
         self.cache_file = None
-        self.config = {}
         self.desktop_files = {}
-        self.locations = []
         self.matcher = None
 
     def get_id(self) -> str:
@@ -184,15 +181,9 @@ class DesktopFilePlugin(Plugin):
     def get_description(self) -> str:
         return "Search for applications from .desktop files"
 
-    def initialize(self, config) -> bool:
+    def initialize(self, user_config) -> bool:
         """Initialize the plugin with the given configuration"""
-        super().initialize(config)
-
-        # Get locations from config
-        self.locations = [
-            os.path.expanduser(loc)
-            for loc in getattr(config, "locations", self.DEFAULTS["locations"])
-        ]
+        super().initialize(user_config)
 
         # Initialize with empty data first
         self.desktop_files = {}
@@ -261,8 +252,10 @@ class DesktopFilePlugin(Plugin):
         """Scan for desktop files in the configured locations"""
         self.desktop_files = {}
 
-        for location in reversed(self.locations):
-            self._scan_location(location)
+        locations = getattr(self.config, "locations", [])
+        for location in reversed(locations):
+            expanded_location = os.path.expanduser(location)
+            self._scan_location(expanded_location)
 
     def _scan_location(self, location: str) -> None:
         """Scan a single location for desktop files"""

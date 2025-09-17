@@ -2,10 +2,12 @@ import importlib
 import inspect
 import logging
 import os
+import sys
 import threading
 from typing import Callable, List, Optional, Type
 
 from gi.repository import GLib
+from xdg_base_dirs import xdg_data_home
 
 from launcher.plugins.base import Plugin, SearchResult
 
@@ -47,28 +49,47 @@ class PluginManager:
         return self._executor
 
     def load_plugins(self, plugins_dir: str) -> None:
-        """Discover and load all plugins from the specified directory"""
+        """Discover and load all plugins from the specified directory and user directory."""
         self.plugins_dir = plugins_dir
 
-        plugin_dirs = [
-            d
-            for d in os.listdir(plugins_dir)
-            if os.path.isdir(os.path.join(plugins_dir, d))
-            and d != "__pycache__"
-            and not d.startswith(".")
-        ]
+        # 1. Load built-in plugins
+        self._load_plugins_from_dir(plugins_dir, is_user_plugin=False)
 
-        for plugin_dir in plugin_dirs:
-            self.load_plugin(plugin_dir)
+        # 2. Load user plugins under XDG config
+        user_plugins_dir = xdg_data_home() / "launcher" / "plugins"
+        if user_plugins_dir.is_dir():
+            self._load_plugins_from_dir(str(user_plugins_dir), is_user_plugin=True)
 
-    def load_plugin(self, plugin_dir: str) -> bool:
+    def _load_plugins_from_dir(self, plugins_dir: str, is_user_plugin: bool) -> None:
+        if is_user_plugin and plugins_dir not in sys.path:
+            sys.path.insert(0, plugins_dir)
+
+        for entry in os.scandir(plugins_dir):
+            if (
+                entry.is_dir()
+                and entry.name != "__pycache__"
+                and not entry.name.startswith(".")
+            ):
+                self.load_plugin(entry.name, plugins_dir, is_user_plugin)
+
+    def load_plugin(
+        self, plugin_dir: str, base_dir: str = None, is_user_plugin: bool = False
+    ) -> bool:
         """Load a single plugin from its directory"""
         try:
-            plugin_file = os.path.join(self.plugins_dir, plugin_dir, "plugin.py")
+            # Use base_dir if provided, otherwise fall back to self.plugins_dir for backward compatibility
+            plugin_base_dir = base_dir if base_dir is not None else self.plugins_dir
+            plugin_file = os.path.join(plugin_base_dir, plugin_dir, "plugin.py")
             if not os.path.exists(plugin_file):
                 return False
 
-            module_name = f"plugins.{plugin_dir}.plugin"
+            if is_user_plugin:
+                # User plugins are in a directory added to sys.path
+                module_name = f"{plugin_dir}.plugin"
+            else:
+                # Built-in plugins are part of the 'plugins' package
+                module_name = f"plugins.{plugin_dir}.plugin"
+
             module = importlib.import_module(module_name)
 
             for name, obj in inspect.getmembers(module):

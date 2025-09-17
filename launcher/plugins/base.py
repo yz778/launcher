@@ -102,21 +102,35 @@ class Plugin(ABC):
         except (OSError, IOError):
             return ""
 
-    def initialize(self, config) -> bool:
+    def initialize(self, user_config) -> bool:
         """
-        Initialize the plugin with the given configuration.
-        Base implementation stores the config. Subclasses should call super().
+        Initializes the plugin by merging its DEFAULTS with the user_config.
 
-        This method should only load configuration and CSS, without doing any heavy setup work.
-        Use the start() method for actual setup work that should be done after the GUI is started.
+        This method creates a complete configuration for the plugin, ensuring that
+        `self.config` is always a valid AttrDict. User-provided values will
+        override the plugin's defaults.
 
         Args:
-            config: Plugin-specific configuration object (AttrDict)
+            user_config: The user-specific configuration object (AttrDict), which
+                         can be None if not provided by the user.
 
         Returns:
-            True if initialization was successful, False otherwise
+            True if initialization was successful, False otherwise.
         """
-        self.config = config
+        from launcher.core.config import AttrDict
+
+        # Start with the plugin's built-in defaults.
+        merged_config = self.DEFAULTS.copy()
+
+        # If the user provided a config, merge it on top of the defaults.
+        if user_config:
+            for key, value in user_config.items():
+                if value is not None:  # Allow users to unset values with null
+                    merged_config[key] = value
+
+        # Convert the final merged dict to an AttrDict for attribute-style access.
+        self.config = AttrDict(merged_config)
+
         return True
 
     def get_cache_dir(self) -> str:
