@@ -1,19 +1,19 @@
-@define-color background #23272e;
-@define-color background-alt #23272e;
-@define-color border #44475a;
-@define-color foreground #f8f8f2;
-@define-color foreground-alt #e0e0e0;
-@define-color foreground-muted #a0a0a0;
-@define-color foreground-subtle #808080;
-@define-color scrollbar rgba(150, 150, 150, 0.4);
-@define-color scrollbar-active rgba(150, 150, 150, 0.8);
-@define-color scrollbar-hover rgba(150, 150, 150, 0.6);
-@define-color selection rgba(80, 100, 140, 0.6);
-@define-color selection-alt rgba(120, 120, 120, 0.4);
+@define-color scrollbar-color rgba(150, 150, 150, 0.4);
+@define-color scrollbar-color-color-active rgba(150, 150, 150, 0.8);
+@define-color scrollbar-color-color-hover rgba(150, 150, 150, 0.6);
+@define-color search-container-background #23272e;
+@define-color selection-background rgba(80, 100, 140, 0.6);
+@define-color selection-background-background-alt rgba(120, 120, 120, 0.4);
+@define-color text-color #f8f8f2;
+@define-color text-color-alt #e0e0e0;
+@define-color text-color-muted #a0a0a0;
+@define-color text-color-subtle #808080;
+@define-color window-background #23272e;
+@define-color window-border #44475a;
 
 #launcher-window {
-    background: @background;
-    border: 2px solid @border;
+    background: @window-background;
+    border: 2px solid @window-border;
     border-radius: 10px;
 }
 
@@ -21,13 +21,13 @@
     margin: 10px;
 }
 
-#launcher-entry-container {
-    background: @background-alt;
+#launcher-search-container {
+    background: @search-container-background;
     padding: 10px;
 }
 
-#launcher-entry {
-    color: @foreground;
+#launcher-search {
+    color: @text-color;
     background: transparent;
     border: none;
     font-size: 20px;
@@ -39,7 +39,7 @@
 
 #result-count-label {
     background: transparent;
-    color: @foreground-subtle;
+    color: @text-color-subtle;
     font-size: 10px;
     font-style: italic;
     padding: 0 0 0 5px;
@@ -63,7 +63,7 @@
     padding: 8px;
     margin-bottom: 5px;
     border-radius: 6px;
-    transition: background-color 0.15s ease;
+    transition: window-background-color 0.15s ease;
     min-height: 40px;
 }
 
@@ -72,7 +72,7 @@
 }
 
 #app-list-item:selected {
-    background-color: @selection;
+    background-color: @selection-background;
 }
 
 /* History item styling */
@@ -83,64 +83,64 @@
 }
 
 #history-item:selected {
-    background-color: @selection-alt;
+    background-color: @selection-background-background-alt;
 }
 
 .history-result #app-name {
     font-weight: bold;
-    color: @foreground-alt;
+    color: @text-color-alt;
 }
 
 .history-result #app-description {
-    color: @foreground-muted;
+    color: @text-color-muted;
     font-style: normal;
 }
 
 #history-icon {
-    color: @foreground-muted;
+    color: @text-color-muted;
     font-size: 18px;
 }
 
 #history-text {
-    color: @foreground-alt;
+    color: @text-color-alt;
     font-size: 16px;
     font-weight: bold;
 }
 
 #app-name {
-    color: @foreground;
+    color: @text-color;
     font-size: 16px;
     font-weight: bold;
 }
 
 #app-description {
-    color: @foreground-muted;
+    color: @text-color-muted;
     font-size: 12px;
 }
 
 #app-count {
-    color: @foreground-subtle;
+    color: @text-color-subtle;
     font-size: 10px;
     font-style: italic;
     margin-left: 5px;
 }
 
-scrollbar {
+scrollbar-color {
     background-color: transparent;
     border: none;
 }
 
-scrollbar slider {
+scrollbar-color slider {
     min-width: 6px;
     min-height: 6px;
     border-radius: 3px;
-    background-color: @scrollbar;
+    background-color: @scrollbar-color;
 }
 
-scrollbar slider:hover {
-    background-color: @scrollbar-hover;
+scrollbar-color slider:hover {
+    background-color: @scrollbar-color-color-hover;
 }
 
-scrollbar slider:active {
-    background-color: @scrollbar-active;
+scrollbar-color slider:active {
+    background-color: @scrollbar-color-color-active;
 }
