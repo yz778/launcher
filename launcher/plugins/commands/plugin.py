@@ -100,25 +100,7 @@ class CommandsPlugin(Plugin):
             theme_name = result.metadata.get("theme_name")
             if theme_name:
                 logger.info(f"Previewing theme: {theme_name}")
-                self._preview_theme(theme_name)
-
-    def _preview_theme(self, theme_name: str) -> bool:
-        """Apply a theme for preview without updating configuration"""
-        try:
-            plugins = getattr(services.plugin_manager, "plugins", None)
-
-            if services.css_manager.load_all_styles(
-                theme_name, plugins, with_transition=True
-            ):
-                logger.info(f"Theme '{theme_name}' previewed")
-                return True
-            else:
-                logger.error(f"Failed to preview theme: {theme_name}")
-                return False
-
-        except Exception as e:
-            logger.error(f"Error previewing theme {theme_name}: {e}")
-            return False
+                self._apply_theme(theme_name, True)
 
     def execute(self, result: SearchResult) -> bool:
         if result.plugin_id != self.get_id():
@@ -143,7 +125,7 @@ class CommandsPlugin(Plugin):
                     return False
 
                 logger.info(f"Applying theme: {theme_name}")
-                return self._apply_theme(theme_name)
+                return self._apply_theme(theme_name, False)
             elif command == "theme":
                 return True
             else:
@@ -154,11 +136,12 @@ class CommandsPlugin(Plugin):
             logger.error(f"Error executing command {command}: {e}")
             return False
 
-    def _apply_theme(self, theme_name: str) -> bool:
-        """Apply a theme and update configuration
+    def _apply_theme(self, theme_name: str, is_preview: bool) -> bool:
+        """Apply or preview a theme
 
         Args:
             theme_name: Name of the theme to apply
+            is_preview: Preview only or save to config
 
         Returns:
             True if successful, False otherwise
@@ -167,9 +150,10 @@ class CommandsPlugin(Plugin):
             # Create a new CSS manager instance and apply the theme
             plugins = getattr(services.plugin_manager, "plugins", None)
 
-            if services.css_manager.load_all_styles(theme_name, plugins):
-                # Update the configuration to persist the theme choice
-                if services.config_manager:
+            if services.css_manager.load_all_styles(
+                theme_name, plugins, with_transition=is_preview
+            ):
+                if not is_preview and services.config_manager:
                     services.config_manager.update_config("system.theme", theme_name)
                     logger.info(
                         f"Theme '{theme_name}' applied and saved to configuration"
