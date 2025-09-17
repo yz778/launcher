@@ -167,6 +167,8 @@ class CommandsPlugin(Plugin):
                             "Config manager not available, theme applied but not saved"
                         )
                         return True
+                else:
+                    return True
             else:
                 logger.error(f"Failed to apply theme: {theme_name}")
                 return False
