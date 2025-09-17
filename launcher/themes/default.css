@@ -1,15 +1,15 @@
 @define-color background #23272e;
 @define-color background-alt #23272e;
+@define-color border #44475a;
 @define-color foreground #f8f8f2;
 @define-color foreground-alt #e0e0e0;
 @define-color foreground-muted #a0a0a0;
 @define-color foreground-subtle #808080;
-@define-color border #44475a;
+@define-color scrollbar rgba(150, 150, 150, 0.4);
+@define-color scrollbar-active rgba(150, 150, 150, 0.8);
+@define-color scrollbar-hover rgba(150, 150, 150, 0.6);
 @define-color selection rgba(80, 100, 140, 0.6);
 @define-color selection-alt rgba(120, 120, 120, 0.4);
-@define-color scrollbar rgba(150, 150, 150, 0.4);
-@define-color scrollbar-hover rgba(150, 150, 150, 0.6);
-@define-color scrollbar-active rgba(150, 150, 150, 0.8);
 
 #launcher-window {
     background: @background;
