@@ -423,10 +423,10 @@ class LauncherWindow(Gtk.Window):
             prefix_plugins = services.plugin_manager.get_current_prefix_plugins()
             if prefix_plugins:
                 if len(prefix_plugins) == 1:
-                    count_text = prefix_plugins[0]
+                    count_text = prefix_plugins[0].get_name()
                 else:
                     additional_count = len(prefix_plugins) - 1
-                    count_text = f"{prefix_plugins[0]} +{additional_count} plugin{'s' if additional_count != 1 else ''}"
+                    count_text = f"{prefix_plugins[0].get_name()} +{additional_count} plugin{'s' if additional_count != 1 else ''}"
             else:
                 count_text = f"{count} result{'s' if count != 1 else ''}"
 
@@ -482,10 +482,16 @@ class LauncherWindow(Gtk.Window):
             self.current_results
         )
 
+        # Limit and sort results: use plugin-specific max_results if only one plugin is active, otherwise use global default
+        active_plugins = services.plugin_manager.get_current_prefix_plugins()
+        max_results = services.config.system.max_results
+
+        if len(active_plugins) == 1:
+            plugin = active_plugins[0]
+            max_results = plugin.config.get("max_results", max_results)
+
         self.current_results.sort(key=lambda r: r.score, reverse=True)
-        self.current_results = self.current_results[
-            : services.config.system.max_results
-        ]
+        self.current_results = self.current_results[:max_results]
 
         self._populate_list_box(self.current_results)
 

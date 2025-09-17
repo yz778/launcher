@@ -12,6 +12,8 @@ class CommandsPlugin(Plugin):
     Launcher plugin to execute internal commands with a colon prefix.
     """
 
+    DEFAULTS = {"max_results": 5000}
+
     def __init__(self):
         super().__init__()
         self.prefix = ":"
