@@ -91,7 +91,7 @@ The launcher uses semantic CSS IDs and classes for easy customization:
 ```css
 /* Main window and entry */
 #launcher-window { /* Main window styling */ }
-#launcher-entry { /* Search input field */ }
+#launcher-search { /* Search input field */ }
 
 /* Results list */
 #app-list-item { /* Individual result items */ }

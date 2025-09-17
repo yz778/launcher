@@ -198,7 +198,11 @@ class PluginManager:
         target_plugins = self._get_plugins_for_prefix(query)
 
         if target_plugins:
-            plugins_to_search = [(plugin.get_id(), plugin) for plugin in target_plugins if plugin.get_id() in self.plugins]
+            plugins_to_search = [
+                (plugin.get_id(), plugin)
+                for plugin in target_plugins
+                if plugin.get_id() in self.plugins
+            ]
             if not plugins_to_search:
                 GLib.idle_add(finished_callback, search_id)
                 return
