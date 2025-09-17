@@ -18,6 +18,8 @@ class CssManager:
         self.theme_provider: Optional[Gtk.CssProvider] = None
         self.transition_provider: Optional[Gtk.CssProvider] = None
         self._transition_timeout_id = None
+        self._highlight_color: Optional[str] = None
+        self._highlight_weight: Optional[str] = None
 
     def load_all_styles(
         self, theme_name: str, plugins: dict = None, with_transition: bool = False
@@ -83,6 +85,51 @@ class CssManager:
 
         return sorted(themes)
 
+    def get_highlight_style(self) -> tuple[str, str]:
+        """Get the highlight color and weight from the current theme.
+
+        Returns:
+            A tuple containing the highlight color and weight.
+        """
+        if self._highlight_color and self._highlight_weight:
+            return self._highlight_color, self._highlight_weight
+
+        label = Gtk.Label()
+        label.get_style_context().add_class("highlight")
+
+        win = Gtk.Window()
+        win.add(label)
+        win.show_all()
+
+        style_context = label.get_style_context()
+        # The 6 is for Gtk.StateFlags.NORMAL
+        color = style_context.get_color(Gtk.StateFlags.NORMAL)
+
+        # The 6 is for Gtk.StateFlags.NORMAL
+        weight = style_context.get_property("font-weight", Gtk.StateFlags.NORMAL)
+
+        self._highlight_color = "#%02x%02x%02x" % (
+            int(color.red * 255),
+            int(color.green * 255),
+            int(color.blue * 255),
+        )
+
+        self._highlight_weight = str(weight)
+        if weight > 400:
+            self._highlight_weight = "bold"
+        else:
+            self._highlight_weight = "normal"
+
+        # Fallback if the theme doesn't specify a highlight color
+        if self._highlight_color == "#000000":
+            logger.warning("No highlight color found in theme, using fallback")
+            self._highlight_color = "#ff0000"
+            self._highlight_weight = "bold"
+
+        win.destroy()
+
+        return self._highlight_color, self._highlight_weight
+
     def _clear_providers(self):
         """Remove all CSS providers from the screen"""
         screen = Gdk.Screen.get_default()
@@ -108,6 +155,10 @@ class CssManager:
                 screen, self.transition_provider
             )
             self.transition_provider = None
+
+        # Clear cached highlight styles
+        self._highlight_color = None
+        self._highlight_weight = None
 
     def _apply_transition_styles(self):
         """Applies a global CSS transition and sets a timer to remove it."""

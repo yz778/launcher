@@ -1,9 +1,9 @@
+@define-color highlight-color #268bd2;
 @define-color scrollbar-color-color-active rgba(147, 161, 161, 0.8);
 @define-color scrollbar-color-color-hover rgba(147, 161, 161, 0.6);
 @define-color scrollbar-color rgba(147, 161, 161, 0.4);
-@define-color search-container-background #eee8d5;
-@define-color selection-background-background-alt rgba(38, 139, 210, 0.2);
-@define-color selection-background rgba(38, 139, 210, 0.3);
+@define-color search-container-background #fdf6e3;
+@define-color selection-background #eee8d5;
 @define-color text-color #657b83;
 @define-color text-color-alt #586e75;
 @define-color text-color-muted #839496;

@@ -1,12 +1,12 @@
+@define-color highlight-color #A6E22E;
 @define-color scrollbar-color-color-active rgba(150, 150, 150, 0.8);
 @define-color scrollbar-color-color-hover rgba(150, 150, 150, 0.6);
 @define-color scrollbar-color rgba(150, 150, 150, 0.4);
-@define-color search-container-background #272822;
-@define-color selection-background-background-alt rgba(166, 226, 46, 0.4);
-@define-color selection-background rgba(249, 38, 114, 0.6);
-@define-color text-color-alt #E6DB74;
+@define-color search-container-background #221F22;
+@define-color selection-background rgba(73, 72, 62, 0.6);
+@define-color text-color-alt #F8F8F2;
 @define-color text-color #F8F8F2;
 @define-color text-color-muted #75715E;
 @define-color text-color-subtle #75715E;
-@define-color window-background #272822;
-@define-color window-border #75715E;
+@define-color window-background #221F22;
+@define-color window-border #19181A;
