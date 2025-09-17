@@ -214,9 +214,7 @@ class PluginManager:
             plugins_to_search = [
                 (plugin_id, plugin_instance)
                 for plugin_id, plugin_instance in self.plugins.items()
-                if not plugin_instance.has_prefix()
-                or not plugin_instance.prefix_only
-                or self._query_matches_any_prefix(query)
+                if not plugin_instance.has_prefix() or not plugin_instance.prefix_only
             ]
             self._current_prefix_plugins = []
 

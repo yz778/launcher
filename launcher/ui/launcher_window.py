@@ -358,7 +358,7 @@ class LauncherWindow(Gtk.Window):
         return scrolled
 
     def _create_web_view_widget(self, result: SearchResult) -> Gtk.Widget:
-        """Create a WebView widget for displaying web content."""
+        """Create a WebView widget for displaying web content. Currently disabled as it errors out with Wayland"""
         return None
         try:
             import gi
