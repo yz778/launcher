@@ -1,6 +1,19 @@
+@define-color background #23272e;
+@define-color background-alt #23272e;
+@define-color foreground #f8f8f2;
+@define-color foreground-alt #e0e0e0;
+@define-color foreground-muted #a0a0a0;
+@define-color foreground-subtle #808080;
+@define-color border #44475a;
+@define-color selection rgba(80, 100, 140, 0.6);
+@define-color selection-alt rgba(120, 120, 120, 0.4);
+@define-color scrollbar rgba(150, 150, 150, 0.4);
+@define-color scrollbar-hover rgba(150, 150, 150, 0.6);
+@define-color scrollbar-active rgba(150, 150, 150, 0.8);
+
 #launcher-window {
-    background: #23272e;
-    border: 2px solid #44475a;
+    background: @background;
+    border: 2px solid @border;
     border-radius: 10px;
 }
 
@@ -9,12 +22,12 @@
 }
 
 #launcher-entry-container {
-    background: #23272e;
+    background: @background-alt;
     padding: 10px;
 }
 
 #launcher-entry {
-    color: #f8f8f2;
+    color: @foreground;
     background: transparent;
     border: none;
     font-size: 20px;
@@ -26,7 +39,7 @@
 
 #result-count-label {
     background: transparent;
-    color: #808080;
+    color: @foreground-subtle;
     font-size: 10px;
     font-style: italic;
     padding: 0 0 0 5px;
@@ -59,7 +72,7 @@
 }
 
 #app-list-item:selected {
-    background-color: rgba(80, 100, 140, 0.6);
+    background-color: @selection;
 }
 
 /* History item styling */
@@ -70,43 +83,43 @@
 }
 
 #history-item:selected {
-    background-color: rgba(120, 120, 120, 0.4);
+    background-color: @selection-alt;
 }
 
 .history-result #app-name {
     font-weight: bold;
-    color: #e0e0e0;
+    color: @foreground-alt;
 }
 
 .history-result #app-description {
-    color: #a0a0a0;
+    color: @foreground-muted;
     font-style: normal;
 }
 
 #history-icon {
-    color: #a0a0a0;
+    color: @foreground-muted;
     font-size: 18px;
 }
 
 #history-text {
-    color: #e0e0e0;
+    color: @foreground-alt;
     font-size: 16px;
     font-weight: bold;
 }
 
 #app-name {
-    color: #f8f8f2;
+    color: @foreground;
     font-size: 16px;
     font-weight: bold;
 }
 
 #app-description {
-    color: #a0a0a0;
+    color: @foreground-muted;
     font-size: 12px;
 }
 
 #app-count {
-    color: #808080;
+    color: @foreground-subtle;
     font-size: 10px;
     font-style: italic;
     margin-left: 5px;
@@ -121,13 +134,13 @@ scrollbar slider {
     min-width: 6px;
     min-height: 6px;
     border-radius: 3px;
-    background-color: rgba(150, 150, 150, 0.4);
+    background-color: @scrollbar;
 }
 
 scrollbar slider:hover {
-    background-color: rgba(150, 150, 150, 0.6);
+    background-color: @scrollbar-hover;
 }
 
 scrollbar slider:active {
-    background-color: rgba(150, 150, 150, 0.8);
+    background-color: @scrollbar-active;
 }

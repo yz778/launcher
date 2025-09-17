@@ -1,64 +1,12 @@
-#launcher-window {
-    background: #1e1e2e;
-    border-color: #313244;
-}
-
-#launcher-entry-container {
-    background: #1e1e2e;
-}
-
-#launcher-entry {
-    color: #cdd6f4;
-}
-
-#result-count-label {
-    color: #cba6f7;
-}
-
-#app-list-item:selected {
-    background-color: rgba(203, 166, 247, 0.3);
-}
-
-#history-item:selected {
-    background-color: rgba(203, 166, 247, 0.2);
-}
-
-.history-result #app-name {
-    color: #cdd6f4;
-}
-
-.history-result #app-description {
-    color: #bac2de;
-}
-
-#history-icon {
-    color: #cba6f7;
-}
-
-#history-text {
-    color: #cdd6f4;
-}
-
-#app-name {
-    color: #cdd6f4;
-}
-
-#app-description {
-    color: #bac2de;
-}
-
-#app-count {
-    color: #cba6f7;
-}
-
-scrollbar slider {
-    background-color: rgba(203, 166, 247, 0.4);
-}
-
-scrollbar slider:hover {
-    background-color: rgba(203, 166, 247, 0.6);
-}
-
-scrollbar slider:active {
-    background-color: rgba(203, 166, 247, 0.8);
-}
+@define-color background #1e1e2e;
+@define-color background-alt #1e1e2e;
+@define-color foreground #cdd6f4;
+@define-color foreground-alt #cdd6f4;
+@define-color foreground-muted #bac2de;
+@define-color foreground-subtle #cba6f7;
+@define-color border #313244;
+@define-color selection rgba(203, 166, 247, 0.3);
+@define-color selection-alt rgba(203, 166, 247, 0.2);
+@define-color scrollbar rgba(203, 166, 247, 0.4);
+@define-color scrollbar-hover rgba(203, 166, 247, 0.6);
+@define-color scrollbar-active rgba(203, 166, 247, 0.8);
