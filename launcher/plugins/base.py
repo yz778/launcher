@@ -3,7 +3,8 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 from launcher import services
 from launcher.utils.scoring_system import FieldHighlight
@@ -24,22 +25,36 @@ class SearchResult:
     metadata: Dict[str, Any] = field(default_factory=dict)
     hilight: Optional["FieldHighlight"] = None
 
+    # New fields for hybrid renderable-based approach
+    render_mode: Optional[str] = None
+    content: Optional[Any] = None
+    render_callback: Optional[Callable[[], Any]] = None
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert the SearchResult to a dictionary, excluding hilight data."""
+        """Convert the SearchResult to a dictionary, excluding hilight data and render_callback."""
         result_dict = asdict(self)
         result_dict.pop("hilight", None)  # don't store in history
+        result_dict.pop("render_callback", None)  # can't serialize functions
+        # Convert enum to string for serialization
+        if result_dict.get("render_mode"):
+            result_dict["render_mode"] = result_dict["render_mode"].value
         return result_dict
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SearchResult":
         """Create a SearchResult from a dictionary."""
-        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+        # Handle render_mode conversion from string back to enum
+        filtered_data = {}
+        for k, v in data.items():
+            if k in cls.__dataclass_fields__:
+                filtered_data[k] = v
+        return cls(**filtered_data)
 
 
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
-    __slots__ = ("config", "prefix", "track_history")
+    __slots__ = ("config", "prefix", "prefix_only", "track_history")
     DEFAULTS = {}
 
     @abstractmethod
@@ -58,6 +73,7 @@ class Plugin(ABC):
         """Initialize the plugin base class"""
         self.config = self.DEFAULTS
         self.prefix: Optional[str] = None
+        self.prefix_only = True
         self.track_history = True
 
     def get_prefix(self) -> Optional[str]:

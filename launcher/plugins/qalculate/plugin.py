@@ -20,6 +20,7 @@ class QalculatePlugin(Plugin):
     def __init__(self):
         super().__init__()
         self.prefix = "="
+        self.prefix_only = False
         self._last_valid_result = None
         self._active_processes = set()
         self._qalc_process = None
