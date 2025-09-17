@@ -102,10 +102,7 @@ class CssManager:
         win.show_all()
 
         style_context = label.get_style_context()
-        # The 6 is for Gtk.StateFlags.NORMAL
         color = style_context.get_color(Gtk.StateFlags.NORMAL)
-
-        # The 6 is for Gtk.StateFlags.NORMAL
         weight = style_context.get_property("font-weight", Gtk.StateFlags.NORMAL)
 
         self._highlight_color = "#%02x%02x%02x" % (
