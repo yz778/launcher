@@ -234,19 +234,34 @@ def handle_theme_command(theme_name: str):
     """
     global services
 
+    available_themes = services.css_manager.get_available_themes()
+
+    if theme_name == "":
+        return "\n".join(available_themes)
+
+    if theme_name not in available_themes:
+        return f"Theme not found: `{theme_name}`"
+
+    success = False
+    message = ""
+
     try:
-        if services.css_manager and services.plugin_manager:
-            plugins = getattr(services.plugin_manager, "plugins", None)
-            if services.css_manager.load_all_styles(theme_name, plugins):
-                if services.config_manager:
-                    services.config_manager.update_config("system.theme", theme_name)
-                logger.info(f"Theme switched to '{theme_name}' via IPC")
-            else:
-                logger.error(f"Failed to switch to theme: {theme_name}")
+        plugins = getattr(services.plugin_manager, "plugins", None)
+        if services.css_manager.load_all_styles(theme_name, plugins):
+            services.config_manager.update_config("system.theme", theme_name)
+            success = True
+            message = f"Theme switched to '{theme_name}' via IPC"
         else:
-            logger.error("CSS manager or plugin manager not available")
+            message = f"Failed to switch to theme: {theme_name}"
     except Exception as e:
-        logger.error(f"Error handling theme command '{theme_name}': {e}")
+        message = f"Error handling theme command '{theme_name}': {e}"
+
+    if success:
+        logger.info(message)
+    else:
+        logger.error(message)
+
+    return message
 
 
 def start_plugins(plugin_manager) -> bool:

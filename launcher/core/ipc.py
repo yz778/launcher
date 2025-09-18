@@ -30,12 +30,12 @@ class IPCManager:
     @staticmethod
     def _get_socket_path(app_name: str) -> str:
         """Construct the path for the IPC socket."""
-        uid = os.getuid()
         runtime_dir = xdg_runtime_dir()
+        sockname = f"{app_name}.sock"
         if runtime_dir and os.path.exists(runtime_dir):
-            return os.path.join(runtime_dir, f"{app_name}-ipc-{uid}.sock")
+            return os.path.join(runtime_dir, sockname)
         # Fallback for systems without XDG_RUNTIME_DIR
-        return os.path.join(tempfile.gettempdir(), f"{app_name}-ipc-{uid}.sock")
+        return os.path.join(tempfile.gettempdir(), sockname)
 
     def register_handler(self, command: str, handler: Callable):
         """
@@ -140,16 +140,31 @@ class IPCManager:
                 return "PONG"
 
             if command in self.handlers:
-                # Schedule handler on the main GTK thread
+                result_holder = {"result": None}
+                done_event = threading.Event()
+
                 def execute_handler():
                     try:
-                        self.handlers[command](args)
+                        result_holder["result"] = self.handlers[command](args)
                     except Exception as e:
                         logger.error(f"Error executing handler for {command}: {e}")
+                        result_holder["result"] = f"ERROR: Handler exception: {e}"
+                    finally:
+                        done_event.set()
                     return False  # Remove from idle queue
 
                 GLib.idle_add(execute_handler)
-                return "OK"
+
+                # Wait for handler to finish (with timeout for safety)
+                if not done_event.wait(timeout=2.0):
+                    logger.error(f"Timeout waiting for handler for {command}")
+                    return "ERROR: Handler timeout"
+                response = result_holder["result"]
+                if response is None:
+                    response = "OK"
+                if not response.endswith("\n"):
+                    response += "\n"
+                return response
             else:
                 return f"ERROR: Unknown command: {command}"
 
