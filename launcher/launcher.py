@@ -164,22 +164,18 @@ def main() -> int:
 
     # Start up the launcher
     from launcher.core.config import ConfigManager
-    from launcher.ui import idle_add, process_pending_events, run_main_loop
-    from launcher.ui.launcher_window import LauncherWindow
+    from launcher.ui.application import LauncherApplication
 
     services.config_manager = ConfigManager(args.config)
     services.config = services.config_manager.get()
 
-    try:
-        services.launcher_window = LauncherWindow(foreground_mode=args.foreground)
-        services.launcher_window.show_and_focus()
-        process_pending_events()
-        plugins_dir = os.path.join(current_dir, "plugins")
-        idle_add(lambda: complete_initialization(plugins_dir, args))
-        run_main_loop()
-
-    finally:
-        shutdown()
+    plugins_dir = os.path.join(current_dir, "plugins")
+    app = LauncherApplication(
+        foreground_mode=args.foreground,
+        config_path=args.config,
+        plugins_dir=plugins_dir,
+    )
+    app.run()
 
     return 0
 

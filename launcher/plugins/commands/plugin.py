@@ -57,14 +57,20 @@ class CommandsPlugin(Plugin):
             try:
                 available_themes = services.css_manager.get_available_themes()
 
-                for theme_name in available_themes:
-                    if not theme_part or theme_part in theme_name.lower():
+                for theme in available_themes:
+                    theme_name = theme["name"]
+                    display_name = theme["display_name"]
+                    if (
+                        not theme_part
+                        or theme_part in theme_name.lower()
+                        or theme_part in display_name.lower()
+                    ):
                         results.append(
                             SearchResult(
                                 plugin_id=self.get_id(),
                                 item_id=f"theme_{theme_name}",
                                 name=f":theme {theme_name}",
-                                description=f"Switch to {theme_name} theme",
+                                description=f"Switch to {display_name}",
                                 icon_spec="https://img.icons8.com/?size=80&id=Hs4y0qsqaZ6G&format=png",
                                 score=95.0 if theme_part else 90.0,
                                 metadata={
