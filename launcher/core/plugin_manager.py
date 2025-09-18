@@ -5,7 +5,7 @@ import os
 import sys
 import threading
 from pathlib import Path
-from typing import Callable, List, Optional, Type, Iterable
+from typing import Callable, Iterable, List, Optional, Type
 
 from gi.repository import GLib
 from xdg_base_dirs import xdg_data_home

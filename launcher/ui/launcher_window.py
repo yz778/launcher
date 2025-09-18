@@ -867,4 +867,3 @@ class LauncherWindow(Gtk.Window):
 
         # Show recent history on startup
         self._show_recent_history()
-
