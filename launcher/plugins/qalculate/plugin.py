@@ -9,7 +9,6 @@ from typing import List, Optional
 import pyperclip
 
 from launcher.plugins.base import Plugin, SearchResult
-from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
