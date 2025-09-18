@@ -139,13 +139,17 @@ class PluginManager:
                             if prefix not in self.prefix_registry:
                                 self.prefix_registry[prefix] = []
                             self.prefix_registry[prefix].append(plugin)
-                            logger.info(f"Registered prefix '{prefix}' for plugin {plugin_id}")
+                            logger.info(
+                                f"Registered prefix '{prefix}' for plugin {plugin_id}"
+                            )
                     else:
                         prefix = prefixes
                         if prefix not in self.prefix_registry:
                             self.prefix_registry[prefix] = []
                         self.prefix_registry[prefix].append(plugin)
-                        logger.info(f"Registered prefix '{prefix}' for plugin {plugin_id}")
+                        logger.info(
+                            f"Registered prefix '{prefix}' for plugin {plugin_id}"
+                        )
 
                 logger.info(f"Initialized plugin: {plugin.get_name()} ({plugin_id})")
                 return True
@@ -177,7 +181,9 @@ class PluginManager:
                                 and plugin in self.prefix_registry[prefix]
                             ):
                                 self.prefix_registry[prefix].remove(plugin)
-                                if not self.prefix_registry[prefix]:  # Remove empty list
+                                if not self.prefix_registry[
+                                    prefix
+                                ]:  # Remove empty list
                                     del self.prefix_registry[prefix]
                                 logger.info(
                                     f"Unregistered prefix '{prefix}' for plugin {plugin_id}"
