@@ -13,6 +13,7 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
   - **QCalculate Plugin**: Advanced calculator with Qalculate! engine
   - **Terminal Plugin**: Execute shell commands directly
   - **Timezone Plugin**: Convert time between different timezones
+  - **Filesystem Plugin**: Search and launch files from the filesystem
 - **Intelligent Search**: A scoring system that prioritizes results based on where a query matches (name vs. description) and the type of match (exact, prefix, substring, fuzzy).
 - **Smart Highlighting**: Matched characters in results are highlighted.
 - **History Tracking**: Learns from usage patterns to prioritize frequently used items
@@ -22,6 +23,24 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
   - Switch themes on the fly with the `:theme` command or --theme CLI command.
   - Live theme preview as you select different themes.
   - Comes with several built-in themes.
+
+## Architecture
+
+The launcher is built with a modular architecture designed for extensibility and performance.
+
+### Internal Structure
+
+- **Plugin System**: Extensible through plugins that provide search sources and functionality.
+- **Services**: Core services include ConfigService for configuration management, ThemeService for theming, and IPCService for inter-process communication.
+- **Bootstrap Process**: Handles initialization in phases including argument parsing, IPC checks, and service setup.
+
+### Startup Process
+
+The startup process involves several key steps:
+
+1. **Argument Parsing**: Command-line arguments are parsed to determine configuration and actions.
+2. **IPC Instance Checks**: Checks for existing instances to handle single-instance behavior.
+3. **Bootstrap Phases**: Initializes services, loads plugins, and prepares the UI.
 
 ## Configuration
 
@@ -63,10 +82,13 @@ You can switch themes in two ways:
 
 The launcher includes a variety of pre-installed themes:
 
+- `ayu-dark`
+- `ayu-light`
 - `catppuccin-frappe`
 - `catppuccin-latte`
 - `catppuccin-macchiato`
 - `catppuccin-mocha`
+- `cobalt2`
 - `dark-blue`
 - `dark-green`
 - `dark-orange`
@@ -75,10 +97,24 @@ The launcher includes a variety of pre-installed themes:
 - `dark-teal`
 - `default`
 - `dracula`
+- `embark`
+- `everforest`
+- `github-dark`
+- `github-light`
 - `gruvbox-dark`
+- `gruvbox-light`
 - `light`
+- `monokai`
+- `night-owl`
 - `nord`
+- `one-dark-light`
+- `one-dark-pro`
 - `solarized-dark`
+- `solarized-light`
+- `tokyo-night-light`
+- `tokyo-night`
+
+Note: The full list of available themes can be viewed using the `:theme` command. Custom themes can override built-in themes by placing CSS files in `~/.config/launcher/themes/`.
 
 ### Creating Custom Themes
 
@@ -86,7 +122,7 @@ You can create your own themes by adding a CSS file to `~/.config/launcher/theme
 
 For example, to create a theme named `my-theme`, create the file `~/.config/launcher/themes/my-theme.css`.
 
-The launcher uses semantic CSS IDs and classes for easy customization:
+The launcher uses semantic CSS variables, CSS IDs and classes for easy customization.
 
 ```css
 /* Main window and entry */
@@ -124,6 +160,8 @@ You can also control a running instance from the command line:
 # Change the theme
 ./launcher --theme nord
 ```
+
+In addition to command-line arguments, the launcher supports control via socket (IPC) communication. This enables remote control of running instances for various commands, such as showing the launcher window or changing themes dynamically.
 
 ### Keyboard Shortcuts
 
