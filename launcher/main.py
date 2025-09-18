@@ -135,11 +135,12 @@ def handle_theme_command(theme_name: str):
     global services
 
     available_themes = services.css_manager.get_available_themes()
+    theme_names = [t['name'] for t in available_themes]
 
     if theme_name == "":
-        return "\n".join(available_themes)
+        return "\n".join([t['display_name'] for t in available_themes])
 
-    if theme_name not in available_themes:
+    if theme_name not in theme_names:
         return f"Theme not found: `{theme_name}`"
 
     success = False
