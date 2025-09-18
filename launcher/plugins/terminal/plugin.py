@@ -16,7 +16,7 @@ class TerminalPlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self.prefix = ">"
+        self.prefixes = [">"]
 
     def get_id(self) -> str:
         return "terminal"
@@ -31,11 +31,9 @@ class TerminalPlugin(Plugin):
         return True
 
     def search(self, query: str) -> List[SearchResult]:
-        if not query.startswith(self.prefix):
-            return []
-
-        command = self.strip_prefix(query)
-        if not command:
+        if not self.query_startswith_prefix(query) or not (
+            command := self.strip_prefixes(query)
+        ):
             return []
 
         # Extract base command for display name

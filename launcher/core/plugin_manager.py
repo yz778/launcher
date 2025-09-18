@@ -131,9 +131,7 @@ class PluginManager:
 
             if plugin.initialize(plugin_config):
                 self.plugins[plugin_id] = plugin
-
-                if plugin.has_prefix():
-                    prefix = plugin.get_prefix()
+                for prefix in plugin.get_prefixes():
                     if prefix not in self.prefix_registry:
                         self.prefix_registry[prefix] = []
                     self.prefix_registry[prefix].append(plugin)
@@ -160,8 +158,7 @@ class PluginManager:
         plugin = self.plugins.pop(plugin_id, None)
         if plugin:
             try:
-                if plugin.has_prefix():
-                    prefix = plugin.get_prefix()
+                for prefix in plugin.get_prefixes():
                     if (
                         prefix in self.prefix_registry
                         and plugin in self.prefix_registry[prefix]
@@ -212,7 +209,8 @@ class PluginManager:
             plugins_to_search = [
                 (plugin_id, plugin_instance)
                 for plugin_id, plugin_instance in self.plugins.items()
-                if not plugin_instance.has_prefix() or not plugin_instance.prefix_only
+                if not plugin_instance.has_prefixes()
+                or not plugin_instance.prefixes_only
             ]
             self._current_prefix_plugins = []
 

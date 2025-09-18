@@ -30,12 +30,12 @@ class IPCManager:
     @staticmethod
     def _get_socket_path(app_name: str) -> str:
         """Construct the path for the IPC socket."""
-        uid = os.getuid()
         runtime_dir = xdg_runtime_dir()
+        sockname = f"{app_name}.sock"
         if runtime_dir and os.path.exists(runtime_dir):
-            return os.path.join(runtime_dir, f"{app_name}-ipc-{uid}.sock")
+            return os.path.join(runtime_dir, sockname)
         # Fallback for systems without XDG_RUNTIME_DIR
-        return os.path.join(tempfile.gettempdir(), f"{app_name}-ipc-{uid}.sock")
+        return os.path.join(tempfile.gettempdir(), sockname)
 
     def register_handler(self, command: str, handler: Callable):
         """
