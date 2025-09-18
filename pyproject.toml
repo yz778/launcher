@@ -29,7 +29,7 @@ dependencies = [
 Homepage = "https://github.com/yz778/launcher"
 
 [project.scripts]
-launcher = "launcher.launcher:main"
+launcher = "launcher.main:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

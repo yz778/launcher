@@ -3,7 +3,6 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 from launcher import services
@@ -68,16 +67,16 @@ class Plugin(ABC):
     def __init__(self):
         """Initialize the plugin base class"""
         self.config = self.DEFAULTS
-        self.prefix: Optional[str] = None
+        self.prefix = None
         self.prefix_only = True
         self.track_history = True
 
-    def get_prefix(self) -> Optional[str]:
+    def get_prefix(self):
         """
         Get the prefix for this plugin, if any.
 
         Returns:
-            The prefix string (e.g., ">") or None if no prefix is used
+            The prefix string (e.g., ">"), list of prefixes, or None if no prefix is used
         """
         return self.prefix
 
@@ -86,8 +85,15 @@ class Plugin(ABC):
         Strips the plugin's prefix from the query if it exists.
         Handles cases with and without a space after the prefix.
         """
-        if self.prefix and query.lower().startswith(self.prefix.lower()):
-            return query[len(self.prefix) :].lstrip()
+        if self.prefix:
+            if isinstance(self.prefix, list):
+                for prefix in self.prefix:
+                    if query.lower().startswith(prefix.lower()):
+                        return query[len(prefix) :].lstrip()
+            elif isinstance(self.prefix, str) and query.lower().startswith(
+                self.prefix.lower()
+            ):
+                return query[len(self.prefix) :].lstrip()
         return query
 
     def has_prefix(self) -> bool:
@@ -97,7 +103,13 @@ class Plugin(ABC):
         Returns:
             True if plugin has a prefix, False otherwise
         """
-        return self.prefix is not None and self.prefix != ""
+        if self.prefix is None:
+            return False
+        if isinstance(self.prefix, list):
+            return len(self.prefix) > 0
+        if isinstance(self.prefix, str):
+            return self.prefix != ""
+        return False
 
     def get_default_css(self) -> str:
         """Return the contents of 'default.css' from the plugin's directory, or an empty string if not found."""

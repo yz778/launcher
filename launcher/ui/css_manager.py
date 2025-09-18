@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from gi.repository import Gdk, GLib, Gtk
 from xdg_base_dirs import xdg_config_home
@@ -59,31 +59,75 @@ class CssManager:
             logger.error(f"Error loading styles with theme {theme_name}: {e}")
             return False
 
-    def get_available_themes(self) -> List[str]:
-        """Get list of available theme names
+    def get_available_themes(self) -> List[Dict[str, str]]:
+        """Get list of available themes with display names
 
         Returns:
-            List of theme names (without .css extension)
+            List of dicts with 'name' and 'display_name' keys (sorted by name)
         """
-        themes = []
+        themes: List[Dict[str, str]] = []
+
+        def add_theme_if_unique(theme_name: str, themes_list: List[Dict[str, str]]):
+            # Avoid duplicates by name
+            if any(t["name"] == theme_name for t in themes_list):
+                return
+
+            display_name = theme_name  # Fallback
+            path = self.get_theme_path(theme_name)
+
+            if path and os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        first_line = f.readline().strip()
+                        if first_line.startswith("/*") and first_line.endswith("*/"):
+                            extracted = first_line[2:-2].strip()
+                            if extracted:
+                                display_name = extracted
+                except Exception as e:
+                    logger.error(
+                        f"Error reading theme display name for {theme_name}: {e}"
+                    )
+
+            themes_list.append({"name": theme_name, "display_name": display_name})
 
         # Check internal themes directory
         internal_themes_dir = os.path.join(os.path.dirname(__file__), "../themes")
         if os.path.exists(internal_themes_dir):
             for file in os.listdir(internal_themes_dir):
                 if file.endswith(".css"):
-                    themes.append(file[:-4])  # Remove .css extension
+                    add_theme_if_unique(file[:-4], themes)
 
-        # Check user themes directory
+        # Check user themes directory (user themes override internal by adding last)
         user_themes_dir = os.path.join(xdg_config_home(), "launcher", "themes")
         if os.path.exists(user_themes_dir):
             for file in os.listdir(user_themes_dir):
                 if file.endswith(".css"):
-                    theme_name = file[:-4]
-                    if theme_name not in themes:  # Avoid duplicates
-                        themes.append(theme_name)
+                    add_theme_if_unique(file[:-4], themes)
 
-        return sorted(themes)
+        return sorted(themes, key=lambda x: x["name"])
+
+    def get_theme_path(self, theme_name: str) -> Optional[str]:
+        """Find the path to a theme file
+
+        Args:
+            theme_name: Name of the theme (without .css extension)
+
+        Returns:
+            Path to the theme file, or None if not found
+        """
+        theme_filename = f"{theme_name}.css"
+
+        user_themes_dir = os.path.join(xdg_config_home(), "launcher", "themes")
+        user_theme_path = os.path.join(user_themes_dir, theme_filename)
+        if os.path.exists(user_theme_path):
+            return user_theme_path
+
+        internal_themes_dir = os.path.join(os.path.dirname(__file__), "../themes")
+        internal_theme_path = os.path.join(internal_themes_dir, theme_filename)
+        if os.path.exists(internal_theme_path):
+            return internal_theme_path
+
+        return None
 
     def get_highlight_style(self) -> tuple[str, str]:
         """Get the highlight color and weight from the current theme.
@@ -269,6 +313,10 @@ class CssManager:
                 logger.error(f"Error getting CSS from plugin {plugin_id}: {e}")
 
         return "\n\n".join(combined_css)
+
+    def cleanup(self):
+        """Clean up CSS providers and resources"""
+        self._clear_providers()
 
     # Legacy methods for backward compatibility
     @classmethod

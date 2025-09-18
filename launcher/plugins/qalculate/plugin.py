@@ -9,7 +9,6 @@ from typing import List, Optional
 import pyperclip
 
 from launcher.plugins.base import Plugin, SearchResult
-from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -270,6 +269,7 @@ class QalculatePlugin(Plugin):
         else:
             self._last_valid_result = result
 
+        result = result.replace('"', "").replace("'", "")
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,

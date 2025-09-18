@@ -6,3 +6,4 @@ config_manager = None
 config = None
 socket_service = None
 css_manager = None
+ipc_manager = None

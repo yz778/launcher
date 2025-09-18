@@ -2,9 +2,9 @@ import logging
 from typing import List
 
 from gi.repository import Gdk, GLib, Gtk, Pango
-from plugins.base import SearchResult
 
 from launcher import services
+from launcher.plugins.base import SearchResult
 from launcher.utils.icon_utils import get_fallback_icon, load_custom_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
 from launcher.utils.text_highlighter import TextHighlighter
@@ -157,9 +157,10 @@ class LauncherWindow(Gtk.Window):
 
     def __init__(
         self,
+        application=None,
         foreground_mode: bool = False,
     ):
-        super().__init__(title="Launcher")
+        super().__init__(application=application, title="Launcher")
 
         self.foreground_mode = foreground_mode
         self.result_deduplicator = ResultDeduplicator()
@@ -175,8 +176,8 @@ class LauncherWindow(Gtk.Window):
         self.set_skip_pager_hint(True)
         self.set_name("launcher-window")
 
-        # Keep a reference to the main loop quit function without leaking Gtk details to main
-        self._schedule_quit = lambda reason=None: GLib.idle_add(Gtk.main_quit)
+        # Keep a reference to the application quit function
+        self._schedule_quit = lambda reason=None: self.get_application().quit()
 
         # Create a vertical box for the layout
         self.vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -799,7 +800,7 @@ class LauncherWindow(Gtk.Window):
     def on_delete_event(self, widget, event):
         """Handle window delete event - hide or quit in foreground mode"""
         if self.foreground_mode:
-            self.shutdown("window delete")
+            self.get_application().quit()
         else:
             self.hide()
         return True
@@ -810,7 +811,7 @@ class LauncherWindow(Gtk.Window):
 
         if keyval == Gdk.KEY_q and state & Gdk.ModifierType.CONTROL_MASK:
             logger.info("Ctrl+Q pressed, quitting via launcher window")
-            self.shutdown("Ctrl+Q")
+            self.get_application().quit()
             return True
 
         if keyval == Gdk.KEY_Escape:
@@ -831,14 +832,14 @@ class LauncherWindow(Gtk.Window):
     def close_window(self):
         """Hide the window or quit based on mode"""
         if self.foreground_mode:
-            # Quit GTK loop through launcher's own method
-            self.shutdown("close_window")
+            # Quit application
+            self.get_application().quit()
         else:
             self.hide()
         return True
 
     def shutdown(self, reason: str = ""):
-        """Schedule quitting the main loop once, allowing cleanup in finally blocks.
+        """Schedule quitting the application once, allowing cleanup in finally blocks.
 
         This keeps GTK knowledge within the launcher window and avoids main importing Gtk.
         """

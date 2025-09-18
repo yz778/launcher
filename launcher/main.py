@@ -1,8 +1,7 @@
-import sys
-
 #############################################################################
 # Immediate singleton & command forwarding
 #############################################################################
+import sys
 
 args = len(sys.argv)
 if args == 1 or (args == 3 and sys.argv[1] == "--theme"):
@@ -32,6 +31,8 @@ import os
 import signal
 
 from launcher import services
+from launcher.core.bootstrap import Bootstrapper
+from launcher.ui.application import LauncherApplication
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
@@ -125,6 +126,45 @@ def arg_parser():
     return parser.parse_args()
 
 
+def handle_theme_command(theme_name: str):
+    """Handle theme switching command from IPC
+
+    Args:
+        theme_name: Name of the theme to switch to
+    """
+    global services
+
+    available_themes = services.css_manager.get_available_themes()
+    theme_names = [t['name'] for t in available_themes]
+
+    if theme_name == "":
+        return "\n".join([t['display_name'] for t in available_themes])
+
+    if theme_name not in theme_names:
+        return f"Theme not found: `{theme_name}`"
+
+    success = False
+    message = ""
+
+    try:
+        plugins = getattr(services.plugin_manager, "plugins", None)
+        if services.css_manager.load_all_styles(theme_name, plugins):
+            services.config_manager.update_config("system.theme", theme_name)
+            success = True
+            message = f"Theme switched to '{theme_name}' via IPC"
+        else:
+            message = f"Failed to switch to theme: {theme_name}"
+    except Exception as e:
+        message = f"Error handling theme command '{theme_name}': {e}"
+
+    if success:
+        logger.info(message)
+    else:
+        logger.error(message)
+
+    return message
+
+
 def main() -> int:
     """Run the launcher application"""
     os.chdir(os.path.expanduser("~"))  # Change to home directory at startup
@@ -162,111 +202,41 @@ def main() -> int:
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    # Start up the launcher
-    from launcher.core.config import ConfigManager
-    from launcher.ui import idle_add, process_pending_events, run_main_loop
-    from launcher.ui.launcher_window import LauncherWindow
+    plugins_dir = os.path.join(current_dir, "plugins")
 
-    services.config_manager = ConfigManager(args.config)
-    services.config = services.config_manager.get()
+    # Initialize services using Bootstrapper
+    bootstrapper = Bootstrapper(
+        config_path=args.config,
+        plugins_dir=plugins_dir,
+        foreground_mode=args.foreground,
+        app_name="launcher",
+    )
 
     try:
-        services.launcher_window = LauncherWindow(foreground_mode=args.foreground)
-        services.launcher_window.show_and_focus()
-        process_pending_events()
-        plugins_dir = os.path.join(current_dir, "plugins")
-        idle_add(lambda: complete_initialization(plugins_dir, args))
-        run_main_loop()
+        container = bootstrapper.bootstrap()
+    except RuntimeError as e:
+        logger.error(f"Bootstrap failed: {e}")
+        return 1
 
-    finally:
-        shutdown()
+    # Register IPC handlers if IPC is available
+    if (
+        not args.foreground
+        and hasattr(services, "ipc_manager")
+        and services.ipc_manager
+    ):
+        services.ipc_manager.register_handler("SHOW", show_window)
+        services.ipc_manager.register_handler("THEME", handle_theme_command)
+
+    # Create and run the LauncherApplication
+    app = LauncherApplication(
+        foreground_mode=args.foreground,
+        config_path=args.config,
+        plugins_dir=plugins_dir,
+    )
+    app.run()
 
     return 0
 
 
-def complete_initialization(
-    plugins_dir: str,
-    args,
-) -> bool:
-    """Finish async initialization tasks after UI is visible"""
-
-    # Lazy import heavy modules
-    from launcher.core.history_manager import HistoryManager
-    from launcher.core.ipc import IPCManager
-    from launcher.core.plugin_manager import PluginManager
-    from launcher.ui.css_manager import CssManager
-
-    global services
-    services.history_manager = HistoryManager(services.config)
-    services.plugin_manager = PluginManager(services.config)
-    services.plugin_manager.load_plugins(plugins_dir)
-
-    # Initialize CSS manager with current theme
-    services.css_manager = CssManager()
-    theme_name = getattr(services.config.system, "theme", "default")
-    services.css_manager.load_all_styles(theme_name, services.plugin_manager.plugins)
-
-    # Set up and start the IPC server for the primary instance
-    if not args.foreground:
-        services.ipc_manager = IPCManager("launcher")
-        services.ipc_manager.register_handler("SHOW", show_window)
-        services.ipc_manager.register_handler("THEME", handle_theme_command)
-        if not services.ipc_manager.start_server():
-            logger.error(
-                "Failed to start IPC server. Singleton and IPC will be disabled."
-            )
-
-    services.launcher_window.start()
-    start_plugins(services.plugin_manager)
-
-    # Schedule background history cleanup after all services are initialized
-    services.history_manager.schedule_background_cleanup()
-
-    logger.info("Background initialization completed")
-    return False  # Remove from idle queue
-
-
-def handle_theme_command(theme_name: str):
-    """Handle theme switching command from IPC
-
-    Args:
-        theme_name: Name of the theme to switch to
-    """
-    global services
-
-    try:
-        if services.css_manager and services.plugin_manager:
-            plugins = getattr(services.plugin_manager, "plugins", None)
-            if services.css_manager.load_all_styles(theme_name, plugins):
-                if services.config_manager:
-                    services.config_manager.update_config("system.theme", theme_name)
-                logger.info(f"Theme switched to '{theme_name}' via IPC")
-            else:
-                logger.error(f"Failed to switch to theme: {theme_name}")
-        else:
-            logger.error("CSS manager or plugin manager not available")
-    except Exception as e:
-        logger.error(f"Error handling theme command '{theme_name}': {e}")
-
-
-def start_plugins(plugin_manager) -> bool:
-    """Initialize all enabled plugins"""
-    import threading
-
-    def start_plugin_thread(plugin_id, plugin):
-        """Thread function to start a single plugin."""
-        try:
-            plugin.start()
-            logger.info(f"Started plugin: {plugin_id}")
-        except Exception as e:
-            logger.error(f"Error starting plugin {plugin_id}: {e}")
-
-    threads = []
-    for plugin_id, plugin in plugin_manager.plugins.items():
-        thread = threading.Thread(target=start_plugin_thread, args=(plugin_id, plugin))
-        thread.daemon = True
-        thread.start()
-        threads.append(thread)
-
-    logger.info("All enabled plugins started")
-    return False
+if __name__ == "__main__":
+    sys.exit(main())

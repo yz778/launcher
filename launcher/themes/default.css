@@ -1,3 +1,5 @@
+/* Default */
+
 @define-color highlight-color #87CEFA;
 @define-color scrollbar-color rgba(150, 150, 150, 0.4);
 @define-color scrollbar-color-color-active rgba(150, 150, 150, 0.8);
@@ -28,6 +30,7 @@
 
 #launcher-search {
     color: @text-color;
+    caret-color: @text-color;
     background: transparent;
     border: none;
     font-size: 20px;
