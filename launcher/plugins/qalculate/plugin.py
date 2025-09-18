@@ -9,7 +9,6 @@ from typing import List, Optional
 import pyperclip
 
 from launcher.plugins.base import Plugin, SearchResult
-from launcher.utils.scoring_system import calculate_match_score
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +18,8 @@ class QalculatePlugin(Plugin):
 
     def __init__(self):
         super().__init__()
-        self.prefix = "="
-        self.prefix_only = False
+        self.prefixes = ["="]
+        self.prefixes_only = False
         self._last_valid_result = None
         self._active_processes = set()
         self._qalc_process = None
@@ -185,7 +184,7 @@ class QalculatePlugin(Plugin):
             return False
 
         # 1. Explicit calculation trigger
-        if query.startswith(self.prefix):
+        if self.query_startswith_prefix(query):
             return True
 
         # 2. Starts with a number (most calculations do)
@@ -259,7 +258,7 @@ class QalculatePlugin(Plugin):
         if not self._is_calculation(query):
             return []
 
-        query = self.strip_prefix(query)
+        query = self.strip_prefixes(query)
 
         result = self._calculate(query)
         if result is None:
@@ -270,6 +269,7 @@ class QalculatePlugin(Plugin):
         else:
             self._last_valid_result = result
 
+        result = result.replace('"', "").replace("'", "")
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,
@@ -305,7 +305,7 @@ class QalculatePlugin(Plugin):
             return False
 
         try:
-            expression = self.strip_prefix(query)
+            expression = self.strip_prefixes(query)
 
             # Use start_new_session to detach from parent process
             subprocess.Popen(

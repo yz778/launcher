@@ -1,8 +1,7 @@
-import sys
-
 #############################################################################
 # Immediate singleton & command forwarding
 #############################################################################
+import sys
 
 args = len(sys.argv)
 if args == 1 or (args == 3 and sys.argv[1] == "--theme"):

@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from gi.repository import Gdk, GLib, Gtk
 from xdg_base_dirs import xdg_config_home
@@ -59,31 +59,41 @@ class CssManager:
             logger.error(f"Error loading styles with theme {theme_name}: {e}")
             return False
 
-    def get_available_themes(self) -> List[str]:
-        """Get list of available theme names
+    def get_available_themes(self) -> List[Dict[str, str]]:
+        """Get list of available themes with display names
 
         Returns:
-            List of theme names (without .css extension)
+            List of dicts with 'name' and 'display_name' keys (sorted by name)
         """
-        themes = []
+        themes_list = []
+        theme_paths = [
+            os.path.join(os.path.dirname(__file__), "../themes"),
+            os.path.join(xdg_config_home(), "launcher", "themes"),
+        ]
 
-        # Check internal themes directory
-        internal_themes_dir = os.path.join(os.path.dirname(__file__), "../themes")
-        if os.path.exists(internal_themes_dir):
-            for file in os.listdir(internal_themes_dir):
-                if file.endswith(".css"):
-                    themes.append(file[:-4])  # Remove .css extension
+        for dir in theme_paths:
+            for file in os.listdir(dir):
+                if not file.endswith(".css"):
+                    continue
 
-        # Check user themes directory
-        user_themes_dir = os.path.join(xdg_config_home(), "launcher", "themes")
-        if os.path.exists(user_themes_dir):
-            for file in os.listdir(user_themes_dir):
-                if file.endswith(".css"):
-                    theme_name = file[:-4]
-                    if theme_name not in themes:  # Avoid duplicates
-                        themes.append(theme_name)
+                theme_name = os.path.splitext(file)[0]
+                display_name = theme_name
+                try:
+                    path = os.path.join(dir, file)
+                    with open(path, "r", encoding="utf-8") as f:
+                        first_line = f.readline().strip()
+                        if first_line.startswith("/*") and first_line.endswith("*/"):
+                            extracted = first_line[2:-2].strip()
+                            if extracted:
+                                display_name = extracted
 
-        return sorted(themes)
+                except Exception as e:
+                    logger.error(f"Unable to read {file}: {e}")
+                    pass
+
+                themes_list.append({"name": theme_name, "display_name": display_name})
+
+        return sorted(themes_list, key=lambda x: x["name"])
 
     def get_highlight_style(self) -> tuple[str, str]:
         """Get the highlight color and weight from the current theme.
@@ -104,6 +114,7 @@ class CssManager:
         style_context = label.get_style_context()
         color = style_context.get_color(Gtk.StateFlags.NORMAL)
         weight = style_context.get_property("font-weight", Gtk.StateFlags.NORMAL)
+        win.destroy()
 
         self._highlight_color = "#%02x%02x%02x" % (
             int(color.red * 255),
@@ -117,8 +128,6 @@ class CssManager:
             logger.warning("No highlight color found in theme, using fallback")
             self._highlight_color = "#87CEFA"
             self._highlight_weight = "bold"
-
-        win.destroy()
 
         return self._highlight_color, self._highlight_weight
 

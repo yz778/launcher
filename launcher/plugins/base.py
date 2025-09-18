@@ -3,7 +3,6 @@ import os
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 from launcher import services
@@ -50,7 +49,7 @@ class SearchResult:
 class Plugin(ABC):
     """Base class for all launcher plugins"""
 
-    __slots__ = ("config", "prefix", "prefix_only", "track_history")
+    __slots__ = ("config", "prefixes", "prefixes_only", "track_history")
     DEFAULTS = {}
 
     @abstractmethod
@@ -68,36 +67,48 @@ class Plugin(ABC):
     def __init__(self):
         """Initialize the plugin base class"""
         self.config = self.DEFAULTS
-        self.prefix: Optional[str] = None
-        self.prefix_only = True
+        self.prefixes = []
+        self.prefixes_only = True
         self.track_history = True
 
-    def get_prefix(self) -> Optional[str]:
+    def get_prefixes(self):
         """
         Get the prefix for this plugin, if any.
 
         Returns:
-            The prefix string (e.g., ">") or None if no prefix is used
+            The list of prefixes, or None if no prefix is used
         """
-        return self.prefix
+        return self.prefixes
 
-    def strip_prefix(self, query: str) -> str:
+    def strip_prefixes(self, query: str) -> str:
         """
         Strips the plugin's prefix from the query if it exists.
         Handles cases with and without a space after the prefix.
         """
-        if self.prefix and query.lower().startswith(self.prefix.lower()):
-            return query[len(self.prefix) :].lstrip()
+        qlower = query.lower()
+        for prefix in self.prefixes:
+            if qlower.startswith(prefix.lower()):
+                return query[len(prefix) :].lstrip()
         return query
 
-    def has_prefix(self) -> bool:
+    def has_prefixes(self) -> bool:
         """
-        Check if this plugin uses a prefix.
+        Check if this plugin has prefixes.
 
         Returns:
-            True if plugin has a prefix, False otherwise
+            True if plugin has prefixes, False otherwise
         """
-        return self.prefix is not None and self.prefix != ""
+        return len(self.prefixes) > 0
+
+    def query_startswith_prefix(self, query: str) -> bool:
+        """
+        Check if query starts with any of the prefixes
+
+        Returns:
+            True if yes, False otherwise
+        """
+        qlower = query.lower()
+        return any(qlower.startswith(p.lower()) for p in self.prefixes)
 
     def get_default_css(self) -> str:
         """Return the contents of 'default.css' from the plugin's directory, or an empty string if not found."""
