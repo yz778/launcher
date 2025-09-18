@@ -269,6 +269,7 @@ class QalculatePlugin(Plugin):
         else:
             self._last_valid_result = result
 
+        result = result.replace('"', "").replace("'", "")
         search_result = SearchResult(
             plugin_id=self.get_id(),
             item_id=query,
