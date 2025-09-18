@@ -116,30 +116,6 @@ class HistoryManager:
             logger.info("History file not found, starting with empty history")
             self.history = []
 
-    def async_load(self, path: str) -> None:
-        """
-        Load history asynchronously using a background thread.
-
-        Args:
-            path: Path to history file
-        """
-
-        def load_callback():
-            """Callback to update services and refresh UI after loading."""
-            from launcher import services
-
-            services.history_manager = self
-            if services.launcher_window:
-                services.launcher_window._show_recent_history()
-
-        def load_thread():
-            """Thread function to load history."""
-            self.load_history(path)
-            GLib.idle_add(load_callback)
-
-        thread = threading.Thread(target=load_thread)
-        thread.start()
-
     def save_history(self) -> bool:
         """
         Save history to file

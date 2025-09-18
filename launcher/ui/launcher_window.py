@@ -865,34 +865,6 @@ class LauncherWindow(Gtk.Window):
             "changed", self.on_entry_changed
         )
 
-        # Call async loaders for plugins and history
-        import os
-
-        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        plugins_dir = os.path.join(current_dir, "plugins")
-        user_dir = str(xdg_data_home() / "launcher" / "plugins")
-
-        # Only load plugins if bootstrap hasn't started loading them yet
-        if not services.plugin_manager.is_loading:
-            services.plugin_manager.async_load_plugins(
-                plugins_dir, user_dir, self._on_plugins_loaded
-            )
-        else:
-            # Bootstrap already started loading, wait for it to complete
-            GLib.timeout_add(100, self._check_bootstrap_loading_complete)
-
-        if services.history_manager.history_file:
-            services.history_manager.async_load(services.history_manager.history_file)
-
-    def _on_plugins_loaded(self):
-        """Callback called when plugin loading is complete."""
-        # Plugins are loaded, refresh to show recent history
+        # Show recent history on startup
         self._show_recent_history()
 
-    def _check_bootstrap_loading_complete(self):
-        """Check if bootstrap's plugin loading is complete."""
-        if not services.plugin_manager.is_loading:
-            # Bootstrap loading is complete, show recent history
-            self._show_recent_history()
-            return False  # Remove timeout
-        return True  # Continue checking

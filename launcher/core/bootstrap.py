@@ -147,14 +147,11 @@ class Bootstrapper:
             # Initialize history manager (depends on config)
             services.history_manager = HistoryManager(services.config)
 
-            # Defer history loading to background thread
+            # Load history
             if services.history_manager.history_file:
-                executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
-                executor.submit(
-                    services.history_manager.load_history,
-                    services.history_manager.history_file,
+                services.history_manager.load_history(
+                    services.history_manager.history_file
                 )
-                executor.shutdown(wait=False)  # Don't wait, let it run in background
 
             # Initialize plugin manager (depends on config)
             services.plugin_manager = PluginManager(services.config)
