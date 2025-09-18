@@ -56,12 +56,18 @@ class PluginManager:
         self.plugins_dir = plugins_dir
 
         # 1. Load built-in plugins
-        self._load_plugins_from_dir(plugins_dir, is_user_plugin=False)
+        plugin_classes = self._discover_plugin_classes(plugins_dir, "plugins.")
+        for plugin_class in plugin_classes:
+            self._register_plugin(plugin_class)
 
         # 2. Load user plugins under XDG config
         user_plugins_dir = xdg_data_home() / "launcher" / "plugins"
         if user_plugins_dir.is_dir():
-            self._load_plugins_from_dir(str(user_plugins_dir), is_user_plugin=True)
+            user_plugin_classes = self._discover_plugin_classes(
+                str(user_plugins_dir), ""
+            )
+            for plugin_class in user_plugin_classes:
+                self._register_plugin(plugin_class)
 
     def async_load_plugins(
         self,
@@ -74,23 +80,25 @@ class PluginManager:
         self.is_loading = True
         executor = self._get_executor()
 
-        # Prepare directory list with flags for "is_user"
-        dir_specs = []
-        dir_specs.append((Path(base_plugins_dir), False))
+        # Prepare directory list with module prefixes
+        source_dirs = [(base_plugins_dir, "plugins.")]
         if user_dir:
-            dir_specs.append((Path(user_dir), True))
+            source_dirs.append((user_dir, ""))
         if extra_dirs:
-            dir_specs.extend(
-                (Path(p), True) for p in extra_dirs
-            )  # mark extra as user-like
+            source_dirs.extend((p, "") for p in extra_dirs)
 
-        # Filter to existing directories
-        dir_specs = [(p, is_user) for p, is_user in dir_specs if p.is_dir()]
+        # Filter to existing directories, guarding against empty paths
+        dir_specs = []
+        for path_str, module_prefix in source_dirs:
+            if path_str:
+                path = Path(path_str)
+                if path.is_dir():
+                    dir_specs.append((path, module_prefix))
 
         # Submit all loads
         futures = [
-            executor.submit(self._load_plugins_from_dir_async, str(path), is_user)
-            for path, is_user in dir_specs
+            executor.submit(self._discover_plugin_classes, str(path), module_prefix)
+            for path, module_prefix in dir_specs
         ]
 
         def internal_completion_callback():
@@ -114,23 +122,11 @@ class PluginManager:
 
         executor.submit(internal_completion_callback)
 
-    def _load_plugins_from_dir(self, plugins_dir: str, is_user_plugin: bool) -> None:
-        if is_user_plugin and plugins_dir not in sys.path:
-            sys.path.insert(0, plugins_dir)
-
-        for entry in os.scandir(plugins_dir):
-            if (
-                entry.is_dir()
-                and entry.name != "__pycache__"
-                and not entry.name.startswith(".")
-            ):
-                self.load_plugin(entry.name, plugins_dir, is_user_plugin)
-
-    def _load_plugins_from_dir_async(
-        self, plugins_dir: str, is_user_plugin: bool
+    def _discover_plugin_classes(
+        self, plugins_dir: str, module_prefix: str
     ) -> List[Type[Plugin]]:
-        """Load plugins from directory asynchronously, returning list of plugin classes"""
-        if is_user_plugin and plugins_dir not in sys.path:
+        """Load plugins from directory, returning list of plugin classes"""
+        if not module_prefix and plugins_dir not in sys.path:
             sys.path.insert(0, plugins_dir)
 
         plugin_classes = []
@@ -141,53 +137,17 @@ class PluginManager:
                 and not entry.name.startswith(".")
             ):
                 plugin_class = self._load_plugin_class(
-                    entry.name, plugins_dir, is_user_plugin
+                    entry.name, plugins_dir, module_prefix
                 )
                 if plugin_class:
                     plugin_classes.append(plugin_class)
         return plugin_classes
 
-    def load_plugin(
-        self,
-        plugin_dir: str,
-        base_dir: Optional[str] = None,
-        is_user_plugin: bool = False,
-    ) -> bool:
-        """Load a single plugin from its directory"""
-        try:
-            # Use base_dir if provided, otherwise fall back to self.plugins_dir for backward compatibility
-            plugin_base_dir = base_dir if base_dir is not None else self.plugins_dir
-            plugin_file = os.path.join(plugin_base_dir, plugin_dir, "plugin.py")
-            if not os.path.exists(plugin_file):
-                return False
-
-            if is_user_plugin:
-                # User plugins are in a directory added to sys.path
-                module_name = f"{plugin_dir}.plugin"
-            else:
-                # Built-in plugins are part of the 'plugins' package
-                module_name = f"plugins.{plugin_dir}.plugin"
-
-            module = importlib.import_module(module_name)
-
-            for name, obj in inspect.getmembers(module):
-                if (
-                    inspect.isclass(obj)
-                    and issubclass(obj, Plugin)
-                    and obj != Plugin
-                    and not inspect.isabstract(obj)
-                ):
-                    return self._register_plugin(obj)
-        except Exception as e:
-            logger.error(f"Error loading plugin {plugin_dir}: {e}")
-            return False
-        return False
-
     def _load_plugin_class(
         self,
         plugin_dir: str,
         base_dir: Optional[str] = None,
-        is_user_plugin: bool = False,
+        module_prefix: str = "",
     ) -> Optional[Type[Plugin]]:
         """Load a single plugin class from its directory without registering"""
         try:
@@ -197,12 +157,7 @@ class PluginManager:
             if not os.path.exists(plugin_file):
                 return None
 
-            if is_user_plugin:
-                # User plugins are in a directory added to sys.path
-                module_name = f"{plugin_dir}.plugin"
-            else:
-                # Built-in plugins are part of the 'plugins' package
-                module_name = f"plugins.{plugin_dir}.plugin"
+            module_name = f"{module_prefix}{plugin_dir}.plugin"
 
             module = importlib.import_module(module_name)
 
