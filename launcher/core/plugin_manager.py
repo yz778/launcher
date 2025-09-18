@@ -133,11 +133,19 @@ class PluginManager:
                 self.plugins[plugin_id] = plugin
 
                 if plugin.has_prefix():
-                    prefix = plugin.get_prefix()
-                    if prefix not in self.prefix_registry:
-                        self.prefix_registry[prefix] = []
-                    self.prefix_registry[prefix].append(plugin)
-                    logger.info(f"Registered prefix '{prefix}' for plugin {plugin_id}")
+                    prefixes = plugin.get_prefix()
+                    if isinstance(prefixes, list):
+                        for prefix in prefixes:
+                            if prefix not in self.prefix_registry:
+                                self.prefix_registry[prefix] = []
+                            self.prefix_registry[prefix].append(plugin)
+                            logger.info(f"Registered prefix '{prefix}' for plugin {plugin_id}")
+                    else:
+                        prefix = prefixes
+                        if prefix not in self.prefix_registry:
+                            self.prefix_registry[prefix] = []
+                        self.prefix_registry[prefix].append(plugin)
+                        logger.info(f"Registered prefix '{prefix}' for plugin {plugin_id}")
 
                 logger.info(f"Initialized plugin: {plugin.get_name()} ({plugin_id})")
                 return True
@@ -161,17 +169,31 @@ class PluginManager:
         if plugin:
             try:
                 if plugin.has_prefix():
-                    prefix = plugin.get_prefix()
-                    if (
-                        prefix in self.prefix_registry
-                        and plugin in self.prefix_registry[prefix]
-                    ):
-                        self.prefix_registry[prefix].remove(plugin)
-                        if not self.prefix_registry[prefix]:  # Remove empty list
-                            del self.prefix_registry[prefix]
-                        logger.info(
-                            f"Unregistered prefix '{prefix}' for plugin {plugin_id}"
-                        )
+                    prefixes = plugin.get_prefix()
+                    if isinstance(prefixes, list):
+                        for prefix in prefixes:
+                            if (
+                                prefix in self.prefix_registry
+                                and plugin in self.prefix_registry[prefix]
+                            ):
+                                self.prefix_registry[prefix].remove(plugin)
+                                if not self.prefix_registry[prefix]:  # Remove empty list
+                                    del self.prefix_registry[prefix]
+                                logger.info(
+                                    f"Unregistered prefix '{prefix}' for plugin {plugin_id}"
+                                )
+                    else:
+                        prefix = prefixes
+                        if (
+                            prefix in self.prefix_registry
+                            and plugin in self.prefix_registry[prefix]
+                        ):
+                            self.prefix_registry[prefix].remove(plugin)
+                            if not self.prefix_registry[prefix]:  # Remove empty list
+                                del self.prefix_registry[prefix]
+                            logger.info(
+                                f"Unregistered prefix '{prefix}' for plugin {plugin_id}"
+                            )
 
                 plugin.cleanup()
             except Exception as e:

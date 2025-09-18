@@ -5,6 +5,7 @@ from typing import List
 
 from launcher.plugins.base import Plugin, SearchResult
 from launcher.utils.icon_utils import normalize_icon_spec
+from launcher.utils.string_matcher import StringMatcher
 from launcher.utils.process_manager import process_manager
 
 logger = logging.getLogger(__name__)
@@ -13,10 +14,11 @@ logger = logging.getLogger(__name__)
 class FilesystemPlugin(Plugin):
     """Plugin for browsing the filesystem with path prefixes / . ~"""
 
-    DEFAULTS = {
-        "show_hidden": False,
-        "max_results": 20,
-    }
+    DEFAULTS = {"show_hidden": False, "max_results": 20}
+
+    def __init__(self):
+        super().__init__()
+        self.prefix = ["/", ".", "~"]
 
     def get_id(self) -> str:
         return "filesystem"
@@ -27,19 +29,44 @@ class FilesystemPlugin(Plugin):
     def get_description(self) -> str:
         return "Browse files and directories using path prefixes / . ~"
 
+    def _resolve_case_insensitive_dir(self, dir_path: str) -> str | None:
+        """Resolve directory path case-insensitively."""
+        if dir_path == ".":
+            return "."
+
+        is_abs = os.path.isabs(dir_path)
+        components = [c for c in os.path.normpath(dir_path).split(os.sep) if c]
+        current = os.getcwd() if not is_abs else "/"
+
+        for comp in components:
+            try:
+                items = os.listdir(current)
+            except (OSError, PermissionError):
+                return None
+
+            matching_dirs = [
+                item
+                for item in items
+                if os.path.isdir(os.path.join(current, item))
+                and item.lower() == comp.lower()
+            ]
+            if not matching_dirs:
+                return None
+            current = os.path.join(current, matching_dirs[0])
+
+        return current
+
     def search(self, query: str) -> List[SearchResult]:
-        if not query or not any(query.startswith(prefix) for prefix in ["/", ".", "~"]):
+        if not query:
             return []
 
         try:
-            # Expand ~ to home directory
             query_path = os.path.expanduser(query)
-
-            # Get the directory and basename
-            dir_path = os.path.dirname(query_path) or "."
+            dir_path_original = os.path.dirname(query_path) or "."
             basename = os.path.basename(query_path) or ""
 
-            if not os.path.isdir(dir_path):
+            dir_path = self._resolve_case_insensitive_dir(dir_path_original)
+            if not dir_path or not os.path.isdir(dir_path):
                 return []
 
             # List directory contents
@@ -50,38 +77,62 @@ class FilesystemPlugin(Plugin):
                 return []
 
             # Filter items starting with basename, exclude hidden if configured
+            show_hidden_temp = (
+                self.config.get("show_hidden", False)
+                or basename.startswith(".")
+                or (basename == "" and query.endswith("."))
+            )
             matching_items = []
             for item in items:
-                if self.config.show_hidden or not item.startswith("."):
+                if show_hidden_temp or not item.startswith("."):
                     if not basename or item.lower().startswith(basename.lower()):
                         matching_items.append(item)
 
-            matching_items.sort()
+            # Use StringMatcher for scoring and highlighting
+            matcher = StringMatcher(
+                items=matching_items, key_func=lambda x: x, history=[]
+            )
+            matches = matcher.match(basename, limit=self.config.get("max_results", 20))
 
             results = []
-            for item in matching_items[: self.config.max_results]:
+            for item, score, field_highlight in matches:
                 full_path = os.path.join(dir_path, item)
                 is_dir = os.path.isdir(full_path)
                 is_executable = os.access(full_path, os.X_OK)
+                is_symlink = os.path.islink(full_path)
 
+                # Determine icon and description
                 if is_dir:
                     icon = "theme://folder"
-                    description = f"Directory: {full_path}"
+                    description = ""
+                elif is_executable:
+                    icon = "theme://utilities-terminal"
+                    description = "+x"
                 else:
-                    if is_executable:
-                        icon = "theme://utilities-terminal"
-                        description = f"Executable: {full_path}"
-                    else:
-                        icon = "theme://text-x-generic"
-                        description = f"File: {full_path}"
+                    icon = "theme://text-x-generic"
+                    description = ""
+
+                # Add symlink suffix if applicable
+                if is_symlink:
+                    description = "→ " + os.path.realpath(full_path)
+
+                # Construct display name
+                resolved_dir = self._resolve_case_insensitive_dir(
+                    os.path.dirname(query) or query
+                ) or (os.path.dirname(query) or query)
+                if basename:
+                    name = os.path.join(resolved_dir, item)
+                else:
+                    name = os.path.join(resolved_dir, item)
 
                 result = SearchResult(
                     plugin_id=self.get_id(),
                     item_id=full_path,
-                    name=item,
+                    name=name,
                     description=description,
                     icon_spec=normalize_icon_spec(icon),
-                    score=1.0,  # All results have same score, or compute based on match length
+                    score=score,
+                    hilight=field_highlight,
                     metadata={"is_dir": is_dir, "is_executable": is_executable},
                 )
                 results.append(result)
@@ -103,18 +154,16 @@ class FilesystemPlugin(Plugin):
         try:
             if is_dir:
                 # Open directory in file manager
-                import subprocess
-
                 subprocess.Popen(["xdg-open", full_path])
             elif is_executable:
                 # Execute the file using process_manager for consistency
                 logger.info(f"Executing executable: {full_path}")
                 return process_manager.launch_detached([full_path])
             else:
-                # Open file with default application
-                import subprocess
-
-                subprocess.Popen(["xdg-open", full_path])
+                terminal_command = self.get_terminal_command()
+                cmd_parts = terminal_command.split() + ["xdg-open", full_path]
+                logger.info(f"Executing command: {' '.join(cmd_parts)}")
+                return process_manager.launch_detached(cmd_parts)
             return True
         except Exception as e:
             logger.error(f"Error executing filesystem item {full_path}: {e}")
