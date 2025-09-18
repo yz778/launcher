@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import tempfile
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -88,8 +89,7 @@ class HistoryManager:
         self._cleanup_scheduled = False
 
         if config and hasattr(config, "system"):
-            history_file = config.system.history_file
-            self.load_history(history_file)
+            self.history_file = config.system.history_file
 
     def load_history(self, history_file_path: str) -> None:
         """
@@ -115,6 +115,30 @@ class HistoryManager:
         else:
             logger.info("History file not found, starting with empty history")
             self.history = []
+
+    def async_load(self, path: str) -> None:
+        """
+        Load history asynchronously using a background thread.
+
+        Args:
+            path: Path to history file
+        """
+
+        def load_callback():
+            """Callback to update services and refresh UI after loading."""
+            from launcher import services
+
+            services.history_manager = self
+            if services.launcher_window:
+                services.launcher_window._show_recent_history()
+
+        def load_thread():
+            """Thread function to load history."""
+            self.load_history(path)
+            GLib.idle_add(load_callback)
+
+        thread = threading.Thread(target=load_thread)
+        thread.start()
 
     def save_history(self) -> bool:
         """

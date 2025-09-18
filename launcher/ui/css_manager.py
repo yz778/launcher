@@ -20,6 +20,7 @@ class CssManager:
         self._transition_timeout_id = None
         self._highlight_color: Optional[str] = None
         self._highlight_weight: Optional[str] = None
+        self.theme: str = "default"
 
     def load_all_styles(
         self, theme_name: str, plugins: dict = None, with_transition: bool = False
@@ -53,6 +54,7 @@ class CssManager:
             self._load_theme_styles(theme_name)
 
             logger.info(f"Successfully loaded all styles with theme: {theme_name}")
+            self.theme = theme_name
             return True
 
         except Exception as e:
@@ -313,6 +315,10 @@ class CssManager:
                 logger.error(f"Error getting CSS from plugin {plugin_id}: {e}")
 
         return "\n\n".join(combined_css)
+
+    def reload_with_plugins(self, plugins):
+        """Reload CSS with plugins asynchronously using GLib.idle_add"""
+        GLib.idle_add(self.load_all_styles, self.theme, plugins)
 
     def cleanup(self):
         """Clean up CSS providers and resources"""

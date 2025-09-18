@@ -2,8 +2,11 @@
 Service bootstrapper for orchestrating service initialization in dependency order.
 """
 
+import concurrent.futures
 import logging
 from typing import Optional
+
+from xdg_base_dirs import xdg_data_home
 
 from launcher import services
 from launcher.container import DIContainer
@@ -90,8 +93,8 @@ class Bootstrapper:
             services.config_manager = ConfigManager(self.config_path)
             services.config = services.config_manager.get()
 
-            # Register config service in DI container
-            config_service = ConfigService(self.config_path)
+            # Register config service in DI container (reuse the same ConfigManager)
+            config_service = ConfigService(services.config_manager)
             self.container.register(ConfigService, config_service)
 
             logger.info("Core services initialized successfully")
@@ -144,16 +147,19 @@ class Bootstrapper:
             # Initialize history manager (depends on config)
             services.history_manager = HistoryManager(services.config)
 
+            # Defer history loading to background thread
+            if services.history_manager.history_file:
+                executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+                executor.submit(
+                    services.history_manager.load_history,
+                    services.history_manager.history_file,
+                )
+                executor.shutdown(wait=False)  # Don't wait, let it run in background
+
             # Initialize plugin manager (depends on config)
             services.plugin_manager = PluginManager(services.config)
-            services.plugin_manager.load_plugins(self.plugins_dir)
-
-            # Update theme with loaded plugins
-            theme_name = getattr(services.config.system, "theme", "default")
-            services.css_manager.load_all_styles(
-                theme_name, services.plugin_manager.plugins
-            )
-
+            user_dir = str(xdg_data_home() / "launcher" / "plugins")
+            services.plugin_manager.async_load_plugins(self.plugins_dir, user_dir)
             logger.info("Business services initialized successfully")
 
         except Exception as e:

@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 from gi.repository import Gdk, GLib, Gtk, Pango
+from xdg_base_dirs import xdg_data_home
 
 from launcher import services
 from launcher.plugins.base import SearchResult
@@ -243,6 +244,9 @@ class LauncherWindow(Gtk.Window):
         # Result update stabilization
         self._result_update_timeout_id = None
         self._result_update_delay_ms = 100  # Delay to stabilize result updates
+
+        # Initial state tracking
+        self._initial_history_shown = False
 
         # Make sure the scrolled window is hidden initially
         self.scrolled.hide()
@@ -531,6 +535,7 @@ class LauncherWindow(Gtk.Window):
         results = services.history_manager.get_history_results()
         if results:
             self._populate_list_box(results)
+        self._initial_history_shown = True
 
     def _search(self) -> bool:
         """Actually perform the search (called after debounce delay)"""
@@ -548,7 +553,9 @@ class LauncherWindow(Gtk.Window):
         self.autocomplete_index = -1
 
         if not query:
-            self._show_recent_history()
+            # Only show recent history if we haven't shown it during initial load
+            if not self._initial_history_shown:
+                self._show_recent_history()
             return False
 
         # Check for autocomplete matches - cache history manager check
@@ -858,5 +865,34 @@ class LauncherWindow(Gtk.Window):
             "changed", self.on_entry_changed
         )
 
+        # Call async loaders for plugins and history
+        import os
+
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        plugins_dir = os.path.join(current_dir, "plugins")
+        user_dir = str(xdg_data_home() / "launcher" / "plugins")
+
+        # Only load plugins if bootstrap hasn't started loading them yet
+        if not services.plugin_manager.is_loading:
+            services.plugin_manager.async_load_plugins(
+                plugins_dir, user_dir, self._on_plugins_loaded
+            )
+        else:
+            # Bootstrap already started loading, wait for it to complete
+            GLib.timeout_add(100, self._check_bootstrap_loading_complete)
+
+        if services.history_manager.history_file:
+            services.history_manager.async_load(services.history_manager.history_file)
+
+    def _on_plugins_loaded(self):
+        """Callback called when plugin loading is complete."""
+        # Plugins are loaded, refresh to show recent history
         self._show_recent_history()
-        self.entry.grab_focus()
+
+    def _check_bootstrap_loading_complete(self):
+        """Check if bootstrap's plugin loading is complete."""
+        if not services.plugin_manager.is_loading:
+            # Bootstrap loading is complete, show recent history
+            self._show_recent_history()
+            return False  # Remove timeout
+        return True  # Continue checking

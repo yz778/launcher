@@ -9,10 +9,6 @@ logger = logging.getLogger(__name__)
 class ProcessManager:
     def __init__(self):
         self._active = {}
-        try:
-            signal.signal(signal.SIGCHLD, self._sigchld_handler)
-        except (OSError, ValueError) as e:
-            logger.warning(f"Cannot set SIGCHLD handler: {e}")
 
     def _sigchld_handler(self, signum, frame):
         """Reap child processes to avoid zombies."""

@@ -81,8 +81,8 @@ class LauncherApplication(Gtk.Application):
             self.add_window(self.window)
             services.launcher_window = self.window  # Set global reference
 
-        self.window.start()
         self.window.show_and_focus()
+        self.window.start()
 
     def setup_actions(self):
         """Set up application-wide actions"""
