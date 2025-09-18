@@ -33,6 +33,7 @@ import signal
 from launcher import services
 from launcher.core.bootstrap import Bootstrapper
 from launcher.ui.application import LauncherApplication
+from launcher.utils.process_manager import process_manager
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
@@ -135,10 +136,10 @@ def handle_theme_command(theme_name: str):
     global services
 
     available_themes = services.css_manager.get_available_themes()
-    theme_names = [t['name'] for t in available_themes]
+    theme_names = [t["name"] for t in available_themes]
 
     if theme_name == "":
-        return "\n".join([t['display_name'] for t in available_themes])
+        return "\n".join([t["display_name"] for t in available_themes])
 
     if theme_name not in theme_names:
         return f"Theme not found: `{theme_name}`"
@@ -201,6 +202,7 @@ def main() -> int:
     # Set up signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGCHLD, process_manager._sigchld_handler)
 
     plugins_dir = os.path.join(current_dir, "plugins")
 

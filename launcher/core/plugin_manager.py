@@ -26,6 +26,7 @@ class PluginManager:
         "prefix_registry",
         "_executor",
         "_current_prefix_plugins",
+        "is_loading",
     )
 
     def __init__(self, config):
@@ -37,6 +38,7 @@ class PluginManager:
         self.prefix_registry = {}  # prefix -> list of plugin instances mapping
         self._executor = None
         self._current_prefix_plugins = []  # List of plugin instances currently being searched via prefix
+        self.is_loading = False
 
     def _get_executor(self):
         """Get or create thread pool executor"""
@@ -60,6 +62,40 @@ class PluginManager:
         if user_plugins_dir.is_dir():
             self._load_plugins_from_dir(str(user_plugins_dir), is_user_plugin=True)
 
+    def async_load_plugins(
+        self,
+        plugins_dir: str,
+        user_dir: str,
+        completion_callback: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """Asynchronously load plugins from built-in and user directories using ThreadPoolExecutor."""
+        self.is_loading = True
+        executor = self._get_executor()
+
+        # Submit parallel loading tasks
+        future_builtin = executor.submit(
+            self._load_plugins_from_dir_async, plugins_dir, False
+        )
+        future_user = executor.submit(self._load_plugins_from_dir_async, user_dir, True)
+
+        def internal_completion_callback():
+            """Callback to register loaded plugins and update loading status."""
+            try:
+                builtin_plugins = future_builtin.result()
+                user_plugins = future_user.result()
+                all_plugins = builtin_plugins + user_plugins
+                GLib.idle_add(self._register_loaded_plugins, all_plugins)
+            except Exception as e:
+                logger.error(f"Error in async plugin loading: {e}")
+            finally:
+                GLib.idle_add(lambda: setattr(self, "is_loading", False))
+                # Call user-provided completion callback if provided
+                if completion_callback:
+                    GLib.idle_add(completion_callback)
+
+        # Submit completion task
+        executor.submit(internal_completion_callback)
+
     def _load_plugins_from_dir(self, plugins_dir: str, is_user_plugin: bool) -> None:
         if is_user_plugin and plugins_dir not in sys.path:
             sys.path.insert(0, plugins_dir)
@@ -72,8 +108,32 @@ class PluginManager:
             ):
                 self.load_plugin(entry.name, plugins_dir, is_user_plugin)
 
+    def _load_plugins_from_dir_async(
+        self, plugins_dir: str, is_user_plugin: bool
+    ) -> List[Type[Plugin]]:
+        """Load plugins from directory asynchronously, returning list of plugin classes"""
+        if is_user_plugin and plugins_dir not in sys.path:
+            sys.path.insert(0, plugins_dir)
+
+        plugin_classes = []
+        for entry in os.scandir(plugins_dir):
+            if (
+                entry.is_dir()
+                and entry.name != "__pycache__"
+                and not entry.name.startswith(".")
+            ):
+                plugin_class = self._load_plugin_class(
+                    entry.name, plugins_dir, is_user_plugin
+                )
+                if plugin_class:
+                    plugin_classes.append(plugin_class)
+        return plugin_classes
+
     def load_plugin(
-        self, plugin_dir: str, base_dir: str = None, is_user_plugin: bool = False
+        self,
+        plugin_dir: str,
+        base_dir: Optional[str] = None,
+        is_user_plugin: bool = False,
     ) -> bool:
         """Load a single plugin from its directory"""
         try:
@@ -104,6 +164,42 @@ class PluginManager:
             logger.error(f"Error loading plugin {plugin_dir}: {e}")
             return False
         return False
+
+    def _load_plugin_class(
+        self,
+        plugin_dir: str,
+        base_dir: Optional[str] = None,
+        is_user_plugin: bool = False,
+    ) -> Optional[Type[Plugin]]:
+        """Load a single plugin class from its directory without registering"""
+        try:
+            # Use base_dir if provided, otherwise fall back to self.plugins_dir for backward compatibility
+            plugin_base_dir = base_dir if base_dir is not None else self.plugins_dir
+            plugin_file = os.path.join(plugin_base_dir, plugin_dir, "plugin.py")
+            if not os.path.exists(plugin_file):
+                return None
+
+            if is_user_plugin:
+                # User plugins are in a directory added to sys.path
+                module_name = f"{plugin_dir}.plugin"
+            else:
+                # Built-in plugins are part of the 'plugins' package
+                module_name = f"plugins.{plugin_dir}.plugin"
+
+            module = importlib.import_module(module_name)
+
+            for name, obj in inspect.getmembers(module):
+                if (
+                    inspect.isclass(obj)
+                    and issubclass(obj, Plugin)
+                    and obj != Plugin
+                    and not inspect.isabstract(obj)
+                ):
+                    return obj
+        except Exception as e:
+            logger.error(f"Error loading plugin {plugin_dir}: {e}")
+            return None
+        return None
 
     def _register_plugin(self, plugin_class: Type[Plugin]) -> bool:
         """Register and initialize a single plugin"""
@@ -162,6 +258,11 @@ class PluginManager:
         except Exception as e:
             logger.error(f"Error registering plugin {plugin_class.__name__}: {e}")
             return False
+
+    def _register_loaded_plugins(self, plugin_classes: List[Type[Plugin]]) -> None:
+        """Register a list of loaded plugin classes"""
+        for plugin_class in plugin_classes:
+            self._register_plugin(plugin_class)
 
     def unload_plugin(self, plugin_id: str) -> bool:
         """Unload a single plugin"""

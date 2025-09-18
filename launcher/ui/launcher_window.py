@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 from gi.repository import Gdk, GLib, Gtk, Pango
+from xdg_base_dirs import xdg_data_home
 
 from launcher import services
 from launcher.plugins.base import SearchResult
@@ -243,6 +244,9 @@ class LauncherWindow(Gtk.Window):
         # Result update stabilization
         self._result_update_timeout_id = None
         self._result_update_delay_ms = 100  # Delay to stabilize result updates
+
+        # Initial state tracking
+        self._initial_history_shown = False
 
         # Make sure the scrolled window is hidden initially
         self.scrolled.hide()
@@ -531,6 +535,7 @@ class LauncherWindow(Gtk.Window):
         results = services.history_manager.get_history_results()
         if results:
             self._populate_list_box(results)
+        self._initial_history_shown = True
 
     def _search(self) -> bool:
         """Actually perform the search (called after debounce delay)"""
@@ -548,7 +553,9 @@ class LauncherWindow(Gtk.Window):
         self.autocomplete_index = -1
 
         if not query:
-            self._show_recent_history()
+            # Only show recent history if we haven't shown it during initial load
+            if not self._initial_history_shown:
+                self._show_recent_history()
             return False
 
         # Check for autocomplete matches - cache history manager check
@@ -858,5 +865,6 @@ class LauncherWindow(Gtk.Window):
             "changed", self.on_entry_changed
         )
 
+        # Show recent history on startup
         self._show_recent_history()
-        self.entry.grab_focus()
+

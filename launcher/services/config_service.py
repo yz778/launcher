@@ -11,13 +11,16 @@ from launcher.services import ConfigServiceProtocol
 class ConfigService(ConfigServiceProtocol):
     """Service wrapper for ConfigManager implementing the ConfigServiceProtocol."""
 
-    def __init__(self, config_file: Optional[str] = None):
+    def __init__(self, config_manager_or_file):
         """Initialize the config service.
 
         Args:
-            config_file: Path to the configuration file
+            config_manager_or_file: Either a ConfigManager instance or path to the configuration file
         """
-        self._config_manager = ConfigManager(config_file)
+        if isinstance(config_manager_or_file, ConfigManager):
+            self._config_manager = config_manager_or_file
+        else:
+            self._config_manager = ConfigManager(config_manager_or_file)
 
     def get_config(self) -> Any:
         """Get the current configuration object."""

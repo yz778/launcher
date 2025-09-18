@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import tempfile
+import threading
 import time
 from typing import Any, Dict, List, Optional
 
@@ -88,8 +89,7 @@ class HistoryManager:
         self._cleanup_scheduled = False
 
         if config and hasattr(config, "system"):
-            history_file = config.system.history_file
-            self.load_history(history_file)
+            self.history_file = config.system.history_file
 
     def load_history(self, history_file_path: str) -> None:
         """
