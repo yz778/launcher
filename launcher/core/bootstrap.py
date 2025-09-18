@@ -211,26 +211,33 @@ class Bootstrapper:
 
         logger.info("All enabled plugins started")
 
-    def _cleanup_on_failure(self) -> None:
-        """Clean up partially initialized services on bootstrap failure."""
-        logger.info("Cleaning up after bootstrap failure")
-
+    def _cleanup_services(self) -> None:
+        """Clean up all major services in reverse dependency order."""
+        logger.info("Cleaning up services")
         try:
-            # Clean up in reverse order
+            # Clean up history manager
             if hasattr(services, "history_manager") and services.history_manager:
                 services.history_manager.cleanup()
 
+            # Clean up plugin manager
             if hasattr(services, "plugin_manager") and services.plugin_manager:
                 services.plugin_manager.cleanup()
 
+            # Clean up IPC manager
             if hasattr(services, "ipc_manager") and services.ipc_manager:
                 services.ipc_manager.stop_server()
 
+            # Clean up CSS manager
             if hasattr(services, "css_manager") and services.css_manager:
                 services.css_manager.cleanup()
 
+            logger.info("All services cleaned up")
         except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            logger.error(f"Error during service cleanup: {e}")
+
+    def _cleanup_on_failure(self) -> None:
+        """Clean up partially initialized services on bootstrap failure."""
+        self._cleanup_services()
 
     def get_container(self) -> DIContainer:
         """Get the DI container. Bootstrap must be called first.
@@ -248,22 +255,4 @@ class Bootstrapper:
     def shutdown(self) -> None:
         """Shutdown all services in reverse dependency order."""
         logger.info("Shutting down services")
-
-        try:
-            # Clean up in reverse initialization order
-            if hasattr(services, "history_manager") and services.history_manager:
-                services.history_manager.cleanup()
-
-            if hasattr(services, "plugin_manager") and services.plugin_manager:
-                services.plugin_manager.cleanup()
-
-            if hasattr(services, "ipc_manager") and services.ipc_manager:
-                services.ipc_manager.stop_server()
-
-            if hasattr(services, "css_manager") and services.css_manager:
-                services.css_manager.cleanup()
-
-            logger.info("Service shutdown completed")
-
-        except Exception as e:
-            logger.error(f"Error during service shutdown: {e}")
+        self._cleanup_services()
