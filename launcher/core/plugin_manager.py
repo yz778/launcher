@@ -4,7 +4,8 @@ import logging
 import os
 import sys
 import threading
-from typing import Callable, List, Optional, Type
+from pathlib import Path
+from typing import Callable, List, Optional, Type, Iterable
 
 from gi.repository import GLib
 from xdg_base_dirs import xdg_data_home
@@ -64,36 +65,53 @@ class PluginManager:
 
     def async_load_plugins(
         self,
-        plugins_dir: str,
+        base_plugins_dir: str,
         user_dir: str,
+        extra_dirs: Optional[Iterable[str]] = None,
         completion_callback: Optional[Callable[[], None]] = None,
     ) -> None:
-        """Asynchronously load plugins from built-in and user directories using ThreadPoolExecutor."""
+        """Asynchronously load plugins from multiple dirs using ThreadPoolExecutor."""
         self.is_loading = True
         executor = self._get_executor()
 
-        # Submit parallel loading tasks
-        future_builtin = executor.submit(
-            self._load_plugins_from_dir_async, plugins_dir, False
-        )
-        future_user = executor.submit(self._load_plugins_from_dir_async, user_dir, True)
+        # Prepare directory list with flags for "is_user"
+        dir_specs = []
+        dir_specs.append((Path(base_plugins_dir), False))
+        if user_dir:
+            dir_specs.append((Path(user_dir), True))
+        if extra_dirs:
+            dir_specs.extend(
+                (Path(p), True) for p in extra_dirs
+            )  # mark extra as user-like
+
+        # Filter to existing directories
+        dir_specs = [(p, is_user) for p, is_user in dir_specs if p.is_dir()]
+
+        # Submit all loads
+        futures = [
+            executor.submit(self._load_plugins_from_dir_async, str(path), is_user)
+            for path, is_user in dir_specs
+        ]
 
         def internal_completion_callback():
-            """Callback to register loaded plugins and update loading status."""
             try:
-                builtin_plugins = future_builtin.result()
-                user_plugins = future_user.result()
-                all_plugins = builtin_plugins + user_plugins
+                results = []
+                for fut in futures:
+                    try:
+                        results.append(fut.result())
+                    except Exception as e:
+                        logger.error(f"Plugin load failed: {e}")  # continue
+                        results.append([])
+                # Flatten lists; preserve order of dir_specs
+                all_plugins = [p for sub in results for p in sub]
                 GLib.idle_add(self._register_loaded_plugins, all_plugins)
             except Exception as e:
                 logger.error(f"Error in async plugin loading: {e}")
             finally:
                 GLib.idle_add(lambda: setattr(self, "is_loading", False))
-                # Call user-provided completion callback if provided
                 if completion_callback:
                     GLib.idle_add(completion_callback)
 
-        # Submit completion task
         executor.submit(internal_completion_callback)
 
     def _load_plugins_from_dir(self, plugins_dir: str, is_user_plugin: bool) -> None:
