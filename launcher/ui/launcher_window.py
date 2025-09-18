@@ -2,9 +2,9 @@ import logging
 from typing import List
 
 from gi.repository import Gdk, GLib, Gtk, Pango
-from plugins.base import SearchResult
 
 from launcher import services
+from launcher.plugins.base import SearchResult
 from launcher.utils.icon_utils import get_fallback_icon, load_custom_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
 from launcher.utils.text_highlighter import TextHighlighter

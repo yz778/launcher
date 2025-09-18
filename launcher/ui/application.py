@@ -1,14 +1,8 @@
 import logging
-import os
 
-from gi.repository import Gio, GLib, Gtk
+from gi.repository import Gio, Gtk
 
 from launcher import services
-from launcher.core.history_manager import HistoryManager
-from launcher.core.ipc import IPCManager
-from launcher.core.plugin_manager import PluginManager
-from launcher.launcher import handle_theme_command, show_window, start_plugins
-from launcher.ui.css_manager import CssManager
 from launcher.ui.launcher_window import LauncherWindow
 
 logger = logging.getLogger(__name__)
@@ -30,54 +24,16 @@ class LauncherApplication(Gtk.Application):
         """Initialize application-wide resources"""
         Gtk.Application.do_startup(self)
 
-        # Initialize CSS and theme management
-        self.css_manager = CssManager()
+        # Services are already initialized by Bootstrapper
+        # Just ensure CSS manager is available
+        if not hasattr(services, "css_manager") or not services.css_manager:
+            logger.warning("CSS manager not available, creating fallback")
+            from launcher.ui.css_manager import CssManager
 
-        # Initialize core services
-        self._initialize_services()
+            services.css_manager = CssManager()
 
         # Set up application-wide actions
         self.setup_actions()
-
-    def _initialize_services(self):
-        """Initialize core services during startup"""
-        # Initialize config and services
-        from launcher.core.config import ConfigManager
-
-        services.config_manager = ConfigManager(self.config_path)
-        services.config = services.config_manager.get()
-
-        # Initialize history and plugin managers
-        services.history_manager = HistoryManager(services.config)
-        services.plugin_manager = PluginManager(services.config)
-        services.plugin_manager.load_plugins(self.plugins_dir)
-
-        # Load CSS with current theme
-        theme_name = getattr(services.config.system, "theme", "default")
-        self.css_manager.load_all_styles(theme_name, services.plugin_manager.plugins)
-
-        # Store CSS manager globally for compatibility
-        services.css_manager = self.css_manager
-
-        # Initialize IPC if not in foreground mode
-        if not self.foreground_mode:
-            services.ipc_manager = IPCManager("launcher")
-            services.ipc_manager.register_handler("SHOW", self._ipc_show_window)
-            services.ipc_manager.register_handler("THEME", self._ipc_handle_theme)
-            if not services.ipc_manager.start_server():
-                logger.error(
-                    "Failed to start IPC server. Singleton and IPC will be disabled."
-                )
-
-        # Start plugins
-        from launcher.launcher import start_plugins
-
-        start_plugins(services.plugin_manager)
-
-        # Schedule background history cleanup
-        services.history_manager.schedule_background_cleanup()
-
-        logger.info("Core services initialized")
 
     def _ipc_show_window(self, args):
         """IPC handler to show the launcher window"""
@@ -86,7 +42,7 @@ class LauncherApplication(Gtk.Application):
 
     def _ipc_handle_theme(self, theme_name: str):
         """IPC handler for theme switching"""
-        available_themes = self.css_manager.get_available_themes()
+        available_themes = services.css_manager.get_available_themes()
         theme_names = [t["name"] for t in available_themes]
 
         if theme_name == "":
@@ -100,7 +56,7 @@ class LauncherApplication(Gtk.Application):
 
         try:
             plugins = getattr(services.plugin_manager, "plugins", None)
-            if self.css_manager.load_all_styles(theme_name, plugins):
+            if services.css_manager.load_all_styles(theme_name, plugins):
                 services.config_manager.update_config("system.theme", theme_name)
                 success = True
                 message = f"Theme switched to '{theme_name}' via IPC"
@@ -158,7 +114,7 @@ class LauncherApplication(Gtk.Application):
             services.history_manager.cleanup()
 
         # Clean up CSS manager
-        if hasattr(self, "css_manager"):
-            self.css_manager.cleanup()
+        if hasattr(services, "css_manager") and services.css_manager:
+            services.css_manager.cleanup()
 
         logger.info("Application resources cleaned up")

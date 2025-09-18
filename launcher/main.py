@@ -1,8 +1,7 @@
-import sys
-
 #############################################################################
 # Immediate singleton & command forwarding
 #############################################################################
+import sys
 
 args = len(sys.argv)
 if args == 1 or (args == 3 and sys.argv[1] == "--theme"):
@@ -32,6 +31,8 @@ import os
 import signal
 
 from launcher import services
+from launcher.core.bootstrap import Bootstrapper
+from launcher.ui.application import LauncherApplication
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
@@ -125,103 +126,6 @@ def arg_parser():
     return parser.parse_args()
 
 
-def main() -> int:
-    """Run the launcher application"""
-    os.chdir(os.path.expanduser("~"))  # Change to home directory at startup
-
-    args = arg_parser()
-
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
-
-    if args.create_config:
-        from launcher.core.config import ConfigManager
-        from launcher.core.plugin_manager import PluginManager
-
-        config_manager = ConfigManager(args.config)
-        plugins_dir = os.path.join(current_dir, "plugins")
-
-        # Load plugins to register their defaults
-        plugin_manager = PluginManager(config_manager.get())
-        plugin_manager.load_plugins(plugins_dir)
-
-        if not config_manager.create_default_config(args.config):
-            return 1
-        return 0
-
-    elif args.theme is not None:
-        from launcher.ui.css_manager import CssManager
-
-        css_manager = CssManager()
-        available_themes = css_manager.get_available_themes()
-        print("Available themes:")
-        print("\n".join(available_themes))
-        exit(0)
-
-    # Set up signal handlers for graceful shutdown
-    signal.signal(signal.SIGTERM, signal_handler)
-    signal.signal(signal.SIGINT, signal_handler)
-
-    # Start up the launcher
-    from launcher.core.config import ConfigManager
-    from launcher.ui.application import LauncherApplication
-
-    services.config_manager = ConfigManager(args.config)
-    services.config = services.config_manager.get()
-
-    plugins_dir = os.path.join(current_dir, "plugins")
-    app = LauncherApplication(
-        foreground_mode=args.foreground,
-        config_path=args.config,
-        plugins_dir=plugins_dir,
-    )
-    app.run()
-
-    return 0
-
-
-def complete_initialization(
-    plugins_dir: str,
-    args,
-) -> bool:
-    """Finish async initialization tasks after UI is visible"""
-
-    # Lazy import heavy modules
-    from launcher.core.history_manager import HistoryManager
-    from launcher.core.ipc import IPCManager
-    from launcher.core.plugin_manager import PluginManager
-    from launcher.ui.css_manager import CssManager
-
-    global services
-    services.history_manager = HistoryManager(services.config)
-    services.plugin_manager = PluginManager(services.config)
-    services.plugin_manager.load_plugins(plugins_dir)
-
-    # Initialize CSS manager with current theme
-    services.css_manager = CssManager()
-    theme_name = getattr(services.config.system, "theme", "default")
-    services.css_manager.load_all_styles(theme_name, services.plugin_manager.plugins)
-
-    # Set up and start the IPC server for the primary instance
-    if not args.foreground:
-        services.ipc_manager = IPCManager("launcher")
-        services.ipc_manager.register_handler("SHOW", show_window)
-        services.ipc_manager.register_handler("THEME", handle_theme_command)
-        if not services.ipc_manager.start_server():
-            logger.error(
-                "Failed to start IPC server. Singleton and IPC will be disabled."
-            )
-
-    services.launcher_window.start()
-    start_plugins(services.plugin_manager)
-
-    # Schedule background history cleanup after all services are initialized
-    services.history_manager.schedule_background_cleanup()
-
-    logger.info("Background initialization completed")
-    return False  # Remove from idle queue
-
-
 def handle_theme_command(theme_name: str):
     """Handle theme switching command from IPC
 
@@ -260,24 +164,78 @@ def handle_theme_command(theme_name: str):
     return message
 
 
-def start_plugins(plugin_manager) -> bool:
-    """Initialize all enabled plugins"""
-    import threading
+def main() -> int:
+    """Run the launcher application"""
+    os.chdir(os.path.expanduser("~"))  # Change to home directory at startup
 
-    def start_plugin_thread(plugin_id, plugin):
-        """Thread function to start a single plugin."""
-        try:
-            plugin.start()
-            logger.info(f"Started plugin: {plugin_id}")
-        except Exception as e:
-            logger.error(f"Error starting plugin {plugin_id}: {e}")
+    args = arg_parser()
 
-    threads = []
-    for plugin_id, plugin in plugin_manager.plugins.items():
-        thread = threading.Thread(target=start_plugin_thread, args=(plugin_id, plugin))
-        thread.daemon = True
-        thread.start()
-        threads.append(thread)
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
 
-    logger.info("All enabled plugins started")
-    return False
+    if args.create_config:
+        from launcher.core.config import ConfigManager
+        from launcher.core.plugin_manager import PluginManager
+
+        config_manager = ConfigManager(args.config)
+        plugins_dir = os.path.join(current_dir, "plugins")
+
+        # Load plugins to register their defaults
+        plugin_manager = PluginManager(config_manager.get())
+        plugin_manager.load_plugins(plugins_dir)
+
+        if not config_manager.create_default_config(args.config):
+            return 1
+        return 0
+
+    elif args.theme is not None:
+        from launcher.ui.css_manager import CssManager
+
+        css_manager = CssManager()
+        available_themes = css_manager.get_available_themes()
+        print("Available themes:")
+        print("\n".join(available_themes))
+        exit(0)
+
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    plugins_dir = os.path.join(current_dir, "plugins")
+
+    # Initialize services using Bootstrapper
+    bootstrapper = Bootstrapper(
+        config_path=args.config,
+        plugins_dir=plugins_dir,
+        foreground_mode=args.foreground,
+        app_name="launcher",
+    )
+
+    try:
+        container = bootstrapper.bootstrap()
+    except RuntimeError as e:
+        logger.error(f"Bootstrap failed: {e}")
+        return 1
+
+    # Register IPC handlers if IPC is available
+    if (
+        not args.foreground
+        and hasattr(services, "ipc_manager")
+        and services.ipc_manager
+    ):
+        services.ipc_manager.register_handler("SHOW", show_window)
+        services.ipc_manager.register_handler("THEME", handle_theme_command)
+
+    # Create and run the LauncherApplication
+    app = LauncherApplication(
+        foreground_mode=args.foreground,
+        config_path=args.config,
+        plugins_dir=plugins_dir,
+    )
+    app.run()
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
