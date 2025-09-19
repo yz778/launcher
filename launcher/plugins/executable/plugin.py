@@ -186,7 +186,7 @@ class ExecutablePlugin(Plugin):
     def _load_from_cache(self) -> None:
         """Load executables from the cache"""
         if not os.path.exists(self.cache_file):
-            logger.info("Executable file cache not found.")
+            logger.info("Executable file cache not found")
             return
 
         try:
@@ -195,7 +195,7 @@ class ExecutablePlugin(Plugin):
                 for item_data in cached_data:
                     executable = ExecutableFile.from_dict(item_data)
                     self.executables[executable.path] = executable
-            logger.info(f"Loaded {len(self.executables)} executables from cache.")
+            logger.info(f"Loaded {len(self.executables)} executables from cache")
         except (IOError, json.JSONDecodeError) as e:
             logger.error(f"Error loading executable file cache: {e}")
 
@@ -204,7 +204,7 @@ class ExecutablePlugin(Plugin):
         try:
             with open(self.cache_file, "w") as f:
                 json.dump([ex.to_dict() for ex in self.executables.values()], f)
-            logger.info(f"Saved {len(self.executables)} executables to cache.")
+            logger.info(f"Saved {len(self.executables)} executables to cache")
         except IOError as e:
             logger.error(f"Error saving executable file cache: {e}")
 
@@ -238,10 +238,6 @@ class ExecutablePlugin(Plugin):
         with self._matcher_lock:
             self.matcher = new_matcher
 
-        logger.info(
-            f"Finished loading {len(self.executables)} executable files in background"
-        )
-
     def _scan_executables(self) -> None:
         """Scan for executable files in the configured locations"""
         self.executables = {}
@@ -250,7 +246,7 @@ class ExecutablePlugin(Plugin):
             expanded_location = os.path.expanduser(location)
             self._scan_executable_location(expanded_location)
 
-        logger.info(f"Loaded {len(self.executables)} executable files")
+        logger.info(f"Refresh scanned {len(self.executables)} executables")
 
     def _scan_executable_location(self, location: str) -> None:
         """Scan a single location for executable files"""

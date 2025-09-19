@@ -13,16 +13,18 @@ class CssManager:
 
     def __init__(self):
         """Initialize the CSS manager"""
-        self.base_provider: Optional[Gtk.CssProvider] = None
-        self.plugin_provider: Optional[Gtk.CssProvider] = None
-        self.theme_provider: Optional[Gtk.CssProvider] = None
+        self.main_provider: Optional[Gtk.CssProvider] = None
         self.transition_provider: Optional[Gtk.CssProvider] = None
         self._transition_timeout_id = None
         self._highlight_color: Optional[str] = None
         self._highlight_weight: Optional[str] = None
+        self._last_final_css: Optional[str] = None  # Cache for last applied CSS
 
     def load_all_styles(
-        self, theme_name: str, plugins: dict = None, with_transition: bool = False
+        self,
+        theme_name: str,
+        plugins: Optional[dict] = None,
+        with_transition: bool = False,
     ) -> bool:
         """Load and apply all styles from scratch
 
@@ -42,17 +44,24 @@ class CssManager:
             if with_transition:
                 self._apply_transition_styles()
 
-            # Load and apply base styles (default.css)
-            self._load_base_styles()
+            final_css = "\n\n".join(
+                [
+                    self._load_base_styles(),
+                    self._load_plugin_styles(plugins),
+                    self._load_theme_styles(theme_name),
+                ]
+            )
 
-            # Load and apply all plugin styles
-            if plugins:
-                self._load_plugin_styles(plugins)
+            # Only apply if CSS has changed
+            if self._last_final_css != final_css:
+                self._apply_css_string(final_css)
+                self._last_final_css = final_css
+                logger.info(f"Applied consolidated CSS for theme: {theme_name}")
+            else:
+                logger.info(
+                    f"CSS unchanged for theme: {theme_name}, skipping re-apply."
+                )
 
-            # Load and apply the specified theme
-            self._load_theme_styles(theme_name)
-
-            logger.info(f"Successfully loaded all styles with theme: {theme_name}")
             return True
 
         except Exception as e:
@@ -135,17 +144,9 @@ class CssManager:
         """Remove all CSS providers from the screen"""
         screen = Gdk.Screen.get_default()
 
-        if self.base_provider:
-            Gtk.StyleContext.remove_provider_for_screen(screen, self.base_provider)
-            self.base_provider = None
-
-        if self.plugin_provider:
-            Gtk.StyleContext.remove_provider_for_screen(screen, self.plugin_provider)
-            self.plugin_provider = None
-
-        if self.theme_provider:
-            Gtk.StyleContext.remove_provider_for_screen(screen, self.theme_provider)
-            self.theme_provider = None
+        if self.main_provider:
+            Gtk.StyleContext.remove_provider_for_screen(screen, self.main_provider)
+            self.main_provider = None
 
         if self._transition_timeout_id:
             GLib.source_remove(self._transition_timeout_id)
@@ -160,6 +161,8 @@ class CssManager:
         # Clear cached highlight styles
         self._highlight_color = None
         self._highlight_weight = None
+        # Clear last applied CSS cache
+        self._last_final_css = None
 
     def _apply_transition_styles(self):
         """Applies a global CSS transition and sets a timer to remove it."""
@@ -186,56 +189,60 @@ class CssManager:
         self._transition_timeout_id = None
         return False  # Stop the timeout from running again
 
-    def _load_base_styles(self):
-        """Load base default styles"""
-        default_theme_path = self._find_theme_file("default")
+    def _apply_css_string(self, css: str):
+        """Apply the CSS to a single provider."""
+        screen = Gdk.Screen.get_default()
+
+        # Remove the old provider if it exists
+        if self.main_provider:
+            Gtk.StyleContext.remove_provider_for_screen(screen, self.main_provider)
+
+        self.main_provider = Gtk.CssProvider()
+        self.main_provider.load_from_data(css.encode())
+        Gtk.StyleContext.add_provider_for_screen(
+            screen, self.main_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+    def _load_base_styles(self) -> str:
+        """Load and return the content of the base default styles."""
+        default_theme_path = os.path.realpath(self._find_theme_file("default"))
         if default_theme_path and os.path.exists(default_theme_path):
-            self.base_provider = Gtk.CssProvider()
-            self.base_provider.load_from_path(default_theme_path)
-            Gtk.StyleContext.add_provider_for_screen(
-                Gdk.Screen.get_default(),
-                self.base_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-                - 1,  # Lower priority than plugins and themes
-            )
-            logger.info(f"Loaded base CSS: default.css from {default_theme_path}")
+            try:
+                with open(default_theme_path, "r", encoding="utf-8") as f:
+                    logger.info(f"Loaded base CSS: {default_theme_path}")
+                    return f.read()
+            except Exception as e:
+                logger.error(f"Error reading base style file: {e}")
         else:
             logger.warning("Default theme file not found for base styles")
+        return ""
 
-    def _load_plugin_styles(self, plugins: dict):
-        """Load and apply plugin styles"""
+    def _load_plugin_styles(self, plugins: Optional[dict]) -> str:
+        """Load and return combined plugin styles."""
         plugin_css = self._combine_plugin_css(plugins)
         if plugin_css:
-            self.plugin_provider = Gtk.CssProvider()
-            self.plugin_provider.load_from_data(plugin_css.encode())
-            Gtk.StyleContext.add_provider_for_screen(
-                Gdk.Screen.get_default(),
-                self.plugin_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-            )
             logger.info("Loaded plugin CSS styles")
+        return plugin_css
 
-    def _load_theme_styles(self, theme_name: str):
-        """Load and apply theme styles"""
+    def _load_theme_styles(self, theme_name: str) -> str:
+        """Load and return the content of the theme styles."""
         if theme_name == "default":
             logger.info(
-                "Skipping theme load for 'default' as it's already loaded as base styles"
+                "Skipping theme load for 'default' as it's already included in base styles"
             )
-            return
+            return ""
 
-        theme_path = self._find_theme_file(theme_name)
+        theme_path = os.path.realpath(self._find_theme_file(theme_name))
         if theme_path and os.path.exists(theme_path):
-            self.theme_provider = Gtk.CssProvider()
-            self.theme_provider.load_from_path(theme_path)
-            Gtk.StyleContext.add_provider_for_screen(
-                Gdk.Screen.get_default(),
-                self.theme_provider,
-                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-                + 1,  # Higher priority than plugins
-            )
-            logger.info(f"Loaded theme CSS: {theme_name} from {theme_path}")
+            try:
+                with open(theme_path, "r", encoding="utf-8") as f:
+                    logger.info(f"Loaded theme CSS: {theme_path}")
+                    return f.read()
+            except Exception as e:
+                logger.error(f"Error reading theme file {theme_name}: {e}")
         else:
             logger.warning(f"Theme file not found: {theme_name}")
+        return ""
 
     def _find_theme_file(self, theme_name: str) -> Optional[str]:
         """Find the path to a theme file
@@ -261,7 +268,7 @@ class CssManager:
         return None
 
     @staticmethod
-    def _combine_plugin_css(plugins: dict = None) -> str:
+    def _combine_plugin_css(plugins: Optional[dict] = None) -> str:
         """Combine and return CSS from all plugins"""
         if not plugins:
             return ""
@@ -281,7 +288,7 @@ class CssManager:
 
     # Legacy methods for backward compatibility
     @classmethod
-    def load_css(cls, config, plugins: dict = None) -> None:
+    def load_css(cls, config, plugins: Optional[dict] = None) -> None:
         """Legacy method for backward compatibility"""
         manager = cls()
         theme_name = getattr(config.system, "theme", "default")
