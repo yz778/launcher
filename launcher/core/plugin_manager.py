@@ -70,25 +70,24 @@ class PluginManager:
                 and entry.name != "__pycache__"
                 and not entry.name.startswith(".")
             ):
-                self.load_plugin(entry.name, plugins_dir, is_user_plugin)
+                plugin_dir_path = os.path.join(plugins_dir, entry.name)
+                self.load_plugin(entry.name, plugin_dir_path, is_user_plugin)
 
     def load_plugin(
-        self, plugin_dir: str, base_dir: str = None, is_user_plugin: bool = False
+        self, plugin_name: str, plugin_dir_path: str, is_user_plugin: bool = False
     ) -> bool:
-        """Load a single plugin from its directory"""
+        """Load a single plugin from its directory path and name"""
         try:
-            # Use base_dir if provided, otherwise fall back to self.plugins_dir for backward compatibility
-            plugin_base_dir = base_dir if base_dir is not None else self.plugins_dir
-            plugin_file = os.path.join(plugin_base_dir, plugin_dir, "plugin.py")
+            plugin_file = os.path.join(plugin_dir_path, "plugin.py")
             if not os.path.exists(plugin_file):
                 return False
 
             if is_user_plugin:
                 # User plugins are in a directory added to sys.path
-                module_name = f"{plugin_dir}.plugin"
+                module_name = f"{plugin_name}.plugin"
             else:
                 # Built-in plugins are part of the 'plugins' package
-                module_name = f"plugins.{plugin_dir}.plugin"
+                module_name = f"plugins.{plugin_name}.plugin"
 
             module = importlib.import_module(module_name)
 
@@ -101,7 +100,7 @@ class PluginManager:
                 ):
                     return self._register_plugin(obj)
         except Exception as e:
-            logger.error(f"Error loading plugin {plugin_dir}: {e}")
+            logger.error(f"Error loading plugin {plugin_name}: {e}")
             return False
         return False
 
