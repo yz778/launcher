@@ -81,6 +81,9 @@ class CssManager:
         ]
 
         for dir in theme_paths:
+            if not os.path.exists(dir):
+                continue
+
             for file in os.listdir(dir):
                 if not file.endswith(".css"):
                     continue
