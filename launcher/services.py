@@ -1,8 +1,9 @@
-singleton_manager = None
-launcher_window = None
-history_manager = None
-plugin_manager = None
-config_manager = None
 config = None
-socket_service = None
+config_manager = None
 css_manager = None
+history_manager = None
+ipc_manager = None
+launcher_window = None
+plugin_manager = None
+singleton_manager = None
+socket_service = None

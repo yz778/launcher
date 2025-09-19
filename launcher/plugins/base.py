@@ -112,17 +112,16 @@ class Plugin(ABC):
 
     def get_default_css(self) -> str:
         """Return the contents of 'default.css' from the plugin's directory, or an empty string if not found."""
-        module = sys.modules[self.__class__.__module__]
-        subclass_file = getattr(module, "__file__", None)
-        if not subclass_file:
-            return ""
-        file_path = os.path.join(
-            os.path.dirname(os.path.abspath(subclass_file)), "default.css"
-        )
         try:
+            module_file = sys.modules[self.__class__.__module__].__file__
+            if not module_file:
+                return ""
+            file_path = os.path.join(
+                os.path.dirname(os.path.abspath(module_file)), "default.css"
+            )
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
-        except (OSError, IOError):
+        except Exception:
             return ""
 
     def initialize(self, user_config) -> bool:

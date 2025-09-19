@@ -197,7 +197,7 @@ class DesktopFilePlugin(Plugin):
     def _load_from_cache(self) -> None:
         """Load desktop files from the cache"""
         if not os.path.exists(self.cache_file):
-            logger.info("Desktop file cache not found.")
+            logger.info("Desktop file cache not found")
             return
 
         try:
@@ -206,7 +206,7 @@ class DesktopFilePlugin(Plugin):
                 for item_data in cached_data:
                     desktop_file = DesktopFile.from_dict(item_data)
                     self.desktop_files[desktop_file.path] = desktop_file
-            logger.info(f"Loaded {len(self.desktop_files)} desktop files from cache.")
+            logger.info(f"Loaded {len(self.desktop_files)} desktop files from cache")
         except (IOError, json.JSONDecodeError) as e:
             logger.error(f"Error loading desktop file cache: {e}")
 
@@ -215,7 +215,7 @@ class DesktopFilePlugin(Plugin):
         try:
             with open(self.cache_file, "w") as f:
                 json.dump([df.to_dict() for df in self.desktop_files.values()], f)
-            logger.info(f"Saved {len(self.desktop_files)} desktop files to cache.")
+            logger.info(f"Saved {len(self.desktop_files)} desktop files to cache")
         except IOError as e:
             logger.error(f"Error saving desktop file cache: {e}")
 
@@ -235,7 +235,7 @@ class DesktopFilePlugin(Plugin):
 
     def _update_matcher(self) -> None:
         """Updates the string matcher in a thread-safe manner"""
-        # Create new matcher with current desktop files
+
         new_matcher = StringMatcher(
             items=list(self.desktop_files.values()), key_func=lambda df: df.name
         )
@@ -243,10 +243,6 @@ class DesktopFilePlugin(Plugin):
         # Atomically replace the matcher
         with self._matcher_lock:
             self.matcher = new_matcher
-
-        logger.info(
-            f"Finished loading {len(self.desktop_files)} desktop files in background"
-        )
 
     def _scan_desktop_files(self) -> None:
         """Scan for desktop files in the configured locations"""
@@ -256,6 +252,8 @@ class DesktopFilePlugin(Plugin):
         for location in reversed(locations):
             expanded_location = os.path.expanduser(location)
             self._scan_location(expanded_location)
+
+        logger.info(f"Refresh scanned {len(self.desktop_files)} desktop files")
 
     def _scan_location(self, location: str) -> None:
         """Scan a single location for desktop files"""

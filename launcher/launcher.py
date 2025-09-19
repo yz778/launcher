@@ -7,30 +7,32 @@ args = len(sys.argv)
 if args == 1 or (args == 3 and sys.argv[1] == "--theme"):
     from launcher.core.ipc import IPCManager
 
+    show_error = True
+
     if len(sys.argv) == 1:
         command = "SHOW"
+        show_error = False
 
     elif sys.argv[1] == "--theme":
         theme_name = sys.argv[2]
         command = f"THEME {theme_name}"
 
-    try:
-        if IPCManager.send_command("launcher", command):
-            print(f"Command '{command}' sent to running instance. Exiting.")
-            exit(0)
-    except (ImportError, IndexError, ValueError):
-        pass
+    if IPCManager.send_command("launcher", command):
+        print(f"Command '{command}' sent to running instance. Exiting.")
+        exit(0)
+    elif show_error:
+        print(f"Unable to send '{command}' command. Exiting.")
+        exit(1)
+
 
 #############################################################################
 # Main Application Code
 #############################################################################
-
 import argparse
 import logging
 import os
 import signal
-
-from launcher import services
+import sys
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
@@ -57,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 
 def shutdown(reason: str = ""):
-    global services
+    from launcher import services
 
     if reason:
         logger.info(f"Quit requested: {reason}")
@@ -78,14 +80,13 @@ def shutdown(reason: str = ""):
 
 
 def show_window(args):
-    """Callback to show the launcher window"""
-    global services
+    from launcher import services
+
     if services.launcher_window:
         services.launcher_window.show_and_focus()
 
 
 def signal_handler(signum, frame):
-    """Handle termination signals"""
     shutdown(reason=f"signal {signum}")
 
 
@@ -125,7 +126,6 @@ def arg_parser():
 
 
 def main() -> int:
-    """Run the launcher application"""
     os.chdir(os.path.expanduser("~"))  # Change to home directory at startup
 
     args = arg_parser()
@@ -134,9 +134,6 @@ def main() -> int:
         logging.getLogger().setLevel(logging.DEBUG)
 
     if args.create_config:
-        from launcher.core.config import ConfigManager
-        from launcher.core.plugin_manager import PluginManager
-
         config_manager = ConfigManager(args.config)
         plugins_dir = os.path.join(current_dir, "plugins")
 
@@ -149,25 +146,29 @@ def main() -> int:
         return 0
 
     elif args.theme is not None:
-        from launcher.ui.css_manager import CssManager
-
         css_manager = CssManager()
         available_themes = css_manager.get_available_themes()
         print("Available themes:")
-        print("\n".join(available_themes))
+        for theme in available_themes:
+            print(theme)
         exit(0)
 
     # Set up signal handlers for graceful shutdown
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
 
-    # Start up the launcher
+    from launcher import services
     from launcher.core.config import ConfigManager
     from launcher.ui import idle_add, process_pending_events, run_main_loop
+    from launcher.ui.css_manager import CssManager
     from launcher.ui.launcher_window import LauncherWindow
 
+    # Start up the launcher
+    logger.info("Loading configuration and initial CSS")
     services.config_manager = ConfigManager(args.config)
     services.config = services.config_manager.get()
+    services.css_manager = CssManager()
+    services.css_manager.load_all_styles(services.config.system.theme, None)
 
     try:
         services.launcher_window = LauncherWindow(foreground_mode=args.foreground)
@@ -187,26 +188,21 @@ def complete_initialization(
     plugins_dir: str,
     args,
 ) -> bool:
-    """Finish async initialization tasks after UI is visible"""
-
-    # Lazy import heavy modules
+    from launcher import services
     from launcher.core.history_manager import HistoryManager
     from launcher.core.ipc import IPCManager
     from launcher.core.plugin_manager import PluginManager
-    from launcher.ui.css_manager import CssManager
 
-    global services
     services.history_manager = HistoryManager(services.config)
     services.plugin_manager = PluginManager(services.config)
     services.plugin_manager.load_plugins(plugins_dir)
-
-    # Initialize CSS manager with current theme
-    services.css_manager = CssManager()
-    theme_name = getattr(services.config.system, "theme", "default")
-    services.css_manager.load_all_styles(theme_name, services.plugin_manager.plugins)
+    services.css_manager.load_all_styles(
+        services.config.system.theme, services.plugin_manager.plugins
+    )
 
     # Set up and start the IPC server for the primary instance
     if not args.foreground:
+        logger.info("Loading IPC manager")
         services.ipc_manager = IPCManager("launcher")
         services.ipc_manager.register_handler("SHOW", show_window)
         services.ipc_manager.register_handler("THEME", handle_theme_command)
@@ -215,23 +211,16 @@ def complete_initialization(
                 "Failed to start IPC server. Singleton and IPC will be disabled."
             )
 
+    logger.info("Starting background processes")
     services.launcher_window.start()
     start_plugins(services.plugin_manager)
-
-    # Schedule background history cleanup after all services are initialized
     services.history_manager.schedule_background_cleanup()
 
-    logger.info("Background initialization completed")
     return False  # Remove from idle queue
 
 
 def handle_theme_command(theme_name: str):
-    """Handle theme switching command from IPC
-
-    Args:
-        theme_name: Name of the theme to switch to
-    """
-    global services
+    from launcher import services
 
     try:
         if services.css_manager and services.plugin_manager:
@@ -249,11 +238,9 @@ def handle_theme_command(theme_name: str):
 
 
 def start_plugins(plugin_manager) -> bool:
-    """Initialize all enabled plugins"""
     import threading
 
     def start_plugin_thread(plugin_id, plugin):
-        """Thread function to start a single plugin."""
         try:
             plugin.start()
             logger.info(f"Started plugin: {plugin_id}")

@@ -359,4 +359,4 @@ class HistoryManager:
         Clean up resources, ensuring history is saved on exit.
         """
         self.save_history()
-        logger.info("HistoryManager cleaned up and history saved.")
+        logger.info("HistoryManager cleaned up and history saved")
