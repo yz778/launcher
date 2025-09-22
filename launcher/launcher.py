@@ -134,6 +134,9 @@ def main() -> int:
         logging.getLogger().setLevel(logging.DEBUG)
 
     if args.create_config:
+        from launcher.core.plugin_manager import PluginManager
+        from launcher.core.config import ConfigManager
+
         config_manager = ConfigManager(args.config)
         plugins_dir = os.path.join(current_dir, "plugins")
 
@@ -146,6 +149,8 @@ def main() -> int:
         return 0
 
     elif args.theme is not None:
+        from launcher.ui.css_manager import CssManager
+
         css_manager = CssManager()
         available_themes = css_manager.get_available_themes()
         print("Available themes:")
