@@ -19,7 +19,7 @@ classifiers = [
 dependencies = [
     "pycairo==1.28.0",
     "PyGObject==3.54.2",
-    "pyperclip==1.10.0",
+    "pyperclip==1.11.0",
     "pytz==2025.2",
     "pyxdg==0.28",
     "xdg-base-dirs==6.0.2",
