@@ -28,6 +28,7 @@ if args == 1 or (args == 3 and sys.argv[1] == "--theme"):
 #############################################################################
 # Main Application Code
 #############################################################################
+# ruff: noqa: E402
 import argparse
 import logging
 import os
@@ -134,8 +135,8 @@ def main() -> int:
         logging.getLogger().setLevel(logging.DEBUG)
 
     if args.create_config:
-        from launcher.core.plugin_manager import PluginManager
         from launcher.core.config import ConfigManager
+        from launcher.core.plugin_manager import PluginManager
 
         config_manager = ConfigManager(args.config)
         plugins_dir = os.path.join(current_dir, "plugins")
