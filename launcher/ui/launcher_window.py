@@ -644,6 +644,10 @@ class LauncherWindow(Gtk.Window):
 
         # Handle Enter to execute
         if keyval == Gdk.KEY_Return:
+            if self._search_timeout_id:
+                GLib.source_remove(self._search_timeout_id)
+                self._search_timeout_id = None
+
             if self.scrolled.get_visible() and services.plugin_manager is not None:
                 selected_row = self.list_box.get_selected_row()
                 row = selected_row

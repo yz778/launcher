@@ -284,11 +284,8 @@ class TimezonePlugin(Plugin):
             except pytz.UnknownTimeZoneError:
                 return tz_name
 
-        source_tz_display = tz_display(parsed["source_tz"])
         target_tz_display = tz_display(parsed["target_tz"])
-
         description = f"{result} in {target_tz_display}"
-
         score_result = calculate_match_score(query, query, is_name=True)
         base_score = score_result[0] if score_result else 100.0
         timezone_bonus = 50

@@ -82,7 +82,6 @@ def calculate_match_score(
 
     query = query.lower().strip()
     text = text.lower().strip()
-    original_text = text  # Keep original for index mapping
 
     # Priority 1: History with user arguments match
     if user_input_with_args:
