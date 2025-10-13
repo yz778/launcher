@@ -5,6 +5,7 @@ from gi.repository import Gdk, GLib, Gtk, Pango
 from plugins.base import SearchResult
 
 from launcher import services
+from launcher.utils.icon_cache import ICON_CACHE
 from launcher.utils.icon_utils import get_fallback_icon, load_custom_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
 from launcher.utils.text_highlighter import TextHighlighter
@@ -94,12 +95,18 @@ class AppListItem(Gtk.ListBoxRow):
         self.add(hbox)
 
     def _load_result_icon(self, result: SearchResult, size: int):
-        """Load icon for a search result using icon_spec"""
+        """Load icon for a search result using icon_spec with caching"""
+        # First check the cache
+        cached = ICON_CACHE.get(result.icon_spec, size)
+        if cached:
+            return cached
+
         if result.icon_spec:
 
             def icon_callback(pixbuf):
                 if pixbuf and self.icon_widget is not None:
                     self.update_icon(pixbuf)
+                    ICON_CACHE.set(result.icon_spec, size, pixbuf)
 
             return load_custom_icon(result.icon_spec, size, callback=icon_callback)
         else:
@@ -230,6 +237,8 @@ class LauncherWindow(Gtk.Window):
         # Current search results
         self.current_results: List[SearchResult] = []
         self.active_search_id: int = 0
+        self.current_query: str = ""
+        self.is_searching: bool = False
 
         # History-related state
         self.autocomplete_matches: List[str] = []
@@ -319,6 +328,7 @@ class LauncherWindow(Gtk.Window):
         self.list_box.show_all()
         self.scrolled.show()
         self._update_results_count(results)
+        self._scroll_to_top()
 
     def _create_widget_for_render_mode(self, result: SearchResult) -> Gtk.Widget:
         """Create a widget based on the specified render mode and content."""
@@ -436,6 +446,12 @@ class LauncherWindow(Gtk.Window):
             self.result_count_label.set_text("")
             self.result_count_label.hide()
 
+    def _scroll_to_top(self):
+        """Scroll the results list to the top."""
+        if self.scrolled.get_vadjustment():
+            adjustment = self.scrolled.get_vadjustment()
+            adjustment.set_value(0)
+
     def handle_plugin_results(
         self, search_id: int, plugin_id: str, plugin_results: List[SearchResult]
     ):
@@ -450,26 +466,25 @@ class LauncherWindow(Gtk.Window):
         self._schedule_result_update(search_id)
 
     def _schedule_result_update(self, search_id: int):
-        """Schedule a result update with stabilization delay to prevent flickering."""
-        # Check if we have any high-priority results that should be shown immediately
+        """Schedule a result update with adaptive delay based on result type"""
+
         has_high_priority = any(result.score >= 1000 for result in self.current_results)
 
+        # Use shorter delay for immediate feedback when possible
+        delay = self._result_update_delay_ms
         if has_high_priority:
-            # Show high-priority results immediately (exact matches)
-            if self._result_update_timeout_id:
-                GLib.source_remove(self._result_update_timeout_id)
-                self._result_update_timeout_id = None
-            self._perform_result_update(search_id)
-        else:
-            # Use stabilization delay for lower-priority results
-            if self._result_update_timeout_id:
-                GLib.source_remove(self._result_update_timeout_id)
+            delay = 10  # Show high-priority results faster
+        elif len(self.current_results) < 5:  # Small result sets can update faster
+            delay = 25
 
-            # Schedule new update
-            self._result_update_timeout_id = GLib.timeout_add(
-                self._result_update_delay_ms,
-                lambda: self._perform_result_update(search_id),
-            )
+        if self._result_update_timeout_id:
+            GLib.source_remove(self._result_update_timeout_id)
+
+        # Schedule new update
+        self._result_update_timeout_id = GLib.timeout_add(
+            delay,
+            lambda: self._perform_result_update(search_id),
+        )
 
     def _perform_result_update(self, search_id: int) -> bool:
         """Actually update the UI with current results (called after stabilization delay)."""
@@ -498,9 +513,12 @@ class LauncherWindow(Gtk.Window):
         return False  # Remove from timeout queue
 
     def handle_search_finished(self, search_id: int):
-        """Callback for when all plugins have finished searching."""
+        """Callback for when all plugins have finished searching with proper sync"""
         if search_id != self.active_search_id:
             return
+
+        # Mark search as complete
+        self.is_searching = False
 
         # Cancel any pending result update and perform final update immediately
         if self._result_update_timeout_id:
@@ -532,7 +550,7 @@ class LauncherWindow(Gtk.Window):
             self._populate_list_box(results)
 
     def _search(self) -> bool:
-        """Actually perform the search (called after debounce delay)"""
+        """Actually perform the search with better synchronization"""
         self._search_timeout_id = None  # Clear timeout ID
 
         # Cancel any pending result updates from previous search
@@ -541,6 +559,7 @@ class LauncherWindow(Gtk.Window):
             self._result_update_timeout_id = None
 
         query = self.entry.get_text().strip()
+        self.current_query = query  # Store current query for reference
 
         self.current_results.clear()
         self.autocomplete_matches.clear()
@@ -550,11 +569,13 @@ class LauncherWindow(Gtk.Window):
             self._show_recent_history()
             return False
 
-        # Check for autocomplete matches - cache history manager check
+        # Check for autocomplete matches
         self.autocomplete_matches = services.history_manager.get_matching_history(
             query, 5
         )
         self.active_search_id += 1
+        self.is_searching = True  # Flag to track search state
+
         services.plugin_manager.search(
             query,
             self.active_search_id,
@@ -628,7 +649,7 @@ class LauncherWindow(Gtk.Window):
         return True
 
     def on_entry_key_press(self, widget, event) -> bool:
-        """Handle key presses in the entry field"""
+        """Handle key presses in the entry field with improved responsiveness"""
         keyval = event.keyval
         state = event.state
 
@@ -642,21 +663,33 @@ class LauncherWindow(Gtk.Window):
             self.entry.set_position(-1)
             return True
 
-        # Handle Enter to execute
+        # Handle Enter with immediate response and proper synchronization
         if keyval == Gdk.KEY_Return:
+            # Cancel any pending search to prevent race conditions
             if self._search_timeout_id:
                 GLib.source_remove(self._search_timeout_id)
                 self._search_timeout_id = None
 
-            if self.scrolled.get_visible() and services.plugin_manager is not None:
+            # Process any pending UI events to ensure current state is reflected
+            while Gtk.events_pending():
+                Gtk.main_iteration()
+
+            if services.plugin_manager is not None:
                 selected_row = self.list_box.get_selected_row()
-                row = selected_row
-                if not row and self.list_box.get_children():
-                    row = self.list_box.get_row_at_index(0)
-                if row:
-                    self.execute_result(row.result, event)
+
+                # If no row is selected, default to the first result
+                if not selected_row and self.list_box.get_children():
+                    selected_row = self.list_box.get_row_at_index(0)
+
+                # Execute the selected result (or return if no selection available)
+                if selected_row and hasattr(selected_row, "result"):
+                    self.execute_result(selected_row.result, event)
                     self.entry.set_text("")
-                    return True
+                elif hasattr(self, "current_query") and self.current_query.strip():
+                    # If there's entry text but no results, consider direct execution
+                    # (e.g., for shell commands that don't need search results)
+                    pass
+                return True
             return True
 
         if self.scrolled.get_visible():

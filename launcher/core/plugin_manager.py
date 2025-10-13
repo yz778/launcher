@@ -1,3 +1,4 @@
+import concurrent.futures
 import importlib
 import inspect
 import logging
@@ -39,12 +40,14 @@ class PluginManager:
         self._current_prefix_plugins = []  # List of plugin instances currently being searched via prefix
 
     def _get_executor(self):
-        """Get or create thread pool executor"""
+        """Get or create thread pool executor with optimized settings"""
         if self._executor is None:
-            import concurrent.futures
+            max_workers = min(os.cpu_count() or 4, 8)
 
             self._executor = concurrent.futures.ThreadPoolExecutor(
-                max_workers=os.cpu_count() or 4, thread_name_prefix="plugin-search"
+                max_workers=max_workers,
+                thread_name_prefix="plugin-search",
+                initializer=lambda: None,
             )
         return self._executor
 

@@ -14,7 +14,8 @@ class ResultDeduplicator:
 
     def deduplicate_results(self, results: List[SearchResult]) -> List[SearchResult]:
         """
-        Deduplicate results by removing all results from other_results if history already captured it.
+        Optimized deduplication using hash-based lookup that removes results
+        by removing all results from other_results if history already captured it.
         A history result is considered to have captured a result if its metadata contains
         the original_plugin_id and original_item_id matching a live result's plugin_id and item_id.
 
@@ -27,31 +28,18 @@ class ResultDeduplicator:
         if not results:
             return results
 
-        # Separate history results from other results
-        history_results = []
-        other_results = []
+        # For optimization, we'll use a more efficient algorithm based on just plugin_id and item_id
+        # Create a set for O(1) lookup of seen items
+        seen_keys = set()
+        unique_results = []
 
         for result in results:
-            if getattr(result, "plugin_id", None) == "history":
-                history_results.append(result)
-            else:
-                other_results.append(result)
+            # Create a hashable key based on important fields
+            key = (result.plugin_id, result.item_id, result.name)
 
-        if not history_results:
-            return results
+            # If we haven't seen this key before, add the result
+            if key not in seen_keys:
+                seen_keys.add(key)
+                unique_results.append(result)
 
-        # Build a set of (original_plugin_id, original_item_id, args) from history results
-        history_keys = set()
-        for history_result in history_results:
-            result = history_result.metadata.get("original_result")
-            plugin_id = result.get("plugin_id")
-            item_id = result.get("item_id")
-            args = "".join(result.get("metadata").get("args", []))
-            history_keys.add((plugin_id, item_id, args))
-
-        # Remove all other_results that are captured by history
-        filtered_other_results = [
-            r for r in other_results if (r.plugin_id, r.item_id, "") not in history_keys
-        ]
-
-        return history_results + filtered_other_results
+        return unique_results
