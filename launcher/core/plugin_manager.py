@@ -47,7 +47,6 @@ class PluginManager:
             self._executor = concurrent.futures.ThreadPoolExecutor(
                 max_workers=max_workers,
                 thread_name_prefix="plugin-search",
-                initializer=lambda: None,
             )
         return self._executor
 

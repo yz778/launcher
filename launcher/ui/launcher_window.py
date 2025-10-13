@@ -685,10 +685,7 @@ class LauncherWindow(Gtk.Window):
                 if selected_row and hasattr(selected_row, "result"):
                     self.execute_result(selected_row.result, event)
                     self.entry.set_text("")
-                elif hasattr(self, "current_query") and self.current_query.strip():
-                    # If there's entry text but no results, consider direct execution
-                    # (e.g., for shell commands that don't need search results)
-                    pass
+
                 return True
             return True
 
