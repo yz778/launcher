@@ -335,8 +335,6 @@ class LauncherWindow(Gtk.Window):
         try:
             if result.render_mode == "text_view":
                 return self._create_text_view_widget(result)
-            elif result.render_mode == "web_view":
-                return self._create_web_view_widget(result)
             elif result.render_mode == "image_buffer":
                 return self._create_image_widget(result)
             else:
@@ -366,37 +364,6 @@ class LauncherWindow(Gtk.Window):
         scrolled.add(text_view)
 
         return scrolled
-
-    def _create_web_view_widget(self, result: SearchResult) -> Gtk.Widget:
-        """Create a WebView widget for displaying web content. Currently disabled as it errors out with Wayland"""
-        return None
-        try:
-            import gi
-
-            gi.require_version("WebKit2", "4.1")
-            from gi.repository import WebKit2
-
-            web_view = WebKit2.WebView()
-
-            if result.content:
-                if isinstance(result.content, str):
-                    if result.content.startswith(("http://", "https://")):
-                        web_view.load_uri(result.content)
-                    else:
-                        web_view.load_html(result.content)
-                else:
-                    logger.warning(
-                        f"Invalid content type for WebView: {type(result.content)}"
-                    )
-                    return None
-
-            # Set a reasonable size
-            web_view.set_size_request(-1, 400)
-            return web_view
-
-        except ImportError:
-            logger.warning("WebKit2 not available, cannot create WebView widget")
-            return None
 
     def _create_image_widget(self, result: SearchResult) -> Gtk.Widget:
         """Create an Image widget for displaying image content."""

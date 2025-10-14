@@ -164,9 +164,7 @@ class HistoryManager:
             unique_id = int(time.time())
             new_entry = {
                 "item_id": f"history_{unique_id}",
-                "name": (
-                    result.name + " " + " ".join(result.metadata.get("args", []))
-                ).strip(),
+                "name": f"{result.name} {' '.join(result.metadata.get('args', []))}".strip(),
                 "result": result.to_dict(),
                 "last_execution_time": time.time(),
                 "usage_count": 1,

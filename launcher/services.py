@@ -5,5 +5,3 @@ history_manager = None
 ipc_manager = None
 launcher_window = None
 plugin_manager = None
-singleton_manager = None
-socket_service = None
