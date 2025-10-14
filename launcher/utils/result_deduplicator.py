@@ -33,10 +33,10 @@ class ResultDeduplicator:
         # Two-phase approach:
         # 1. Identify all logical items and prioritize history results over live results
         # 2. Build result list, preferring history results over live results for same logical item
-        
+
         # Phase 1: First pass - collect all logical keys from history results to give them priority
         history_logical_keys = set()
-        
+
         for result in results:
             if result.plugin_id == "history" and "original_result" in result.metadata:
                 # This is a history result, use its original identity
@@ -44,7 +44,7 @@ class ResultDeduplicator:
                 original_plugin_id = original_result_data.get("plugin_id")
                 original_item_id = original_result_data.get("item_id")
                 original_name = original_result_data.get("name")
-                
+
                 if original_plugin_id and original_item_id:
                     logical_key = (original_plugin_id, original_item_id, original_name)
                     history_logical_keys.add(logical_key)
@@ -61,7 +61,7 @@ class ResultDeduplicator:
                 original_plugin_id = original_result_data.get("plugin_id")
                 original_item_id = original_result_data.get("item_id")
                 original_name = original_result_data.get("name")
-                
+
                 if original_plugin_id and original_item_id:
                     logical_key = (original_plugin_id, original_item_id, original_name)
                 else:
@@ -74,11 +74,11 @@ class ResultDeduplicator:
             # Skip if we've already seen this logical item
             if logical_key in seen_logical_keys:
                 continue
-                
+
             # For live results, skip if there's a corresponding history result (same logical item)
             if result.plugin_id != "history" and logical_key in history_logical_keys:
                 continue
-                
+
             # Add the result
             seen_logical_keys.add(logical_key)
             unique_results.append(result)
