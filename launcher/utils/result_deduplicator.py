@@ -30,57 +30,35 @@ class ResultDeduplicator:
         if not results:
             return results
 
-        # Two-phase approach:
-        # 1. Identify all logical items and prioritize history results over live results
-        # 2. Build result list, preferring history results over live results for same logical item
+        # Use a single pass with a dictionary to deduplicate and prioritize history results.
+        # This is more efficient and avoids code duplication.
+        unique_results_map = {}
 
-        # Phase 1: First pass - collect all logical keys from history results to give them priority
-        history_logical_keys = set()
-
-        for result in results:
+        def get_logical_key(result: "SearchResult") -> tuple:
+            """Determines the logical key for a search result."""
             if result.plugin_id == "history" and "original_result" in result.metadata:
-                # This is a history result, use its original identity
                 original_result_data = result.metadata["original_result"]
                 original_plugin_id = original_result_data.get("plugin_id")
                 original_item_id = original_result_data.get("item_id")
                 original_name = original_result_data.get("name")
 
                 if original_plugin_id and original_item_id:
-                    logical_key = (original_plugin_id, original_item_id, original_name)
-                    history_logical_keys.add(logical_key)
+                    return (original_plugin_id, original_item_id, original_name)
 
-        # Phase 2: Build the final list, skipping live results that have corresponding history results
-        seen_logical_keys = set()
-        unique_results = []
+            return (result.plugin_id, result.item_id, result.name)
 
         for result in results:
-            # Determine the logical key for this result
-            if result.plugin_id == "history" and "original_result" in result.metadata:
-                # This is a history result, use its original identity
-                original_result_data = result.metadata["original_result"]
-                original_plugin_id = original_result_data.get("plugin_id")
-                original_item_id = original_result_data.get("item_id")
-                original_name = original_result_data.get("name")
+            logical_key = get_logical_key(result)
 
-                if original_plugin_id and original_item_id:
-                    logical_key = (original_plugin_id, original_item_id, original_name)
-                else:
-                    # If no proper original_result data, use actual result data
-                    logical_key = (result.plugin_id, result.item_id, result.name)
-            else:
-                # This is a live plugin result
-                logical_key = (result.plugin_id, result.item_id, result.name)
+            existing_result = unique_results_map.get(logical_key)
 
-            # Skip if we've already seen this logical item
-            if logical_key in seen_logical_keys:
+            # If we haven't seen this logical item, add it.
+            if not existing_result:
+                unique_results_map[logical_key] = result
                 continue
 
-            # For live results, skip if there's a corresponding history result (same logical item)
-            if result.plugin_id != "history" and logical_key in history_logical_keys:
-                continue
+            # If we have seen it, replace if the new one is a history result and the old one is not.
+            if result.plugin_id == "history" and existing_result.plugin_id != "history":
+                unique_results_map[logical_key] = result
 
-            # Add the result
-            seen_logical_keys.add(logical_key)
-            unique_results.append(result)
-
-        return unique_results
+        return list(unique_results_map.values())
