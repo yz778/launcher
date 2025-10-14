@@ -34,7 +34,7 @@ class ResultDeduplicator:
         # This is more efficient and avoids code duplication.
         unique_results_map = {}
 
-        def get_logical_key(result: "SearchResult") -> tuple:
+        def get_logical_key(result: SearchResult) -> tuple:
             """Determines the logical key for a search result."""
             if result.plugin_id == "history" and "original_result" in result.metadata:
                 original_result_data = result.metadata["original_result"]
@@ -49,16 +49,13 @@ class ResultDeduplicator:
 
         for result in results:
             logical_key = get_logical_key(result)
-
             existing_result = unique_results_map.get(logical_key)
 
-            # If we haven't seen this logical item, add it.
-            if not existing_result:
-                unique_results_map[logical_key] = result
-                continue
-
-            # If we have seen it, replace if the new one is a history result and the old one is not.
-            if result.plugin_id == "history" and existing_result.plugin_id != "history":
+            # Add the result if we haven't seen this logical item, or if the new result is a history
+            # result and the existing one is not (history results take priority).
+            if not existing_result or (
+                result.plugin_id == "history" and existing_result.plugin_id != "history"
+            ):
                 unique_results_map[logical_key] = result
 
         return list(unique_results_map.values())
