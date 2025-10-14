@@ -288,11 +288,3 @@ class CssManager:
                 logger.error(f"Error getting CSS from plugin {plugin_id}: {e}")
 
         return "\n\n".join(combined_css)
-
-    # Legacy methods for backward compatibility
-    @classmethod
-    def load_css(cls, config, plugins: Optional[dict] = None) -> None:
-        """Legacy method for backward compatibility"""
-        manager = cls()
-        theme_name = getattr(config.system, "theme", "default")
-        manager.load_all_styles(theme_name, plugins)
