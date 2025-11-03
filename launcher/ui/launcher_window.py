@@ -161,6 +161,7 @@ class LauncherWindow(Gtk.Window):
         Gdk.KEY_Page_Up,
         Gdk.KEY_Page_Down,
     ]
+    PAGE_SCROLL_AMOUNT = 5
 
     def __init__(
         self,
@@ -572,8 +573,8 @@ class LauncherWindow(Gtk.Window):
         if selected_row:
             index = selected_row.get_index()
             target_index = index + direction
-            if target_index < 0 or target_index >= len(children):
-                return True
+            # Clamp target_index to valid range [0, len(children)-1]
+            target_index = max(0, min(target_index, len(children) - 1))
         else:
             target_index = 0 if direction > 0 else len(children) - 1
 
@@ -594,10 +595,7 @@ class LauncherWindow(Gtk.Window):
             self._selection_anchor = target_index
 
         # Ensure the selected row is visible
-        adjustment = self.scrolled.get_vadjustment()
-        if adjustment:
-            row_alloc = target_row.get_allocation()
-            adjustment.clamp_page(row_alloc.y, row_alloc.y + row_alloc.height)
+        self._ensure_row_visible(target_row)
 
         # Cancel any pending search while navigating
         if self._search_timeout_id:
@@ -667,11 +665,11 @@ class LauncherWindow(Gtk.Window):
 
             # Handle Page Down for scrolling
             elif keyval == Gdk.KEY_Page_Down:
-                return self._navigate_selection(+5, state)
+                return self._navigate_selection(+self.PAGE_SCROLL_AMOUNT, state)
 
             # Handle Page Up for scrolling
             elif keyval == Gdk.KEY_Page_Up:
-                return self._navigate_selection(-5, state)
+                return self._navigate_selection(-self.PAGE_SCROLL_AMOUNT, state)
 
             # Handle Tab for non-autocomplete (select item name)
             elif keyval == Gdk.KEY_Tab:
@@ -860,7 +858,6 @@ class LauncherWindow(Gtk.Window):
     def _ensure_row_visible(self, row):
         """Ensure the given row is visible in the scrolled window"""
         if row:
-            row.grab_focus()
             self.scrolled.get_vadjustment().clamp_page(
                 row.get_allocation().y,
                 row.get_allocation().y + row.get_allocation().height,
