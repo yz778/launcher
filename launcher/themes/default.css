@@ -17,6 +17,8 @@
     background: @window-background;
     border: 2px solid @window-border;
     border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    transition: all 0.2s ease;
 }
 
 #launcher-container {
@@ -38,6 +40,7 @@
     margin: 0;
     box-shadow: none;
     outline: none;
+    transition: all 0.3s ease;
 }
 
 #result-count-label {

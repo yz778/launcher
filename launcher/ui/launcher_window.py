@@ -2,9 +2,9 @@ import logging
 from typing import List
 
 from gi.repository import Gdk, GLib, Gtk, Pango
-from plugins.base import SearchResult
 
 from launcher import services
+from launcher.plugins.base import SearchResult
 from launcher.utils.icon_cache import ICON_CACHE
 from launcher.utils.icon_utils import get_fallback_icon, load_custom_icon
 from launcher.utils.result_deduplicator import ResultDeduplicator
@@ -665,6 +665,14 @@ class LauncherWindow(Gtk.Window):
             elif keyval == Gdk.KEY_Up:
                 return self._navigate_selection(-1, state)
 
+            # Handle Page Down for scrolling
+            elif keyval == Gdk.KEY_Page_Down:
+                return self._navigate_selection(+5, state)
+
+            # Handle Page Up for scrolling
+            elif keyval == Gdk.KEY_Page_Up:
+                return self._navigate_selection(-5, state)
+
             # Handle Tab for non-autocomplete (select item name)
             elif keyval == Gdk.KEY_Tab:
                 selected_row = self.list_box.get_selected_row()
@@ -848,6 +856,15 @@ class LauncherWindow(Gtk.Window):
         LauncherWindow._shutdown_requested = True
 
         self._schedule_quit(reason)
+
+    def _ensure_row_visible(self, row):
+        """Ensure the given row is visible in the scrolled window"""
+        if row:
+            row.grab_focus()
+            self.scrolled.get_vadjustment().clamp_page(
+                row.get_allocation().y,
+                row.get_allocation().y + row.get_allocation().height,
+            )
 
     def start(self):
         """Update the window with the full configuration after initialization"""
