@@ -17,7 +17,7 @@ classifiers = [
     "Environment :: Wayland",
 ]
 dependencies = [
-    "pycairo==1.28.0",
+    "pycairo==1.29.0",
     "PyGObject==3.54.2",
     "pyperclip==1.11.0",
     "pytz==2025.2",
