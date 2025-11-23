@@ -513,7 +513,7 @@ class LauncherWindow(Gtk.Window):
     def _show_recent_history(self) -> None:
         """Show recent history."""
         self._clear_list_box_and_hide()
-        results = services.history_manager.get_history_results()
+        results = services.history_manager.get_history_results(exclude_plugin_only=True)
         if results:
             self._populate_list_box(results)
 
@@ -765,7 +765,10 @@ class LauncherWindow(Gtk.Window):
                 if original_result_dict:
                     result_to_track = SearchResult.from_dict(original_result_dict)
 
-            if plugin.track_history:
+            # Track history: True = global, "plugin" = plugin-only, False = none
+            if plugin.track_history is True:
+                services.history_manager.add_history(result_to_track)
+            elif plugin.track_history == "plugin":
                 services.history_manager.add_history(result_to_track)
 
             self.close_window()

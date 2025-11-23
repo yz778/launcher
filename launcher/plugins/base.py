@@ -69,7 +69,7 @@ class Plugin(ABC):
         self.config = self.DEFAULTS
         self.prefixes = []
         self.prefixes_only = True
-        self.track_history = True
+        self.track_history = True  # True = global history, False = no history, "plugin" = plugin-only history
 
     def get_prefixes(self):
         """
@@ -220,6 +220,21 @@ class Plugin(ABC):
             result: The search result to preview
         """
         pass
+
+    def get_plugin_history(self) -> List[SearchResult]:
+        """
+        Get history entries specific to this plugin.
+        Only called when track_history == "plugin".
+
+        Returns:
+            List of SearchResult objects from this plugin's history
+        """
+        from launcher import services
+
+        if not services.history_manager:
+            return []
+
+        return services.history_manager.get_plugin_history(self.get_id())
 
     def cleanup(self) -> None:
         """

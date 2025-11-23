@@ -259,12 +259,30 @@ class TimezonePlugin(Plugin):
 
     def search(self, query: str) -> List[SearchResult]:
         """Search for timezone conversions matching the query, supporting 'local' for both source and target"""
-        query = self.strip_prefixes(query)
-
-        if not self._is_timezone_query(query):
+        if not self.query_startswith_prefix(query):
             return []
 
-        parsed = self._parse_timezone_query(query)
+        stripped_query = self.strip_prefixes(query)
+
+        # Show placeholder when only prefix is typed
+        if not stripped_query:
+            return [
+                SearchResult(
+                    plugin_id=self.get_id(),
+                    item_id="",
+                    name="Timezone Converter",
+                    description="Convert times between timezones (e.g., 5pm pst to est)",
+                    icon_spec="theme://appointment-soon",
+                    score=100.0,
+                    hilight=None,
+                    metadata={},
+                )
+            ]
+
+        if not self._is_timezone_query(stripped_query):
+            return []
+
+        parsed = self._parse_timezone_query(stripped_query)
         if not parsed:
             return []
 
@@ -286,15 +304,17 @@ class TimezonePlugin(Plugin):
 
         target_tz_display = tz_display(parsed["target_tz"])
         description = f"{result} in {target_tz_display}"
-        score_result = calculate_match_score(query, query, is_name=True)
+        score_result = calculate_match_score(
+            stripped_query, stripped_query, is_name=True
+        )
         base_score = score_result[0] if score_result else 100.0
         timezone_bonus = 50
         final_score = base_score + timezone_bonus
 
         search_result = SearchResult(
             plugin_id=self.get_id(),
-            item_id=query,
-            name=query,
+            item_id=stripped_query,
+            name=stripped_query,
             description=description,
             icon_spec="theme://appointment-soon",
             score=final_score,
