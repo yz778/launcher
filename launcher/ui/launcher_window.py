@@ -770,9 +770,7 @@ class LauncherWindow(Gtk.Window):
                     result_to_track = SearchResult.from_dict(original_result_dict)
 
             # Track history: True = global, "plugin" = plugin-only, False = none
-            if plugin.track_history is True:
-                services.instance.history_manager.add_history(result_to_track)
-            elif plugin.track_history == "plugin":
+            if plugin.track_history:
                 services.instance.history_manager.add_history(result_to_track)
 
             self.close_window()
