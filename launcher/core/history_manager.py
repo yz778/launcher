@@ -97,8 +97,10 @@ class HistoryManager:
             # Exclude plugin-only history from global history
             if exclude_plugin_only:
                 entry_plugin_id = result_data.get("plugin_id")
-                if entry_plugin_id and services.plugin_manager:
-                    plugin = services.plugin_manager.get_plugin_by_id(entry_plugin_id)
+                if entry_plugin_id and services.instance.plugin_manager:
+                    plugin = services.instance.plugin_manager.get_plugin_by_id(
+                        entry_plugin_id
+                    )
                     if plugin and plugin.track_history == "plugin":
                         continue
 
@@ -345,7 +347,10 @@ class HistoryManager:
         """
         from launcher import services
 
-        if not hasattr(services, "plugin_manager") or not services.plugin_manager:
+        if (
+            not hasattr(services.instance, "plugin_manager")
+            or not services.instance.plugin_manager
+        ):
             logger.warning("Plugin manager not available for history validation")
             return
 
@@ -365,7 +370,7 @@ class HistoryManager:
                 continue
 
             # Get the plugin and validate the item
-            plugin = services.plugin_manager.get_plugin_by_id(plugin_id)
+            plugin = services.instance.plugin_manager.get_plugin_by_id(plugin_id)
             if plugin and hasattr(plugin, "validate_item"):
                 try:
                     if plugin.validate_item(item_id):

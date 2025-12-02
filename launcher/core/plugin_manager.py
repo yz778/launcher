@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import threading
+from pathlib import Path
 from typing import Callable, List, Optional, Type
 
 from gi.repository import GLib
@@ -50,7 +51,7 @@ class PluginManager:
             )
         return self._executor
 
-    def load_plugins(self, plugins_dir: str) -> None:
+    def load_plugins(self, plugins_dir: Path) -> None:
         """Discover and load all plugins from the specified directory and user directory."""
         self.plugins_dir = plugins_dir
 
@@ -60,28 +61,27 @@ class PluginManager:
         # 2. Load user plugins under XDG config
         user_plugins_dir = xdg_data_home() / "launcher" / "plugins"
         if user_plugins_dir.is_dir():
-            self._load_plugins_from_dir(str(user_plugins_dir), is_user_plugin=True)
+            self._load_plugins_from_dir(user_plugins_dir, is_user_plugin=True)
 
-    def _load_plugins_from_dir(self, plugins_dir: str, is_user_plugin: bool) -> None:
-        if is_user_plugin and plugins_dir not in sys.path:
-            sys.path.insert(0, plugins_dir)
+    def _load_plugins_from_dir(self, plugins_dir: Path, is_user_plugin: bool) -> None:
+        if is_user_plugin and str(plugins_dir) not in sys.path:
+            sys.path.insert(0, str(plugins_dir))
 
-        for entry in os.scandir(plugins_dir):
+        for entry in plugins_dir.iterdir():
             if (
                 entry.is_dir()
                 and entry.name != "__pycache__"
                 and not entry.name.startswith(".")
             ):
-                plugin_dir_path = os.path.join(plugins_dir, entry.name)
-                self.load_plugin(entry.name, plugin_dir_path, is_user_plugin)
+                self.load_plugin(entry.name, entry, is_user_plugin)
 
     def load_plugin(
-        self, plugin_name: str, plugin_dir_path: str, is_user_plugin: bool = False
+        self, plugin_name: str, plugin_dir_path: Path, is_user_plugin: bool = False
     ) -> bool:
         """Load a single plugin from its directory path and name"""
         try:
-            plugin_file = os.path.join(plugin_dir_path, "plugin.py")
-            if not os.path.exists(plugin_file):
+            plugin_file = plugin_dir_path / "plugin.py"
+            if not plugin_file.exists():
                 return False
 
             if is_user_plugin:

@@ -172,9 +172,9 @@ class LauncherWindow(Gtk.Window):
         self.foreground_mode = foreground_mode
         self.result_deduplicator = ResultDeduplicator()
 
-        self.icon_size = services.config.system.icon_size
-        self.window_width = services.config.system.window_width
-        self.window_height = services.config.system.window_height
+        self.icon_size = services.instance.config.system.icon_size
+        self.window_width = services.instance.config.system.window_width
+        self.window_height = services.instance.config.system.window_height
 
         self.set_decorated(False)
         self.set_default_size(self.window_width, self.window_height)
@@ -398,7 +398,9 @@ class LauncherWindow(Gtk.Window):
 
         # Show/hide result count
         if count:
-            prefix_plugins = services.plugin_manager.get_current_prefix_plugins()
+            prefix_plugins = (
+                services.instance.plugin_manager.get_current_prefix_plugins()
+            )
             if prefix_plugins:
                 if len(prefix_plugins) == 1:
                     count_text = prefix_plugins[0].get_name()
@@ -466,8 +468,8 @@ class LauncherWindow(Gtk.Window):
         )
 
         # Limit and sort results: use plugin-specific max_results if only one plugin is active, otherwise use global default
-        active_plugins = services.plugin_manager.get_current_prefix_plugins()
-        max_results = services.config.system.max_results
+        active_plugins = services.instance.plugin_manager.get_current_prefix_plugins()
+        max_results = services.instance.config.system.max_results
 
         if len(active_plugins) == 1:
             plugin = active_plugins[0]
@@ -513,7 +515,9 @@ class LauncherWindow(Gtk.Window):
     def _show_recent_history(self) -> None:
         """Show recent history."""
         self._clear_list_box_and_hide()
-        results = services.history_manager.get_history_results(exclude_plugin_only=True)
+        results = services.instance.history_manager.get_history_results(
+            exclude_plugin_only=True
+        )
         if results:
             self._populate_list_box(results)
 
@@ -538,13 +542,13 @@ class LauncherWindow(Gtk.Window):
             return False
 
         # Check for autocomplete matches
-        self.autocomplete_matches = services.history_manager.get_matching_history(
-            query, 5
+        self.autocomplete_matches = (
+            services.instance.history_manager.get_matching_history(query, 5)
         )
         self.active_search_id += 1
         self.is_searching = True  # Flag to track search state
 
-        services.plugin_manager.search(
+        services.instance.plugin_manager.search(
             query,
             self.active_search_id,
             self.handle_plugin_results,
@@ -639,7 +643,7 @@ class LauncherWindow(Gtk.Window):
             while Gtk.events_pending():
                 Gtk.main_iteration()
 
-            if services.plugin_manager is not None:
+            if services.instance.plugin_manager is not None:
                 selected_row = self.list_box.get_selected_row()
 
                 # If no row is selected, default to the first result
@@ -691,7 +695,7 @@ class LauncherWindow(Gtk.Window):
                 if selected_rows:
                     for row in selected_rows:
                         if hasattr(row, "result") and row.result.plugin_id == "history":
-                            services.history_manager.remove_history_entry(
+                            services.instance.history_manager.remove_history_entry(
                                 row.result.item_id
                             )
                             self.list_box.remove(row)
@@ -716,7 +720,7 @@ class LauncherWindow(Gtk.Window):
 
         if row and hasattr(row, "result"):
             result = row.result
-            plugin = services.plugin_manager.plugins.get(result.plugin_id)
+            plugin = services.instance.plugin_manager.plugins.get(result.plugin_id)
             if plugin:
                 try:
                     plugin.preview(result)
@@ -757,8 +761,8 @@ class LauncherWindow(Gtk.Window):
 
         self._capture_modifier_state(result, event)
 
-        plugin = services.plugin_manager.plugins.get(result.plugin_id)
-        if services.plugin_manager.execute(result):
+        plugin = services.instance.plugin_manager.plugins.get(result.plugin_id)
+        if services.instance.plugin_manager.execute(result):
             result_to_track = result
             if result.plugin_id == "history":
                 original_result_dict = result.metadata.get("original_result")
@@ -767,15 +771,18 @@ class LauncherWindow(Gtk.Window):
 
             # Track history: True = global, "plugin" = plugin-only, False = none
             if plugin.track_history is True:
-                services.history_manager.add_history(result_to_track)
+                services.instance.history_manager.add_history(result_to_track)
             elif plugin.track_history == "plugin":
-                services.history_manager.add_history(result_to_track)
+                services.instance.history_manager.add_history(result_to_track)
 
             self.close_window()
 
     def _validate_managers(self) -> bool:
         """Validate that required managers are initialized"""
-        if services.history_manager is None or services.plugin_manager is None:
+        if (
+            services.instance.history_manager is None
+            or services.instance.plugin_manager is None
+        ):
             logger.warning("Cannot execute result: managers not initialized yet")
             self.close_window()
             return False

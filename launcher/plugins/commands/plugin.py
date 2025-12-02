@@ -55,7 +55,7 @@ class CommandsPlugin(Plugin):
             theme_part = command_input[5:].strip()  # Remove "theme" and whitespace
 
             try:
-                available_themes = services.css_manager.get_available_themes()
+                available_themes = services.instance.css_manager.get_available_themes()
 
                 for theme in available_themes:
                     theme_name = theme["name"]
@@ -155,14 +155,14 @@ class CommandsPlugin(Plugin):
         """
         try:
             # Create a new CSS manager instance and apply the theme
-            plugins = getattr(services.plugin_manager, "plugins", None)
+            plugins = getattr(services.instance.plugin_manager, "plugins", None)
 
-            if services.css_manager.load_all_styles(
+            if services.instance.css_manager.load_all_styles(
                 theme_name, plugins, with_transition=is_preview
             ):
                 if not is_preview:
-                    if services.config_manager:
-                        services.config_manager.update_config(
+                    if services.instance.config_manager:
+                        services.instance.config_manager.update_config(
                             "system.theme", theme_name
                         )
                         logger.info(

@@ -1,8 +1,8 @@
 import logging
-import os
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from launcher import services
@@ -116,11 +116,10 @@ class Plugin(ABC):
             module_file = sys.modules[self.__class__.__module__].__file__
             if not module_file:
                 return ""
-            file_path = os.path.join(
-                os.path.dirname(os.path.abspath(module_file)), "default.css"
-            )
-            with open(file_path, "r", encoding="utf-8") as f:
-                return f.read()
+            file_path = Path(module_file).resolve().parent / "default.css"
+            if file_path.exists():
+                return file_path.read_text(encoding="utf-8")
+            return ""
         except Exception:
             return ""
 
@@ -156,10 +155,10 @@ class Plugin(ABC):
         return True
 
     def get_cache_dir(self) -> str:
-        return services.config.system.cache_dir
+        return services.instance.config.system.cache_dir
 
     def get_terminal_command(self) -> str:
-        return services.config.system.get("terminal_command")
+        return services.instance.config.system.get("terminal_command")
 
     def start(self) -> bool:
         """
@@ -231,10 +230,10 @@ class Plugin(ABC):
         """
         from launcher import services
 
-        if not services.history_manager:
+        if not services.instance.history_manager:
             return []
 
-        return services.history_manager.get_plugin_history(self.get_id())
+        return services.instance.history_manager.get_plugin_history(self.get_id())
 
     def cleanup(self) -> None:
         """

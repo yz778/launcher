@@ -12,7 +12,9 @@ class TextHighlighter:
             return GLib.markup_escape_text(text)
 
         # Get highlight styling from the CSS manager
-        highlight_color, highlight_weight = services.css_manager.get_highlight_style()
+        highlight_color, highlight_weight = (
+            services.instance.css_manager.get_highlight_style()
+        )
 
         # Create a list to track which characters should be highlighted
         highlighted = [False] * len(text)
