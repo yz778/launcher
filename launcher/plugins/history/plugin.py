@@ -29,7 +29,7 @@ class HistoryPlugin(Plugin):
         if len(query) < self.config.min_query_length:
             return []
 
-        history_manager = services.history_manager
+        history_manager = services.instance.history_manager
         history_entries = history_manager.history
         results = []
 
@@ -54,7 +54,7 @@ class HistoryPlugin(Plugin):
 
         original_result = SearchResult.from_dict(original_result_dict)
 
-        plugin_manager = services.plugin_manager
+        plugin_manager = services.instance.plugin_manager
         if not plugin_manager:
             logger.error("Plugin manager not available")
             return False

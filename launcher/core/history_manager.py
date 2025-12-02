@@ -68,17 +68,59 @@ class HistoryManager:
             hilight=field_highlight,
         )
 
-    def get_history_results(self) -> List[SearchResult]:
+    def get_history_results(
+        self, plugin_id: Optional[str] = None, exclude_plugin_only: bool = False
+    ) -> List[SearchResult]:
         """
         Return a list of SearchResult objects for history entries.
+
+        Args:
+            plugin_id: If specified, only return history for this plugin
+            exclude_plugin_only: If True, exclude items from plugins with track_history="plugin"
+
+        Returns:
+            List of SearchResult objects
         """
+        from launcher import services
+
         results = []
         for entry in self.history:
+            result_data = entry.get("result")
+            if not result_data:
+                continue
+
+            # Filter by plugin if specified
+            if plugin_id:
+                if result_data.get("plugin_id") != plugin_id:
+                    continue
+
+            # Exclude plugin-only history from global history
+            if exclude_plugin_only:
+                entry_plugin_id = result_data.get("plugin_id")
+                if entry_plugin_id and services.instance.plugin_manager:
+                    plugin = services.instance.plugin_manager.get_plugin_by_id(
+                        entry_plugin_id
+                    )
+                    if plugin and plugin.track_history == "plugin":
+                        continue
+
             history_result = self.make_search_result(entry, None)
             if history_result:
                 results.append(history_result)
 
         return results
+
+    def get_plugin_history(self, plugin_id: str) -> List[SearchResult]:
+        """
+        Get history entries for a specific plugin.
+
+        Args:
+            plugin_id: The plugin ID to filter by
+
+        Returns:
+            List of SearchResult objects for this plugin
+        """
+        return self.get_history_results(plugin_id=plugin_id)
 
     __slots__ = ("history", "history_file", "_cleanup_scheduled")
 
@@ -305,7 +347,10 @@ class HistoryManager:
         """
         from launcher import services
 
-        if not hasattr(services, "plugin_manager") or not services.plugin_manager:
+        if (
+            not hasattr(services.instance, "plugin_manager")
+            or not services.instance.plugin_manager
+        ):
             logger.warning("Plugin manager not available for history validation")
             return
 
@@ -325,7 +370,7 @@ class HistoryManager:
                 continue
 
             # Get the plugin and validate the item
-            plugin = services.plugin_manager.get_plugin_by_id(plugin_id)
+            plugin = services.instance.plugin_manager.get_plugin_by_id(plugin_id)
             if plugin and hasattr(plugin, "validate_item"):
                 try:
                     if plugin.validate_item(item_id):

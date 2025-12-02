@@ -34,10 +34,11 @@ import logging
 import os
 import signal
 import sys
+from pathlib import Path
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
+current_dir = Path(__file__).resolve().parent
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
 
 
 class ErrorLineFormatter(logging.Formatter):
@@ -67,24 +68,24 @@ def shutdown(reason: str = ""):
     else:
         logger.info("Quit requested")
 
-    if services.launcher_window:
-        services.launcher_window.shutdown()
+    if services.instance.launcher_window:
+        services.instance.launcher_window.shutdown()
 
-    if services.plugin_manager:
-        services.plugin_manager.cleanup()
+    if services.instance.plugin_manager:
+        services.instance.plugin_manager.cleanup()
 
-    if services.history_manager:
-        services.history_manager.cleanup()
+    if services.instance.history_manager:
+        services.instance.history_manager.cleanup()
 
-    if services.ipc_manager:
-        services.ipc_manager.stop_server()
+    if services.instance.ipc_manager:
+        services.instance.ipc_manager.stop_server()
 
 
 def show_window(args):
     from launcher import services
 
-    if services.launcher_window:
-        services.launcher_window.show_and_focus()
+    if services.instance.launcher_window:
+        services.instance.launcher_window.show_and_focus()
 
 
 def signal_handler(signum, frame):
@@ -139,7 +140,7 @@ def main() -> int:
         from launcher.core.plugin_manager import PluginManager
 
         config_manager = ConfigManager(args.config)
-        plugins_dir = os.path.join(current_dir, "plugins")
+        plugins_dir = current_dir / "plugins"
 
         # Load plugins to register their defaults
         plugin_manager = PluginManager(config_manager.get())
@@ -171,16 +172,20 @@ def main() -> int:
 
     # Start up the launcher
     logger.info("Loading configuration and initial CSS")
-    services.config_manager = ConfigManager(args.config)
-    services.config = services.config_manager.get()
-    services.css_manager = CssManager()
-    services.css_manager.load_all_styles(services.config.system.theme, None)
+    services.instance.config_manager = ConfigManager(args.config)
+    services.instance.config = services.instance.config_manager.get()
+    services.instance.css_manager = CssManager()
+    services.instance.css_manager.load_all_styles(
+        services.instance.config.system.theme, None
+    )
 
     try:
-        services.launcher_window = LauncherWindow(foreground_mode=args.foreground)
-        services.launcher_window.show_and_focus()
+        services.instance.launcher_window = LauncherWindow(
+            foreground_mode=args.foreground
+        )
+        services.instance.launcher_window.show_and_focus()
         process_pending_events()
-        plugins_dir = os.path.join(current_dir, "plugins")
+        plugins_dir = current_dir / "plugins"
         idle_add(lambda: complete_initialization(plugins_dir, args))
         run_main_loop()
 
@@ -191,7 +196,7 @@ def main() -> int:
 
 
 def complete_initialization(
-    plugins_dir: str,
+    plugins_dir: Path,
     args,
 ) -> bool:
     from launcher import services
@@ -199,28 +204,28 @@ def complete_initialization(
     from launcher.core.ipc import IPCManager
     from launcher.core.plugin_manager import PluginManager
 
-    services.history_manager = HistoryManager(services.config)
-    services.plugin_manager = PluginManager(services.config)
-    services.plugin_manager.load_plugins(plugins_dir)
-    services.css_manager.load_all_styles(
-        services.config.system.theme, services.plugin_manager.plugins
+    services.instance.history_manager = HistoryManager(services.instance.config)
+    services.instance.plugin_manager = PluginManager(services.instance.config)
+    services.instance.plugin_manager.load_plugins(plugins_dir)
+    services.instance.css_manager.load_all_styles(
+        services.instance.config.system.theme, services.instance.plugin_manager.plugins
     )
 
     # Set up and start the IPC server for the primary instance
     if not args.foreground:
         logger.info("Loading IPC manager")
-        services.ipc_manager = IPCManager("launcher")
-        services.ipc_manager.register_handler("SHOW", show_window)
-        services.ipc_manager.register_handler("THEME", handle_theme_command)
-        if not services.ipc_manager.start_server():
+        services.instance.ipc_manager = IPCManager("launcher")
+        services.instance.ipc_manager.register_handler("SHOW", show_window)
+        services.instance.ipc_manager.register_handler("THEME", handle_theme_command)
+        if not services.instance.ipc_manager.start_server():
             logger.error(
                 "Failed to start IPC server. Singleton and IPC will be disabled."
             )
 
     logger.info("Starting background processes")
-    services.launcher_window.start()
-    start_plugins(services.plugin_manager)
-    services.history_manager.schedule_background_cleanup()
+    services.instance.launcher_window.start()
+    start_plugins(services.instance.plugin_manager)
+    services.instance.history_manager.schedule_background_cleanup()
 
     return False  # Remove from idle queue
 
@@ -229,11 +234,13 @@ def handle_theme_command(theme_name: str):
     from launcher import services
 
     try:
-        if services.css_manager and services.plugin_manager:
-            plugins = getattr(services.plugin_manager, "plugins", None)
-            if services.css_manager.load_all_styles(theme_name, plugins):
-                if services.config_manager:
-                    services.config_manager.update_config("system.theme", theme_name)
+        if services.instance.css_manager and services.instance.plugin_manager:
+            plugins = getattr(services.instance.plugin_manager, "plugins", None)
+            if services.instance.css_manager.load_all_styles(theme_name, plugins):
+                if services.instance.config_manager:
+                    services.instance.config_manager.update_config(
+                        "system.theme", theme_name
+                    )
                 logger.info(f"Theme switched to '{theme_name}' via IPC")
             else:
                 logger.error(f"Failed to switch to theme: {theme_name}")

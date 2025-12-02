@@ -177,7 +177,7 @@ class ExecutablePlugin(Plugin):
         # Access cache dir through services
         from launcher import services
 
-        cache_dir = services.config_manager.get_cache_dir()
+        cache_dir = services.instance.config_manager.get_cache_dir()
         self.cache_file = os.path.join(cache_dir, f"{self.get_id()}_cache.json")
         self.include_patterns = [re.compile(pattern) for pattern in self.config.include]
         self.exclude_patterns = [re.compile(pattern) for pattern in self.config.exclude]
