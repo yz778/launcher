@@ -28,7 +28,7 @@ compile:
 
 # Lint and format Python code
 lint:
-	ruff check --select I --fix || exit 1
-	ruff format
+	uvx ruff check --select I --fix || exit 1
+	uvx ruff format
 
 .PHONY: setup run clean compile lint
