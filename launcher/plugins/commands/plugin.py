@@ -24,6 +24,11 @@ class CommandsPlugin(Plugin):
                 "description": "Shutdown the launcher",
                 "icon": "https://img.icons8.com/?size=48&id=IwZ4mbmrC5gw&format=png",
             },
+            "reload": {
+                "name": ":reload",
+                "description": "Reload app/executable indexes",
+                "icon": "theme://view-refresh",
+            },
             "theme": {
                 "name": ":theme",
                 "description": "Switch launcher theme",
@@ -125,6 +130,9 @@ class CommandsPlugin(Plugin):
 
                 shutdown("exit command")
                 return True
+            elif command == "reload":
+                logger.info("Reload command executed, refreshing plugin indexes")
+                return self._reload_plugin_indexes()
             elif command == "apply_theme":
                 theme_name = result.metadata.get("theme_name")
                 if not theme_name:
@@ -183,3 +191,32 @@ class CommandsPlugin(Plugin):
         except Exception as e:
             logger.error(f"Error applying theme {theme_name}: {e}")
             return False
+
+    def _reload_plugin_indexes(self) -> bool:
+        """Reload plugin data sources that provide launchable app results."""
+        plugin_manager = services.instance.plugin_manager
+        if not plugin_manager:
+            logger.error("Plugin manager not available for reload")
+            return False
+
+        reloadable_plugin_ids = ("desktop_file", "executable")
+        reloaded_any = False
+
+        for plugin_id in reloadable_plugin_ids:
+            plugin = plugin_manager.get_plugin_by_id(plugin_id)
+            if not plugin:
+                logger.warning(f"Reload skipped: plugin '{plugin_id}' is not loaded")
+                continue
+
+            if not plugin.reload():
+                logger.error(f"Reload failed for plugin '{plugin_id}'")
+                return False
+
+            reloaded_any = True
+            logger.info(f"Reloaded plugin '{plugin_id}'")
+
+        if not reloaded_any:
+            logger.error("Reload failed: no reloadable plugins are currently loaded")
+            return False
+
+        return True

@@ -172,6 +172,15 @@ class Plugin(ABC):
         """
         return True  # Default implementation does nothing
 
+    def reload(self) -> bool:
+        """
+        Reload plugin data while the launcher is running.
+
+        Returns:
+            True if reload was successful, False otherwise.
+        """
+        return True
+
     @abstractmethod
     def search(self, query: str) -> List[SearchResult]:
         """
