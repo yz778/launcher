@@ -233,6 +233,11 @@ class DesktopFilePlugin(Plugin):
         self._save_to_cache()  # Save the newly scanned files to cache
         self._update_matcher()
 
+    def reload(self) -> bool:
+        """Reload desktop files and refresh matcher data."""
+        self._scan_and_update_matcher()
+        return True
+
     def _update_matcher(self) -> None:
         """Updates the string matcher in a thread-safe manner"""
 

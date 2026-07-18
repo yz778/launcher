@@ -6,7 +6,7 @@ A fast, extensible GTK launcher with intelligent search and highlighting.
 
 - **Plugin Architecture**: Easily extend with new search sources
 - **Core Plugins**:
-  - **Commands Plugin**: Provides internal commands like `:exit` and `:theme`.
+  - **Commands Plugin**: Provides internal commands like `:exit`, `:theme`, and `:reload`.
   - **Desktop File Plugin**: Launch applications from .desktop files
   - **Executable Plugin**: Launch executables from custom directories
   - **History Plugin**: Search through command execution history
