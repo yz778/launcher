@@ -20,7 +20,7 @@ dependencies = [
     "pycairo==1.29.0",
     "PyGObject==3.54.2",
     "pyperclip==1.11.0",
-    "pytz==2025.2",
+    "pytz==2026.4",
     "pyxdg==0.28",
     "xdg-base-dirs==6.0.2",
 ]
